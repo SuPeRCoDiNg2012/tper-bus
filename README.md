@@ -1,0 +1,179 @@
+# TPER Zone Calc
+
+Web app mobile-first (PWA) per calcolare zone tariffarie, costo del biglietto e linee bus/treno per i trasporti pubblici del bacino di Bologna (TPER + Trenitalia Tper / Mi Muovo).
+
+**100% gratuita per sempre**: nessuna dipendenza a pagamento, nessuna carta di credito richiesta, nessun limite nascosto.
+
+## Tabella dei componenti
+
+| Componente | Soluzione scelta | Costo | Limiti | URL documentazione |
+|---|---|---|---|---|
+| Frontend | HTML + CSS + JavaScript puro (nessun framework, nessuna build) | 0 € per sempre | Nessuno: codice statico, gira in qualsiasi browser moderno | — (web standard) |
+| Hosting | GitHub Pages (consigliato) — alternative equivalenti: Netlify, Vercel, Cloudflare Pages | 0 € per sempre, nessuna carta richiesta | GitHub Pages: 1 GB di spazio, 100 GB/mese di banda, limite ampiamente sufficiente per questa app | https://pages.github.com |
+| Dati fermate bus | Dataset open data Regione Emilia-Romagna | 0 € — licenza aperta | Va scaricato e aggiornato periodicamente a mano (non in tempo reale) | https://dati.emilia-romagna.it/dataset/tper-fermate-autobus |
+| Linee/orari (GTFS) | Feed open data GTFS ufficiale TPER | 0 € — licenza open data | File grande: va preprocessato offline con lo script incluso, non scaricato dal browser | https://solweb.tper.it/web/tools/open-data/open-data-download.aspx |
+| Orari in tempo reale | TPER HelloBus (web service XML pubblico) | 0 € — nessuna API key | Il servizio non invia header CORS: l'app passa da un relay pubblico (proxy.corsfix.com, con fallback), sostituibile dal tab Info | https://hellobuswsweb.tper.it/web-services/hellobus.asmx |
+| Calcolo del percorso | Motore RAPTOR in `routing.js` sugli orari programmati del GTFS TPER | 0 € — nessuna API esterna, nessuna key | Orari di tabella (non realtime): possono variare per traffico e lavori | https://developers.google.com/transit/gtfs |
+| Mappa | MapLibre GL + OpenFreeMap (stile Liberty) | 0 € — nessuna API key, nessun limite | Richiede connessione per stile e tile vettoriali; ricerca fermate, zone e prezzi restano offline | https://openfreemap.org |
+| PWA (installabilità + offline) | `manifest.json` + Service Worker nativo del browser | 0 € — standard web nativo | Nessuno | https://developer.mozilla.org/docs/Web/Progressive_web_apps |
+| Icone app | SVG generate a mano/localmente, incluse nel progetto | 0 € | SVG invece di PNG: leggerissime, nessun tool esterno necessario | — |
+| Tracciato stradale | OSRM demo pubblico (map matching) per agganciare le shapes TPER alle strade | 0 € — nessuna API key | Servizio pubblico senza garanzie: se non risponde si usa il tracciato ufficiale. La richiesta contiene solo le coordinate del percorso. Geometrie agganciate salvate in locale | https://project-osrm.org |
+| Preprocessing GTFS | Script Node.js incluso (`scripts/preprocess-gtfs.js`), solo moduli nativi | 0 € — Node.js è open source | Richiede Node.js installato in locale, solo per rigenerare i dati, non per l'uso dell'app | https://nodejs.org |
+
+Nessun componente richiede carta di credito, free trial a scadenza o abbonamento.
+
+## Struttura del progetto
+
+```
+tper-zone-calc/
+├── index.html                    # Struttura e stili dell'app (mappa, ricerca, bottom sheet)
+├── app.js                        # Logica: fermate, calcolo zone, orari live, mappa
+├── routing.js                    # Calcolo del percorso (linee, orari, cambi) sugli orari GTFS
+├── vista-percorso.js             # Rendering HTML della scheda percorso (tempi, cambi, tratti a piedi)
+├── manifest.json                  # Manifest PWA
+├── sw.js                          # Service worker (cache offline)
+├── icons/
+│   ├── icon-192.svg
+│   ├── icon-512.svg
+│   ├── icon-maskable-192.svg
+│   └── icon-maskable-512.svg
+├── data/
+│   ├── fermate.json                # 9.603 fermate bus reali + stazioni ferroviarie curate a mano (9.464 con indirizzo breve)
+│   ├── linee-per-fermata.json      # Linee che servono ciascuna fermata (dal dataset ufficiale)
+│   ├── orari.json                  # Orari di tutte le corse (GTFS TPER compresso, ~5,8 MB)
+│   ├── orari.json.gz               # Stessa cosa in gzip (~279 KB): è questo che l'app scarica
+│   ├── tracciati.json              # Geometrie reali delle linee (1.617 forme, ~0,8 MB)
+│   └── tracciati.json.gz           # Stessa cosa in gzip (~166 KB): scaricata solo quando serve il percorso
+├── scripts/
+│   ├── converti-fermate-autobus.py # Converte il dataset ufficiale TPER (bus) nei due file dati sopra
+│   ├── preprocess-orari.js         # Dal GTFS completo genera data/orari.json per il calcolo percorsi
+│   └── preprocess-gtfs.js          # (opzionale) elabora il GTFS completo, utile solo per dati extra
+└── README.md
+```
+
+> **Dataset incluso**: i file in `data/` contengono ora il dataset reale e completo delle fermate bus TPER (9.603 fermate, con le linee che le servono), più un elenco curato a mano delle principali stazioni ferroviarie. Se TPER aggiorna il proprio dataset open data, rilancia lo script `scripts/converti-fermate-autobus.py` (vedi sotto) per rigenerare i dati.
+
+## Deploy gratuito (GitHub Pages)
+
+1. Crea un repository GitHub pubblico (o privato, GitHub Pages funziona comunque con piano gratuito su repo pubblici) e carica tutti i file di questo progetto nella root.
+2. Vai su **Settings → Pages** del repository.
+3. In "Build and deployment" seleziona **Deploy from a branch**, branch `main`, cartella `/ (root)`.
+4. Salva: dopo circa un minuto l'app sarà disponibile su `https://<tuo-utente>.github.io/<nome-repo>/`.
+5. Nessuna carta di credito o account a pagamento richiesto.
+
+### Alternative altrettanto gratuite
+
+- **Netlify** (https://www.netlify.com): trascina la cartella del progetto su app.netlify.com, oppure collega il repo GitHub per deploy automatici. Piano free permanente, nessuna carta richiesta.
+- **Vercel** (https://vercel.com): stesso principio, deploy da GitHub. Piano Hobby gratuito permanente.
+- **Cloudflare Pages** (https://pages.cloudflare.com): deploy da GitHub, piano free permanente generoso.
+
+In tutti i casi, trattandosi di file statici (nessun server, nessun database), il deploy è immediato: basta puntare alla root del progetto.
+
+## Come aggiornare i dati (dataset completo)
+
+### A) Fermate bus + linee (metodo consigliato, un solo file)
+
+Il dataset ufficiale `tper-fermate-autobus.json` della Regione Emilia-Romagna contiene **già tutto il necessario in un unico file**: un record per ogni combinazione fermata+linea, con nome, comune, zona tariffaria e coordinate. Non serve più scaricare ed elaborare il GTFS per i bus.
+
+1. Scarica il JSON ufficiale da: https://dati.emilia-romagna.it/dataset/tper-fermate-autobus
+2. Esegui lo script Python incluso (richiede solo Python 3, nessuna libreria da installare):
+   ```bash
+   python3 scripts/converti-fermate-autobus.py tper-fermate-autobus.json data/fermate.json data/linee-per-fermata.json
+   ```
+3. Lo script genera direttamente sia `data/fermate.json` sia `data/linee-per-fermata.json`, già nel formato corretto, raggruppando automaticamente le righe per fermata.
+
+Esempio di output atteso:
+```
+Fatto. 9603 fermate scritte in data/fermate.json
+Linee per 8994 fermate scritte in data/linee-per-fermata.json
+(17 record scartati perché privi di zona tariffaria)
+```
+
+### B) Stazioni ferroviarie
+
+Il dataset ufficiale sopra riguarda **solo gli autobus**. Le stazioni ferroviarie regionali sono incluse a mano nello script, nell'elenco `STAZIONI_TRENO` in cima a `scripts/converti-fermate-autobus.py`: aggiungi lì le stazioni che ti servono (nome, zona, coordinate) e rilancia lo script.
+
+In alternativa, per un elenco più completo delle linee ferroviarie, resta disponibile il percorso GTFS descritto nella sezione "Metodo alternativo (GTFS)" più sotto, da cui si possono estrarre anche le stazioni.
+
+### Calcolo del percorso (orari bus)
+
+Il blocco **Percorso** nel tab Viaggio calcola quali bus prendere, a che ora e con quanti cambi, come un pianificatore di viaggio. Non usa nessun servizio esterno: `routing.js` legge `data/orari.json.gz` (tutti i passaggi di tutte le corse TPER) e applica un algoritmo RAPTOR lato browser.
+
+Per rigenerare gli orari dal feed GTFS ufficiale:
+
+```bash
+# 1. scarica e scompatta il GTFS TPER (aggiorna la versione nella URL)
+curl -L -o gtfs.zip "https://solweb.tper.it/web/tools/open-data/open-data-download.aspx?source=solweb.tper.it&filename=gommagtfsbo&version=20261111&format=zip"
+unzip gtfs.zip -d gtfs-tper
+
+# 2. genera data/orari.json e data/tracciati.json(.gz) (Node.js, nessuna dipendenza)
+node scripts/preprocess-orari.js gtfs-tper data/orari.json
+
+# 3. comprimi gli orari: è il file che l'app scarica davvero
+#    (tracciati.json.gz viene già scritto in gzip dallo script)
+gzip -9 -c data/orari.json > data/orari.json.gz
+```
+
+Nel tab Viaggio la mappa mostra la linea del bus: la geometria ufficiale viene agganciata alla rete stradale con OSRM (map matching a pezzi, cache in `localStorage`, fallback automatico sul tracciato ufficiale se il servizio non risponde o il risultato non è coerente). Senza rete si vedono comunque fermate, orari e prezzo.
+
+Lo stesso script legge anche `shapes.txt` e produce `data/tracciati.json`: la geometria reale di ogni linea (semplificata a 8 m di tolleranza e codificata come polilinea), allineata corsa per corsa a `orari.json`. È così che il tab Viaggio disegna sulla mappa il percorso del bus invece di una linea dritta tra le due fermate; i tratti a piedi restano tratteggiati. Sulla linea partenza, cambi e arrivo hanno nodi distinti (rosso, anello bianco con corona, nero). Se una tratta non ha la geometria GTFS viene disegnata come linea diritta tratteggiata e la scheda del percorso lo dichiara.
+
+Il calcolo usa anche le fermate a pochi passi da quella scelta (pali opposti, fermate della stessa via) e mostra i tratti a piedi stimati. Gli orari sono quelli programmati nel GTFS: non tengono conto dei ritardi reali (per quelli c'è il tab "In tempo reale").
+
+### Metodo alternativo (GTFS, opzionale)
+
+Se in futuro vuoi anche gli orari di passaggio o un elenco linee più dettagliato (non solo i numeri di linea), resta disponibile lo script `scripts/preprocess-gtfs.js` (richiede Node.js) che elabora il feed GTFS completo di TPER da https://solweb.tper.it/web/tools/open-data/open-data-download.aspx. Per il solo calcolo zone/prezzo, però, il metodo A) sopra è sufficiente e molto più semplice.
+
+### C) Zone tariffarie di riferimento (sistema Mi Muovo)
+
+- **500** — Bologna capoluogo
+- **Zone neutre Area Urbana** (coperte da abbonamento urbano se solo attraversate): 501 San Lazzaro, 502 Villanova, 503 Quarto Inferiore, 504 Corticella, 505 Lippo, 506 Lavino di Mezzo, 507 Casalecchio, 509 Rastignano
+- **Prime cinture extraurbane**: 521 Castenaso, 531 Castel Maggiore, 541 San Giorgio di Piano, 561 Bentivoglio, 571 Zola Predosa, 581 Sasso Marconi, 582 Marzabotto, 591 Valsamoggia, 510 Imola, 536 Molinella
+
+Le zone neutre non aggiungono scatti se solo attraversate; aggiungono uno scatto solo se la destinazione finale è lì e non si ha l'abbonamento urbano.
+
+## Tariffe (indicative, da verificare)
+
+- Bus urbano / 1 zona: 2,30 € (riforma marzo 2025)
+- Bus 2 zone: 2,90 €
+- Bus 3 zone: 3,70 €
+- Bus 4 zone: 4,50 €
+- Treno regionale: stima a zone (1 zona 2,30 €, 2 zone 3,10 €, 3 zone 3,90 €), il prezzo reale dipende dai km e dall'adeguamento ISTAT (gennaio 2026 +3,3%)
+
+**Verifica sempre il prezzo esatto su tper.it, trenitaliatper.it o sul calcolatore ufficiale** (https://solweb.tper.it/web/tools/zone-calculator.aspx): questa app fornisce una stima rapida, non un biglietto valido.
+
+## Provare l'app in locale (prima del deploy)
+
+**Non aprire `index.html` con un doppio click.** I browser bloccano per sicurezza il caricamento di file JSON locali via `fetch()` quando la pagina è aperta con il protocollo `file://` (errore CORS). In quel caso l'app passa a un elenco di fermate molto ridotto e il calcolo può sembrare "non funzionare" se non selezioni una fermata presente in quell'elenco ridotto.
+
+Per testare in locale, avvia un piccolo server statico nella cartella del progetto, ad esempio:
+
+```bash
+# Con Python (incluso in quasi tutti i sistemi)
+python3 -m http.server 8080
+
+# oppure con Node.js, senza installare nulla
+npx serve .
+```
+
+Poi apri `http://localhost:8080` nel browser: a quel punto `fetch()` funziona normalmente e l'app carica il dataset completo di `data/fermate.json`.
+
+Una volta pubblicata su GitHub Pages/Netlify/Vercel/Cloudflare Pages (vedi sopra), questo problema non si presenta più, perché il sito viene servito via `https://`.
+
+## Limiti noti
+
+- Il dataset bus è reale e completo (9.603 fermate), ma alcune fermate compaiono due volte con lo stesso nome: sono i due "pali" della stessa fermata, uno per ciascun senso di marcia. È normale: selezionando l'uno o l'altro il risultato del calcolo non cambia.
+- Le stazioni ferroviarie sono una lista curata a mano (11 stazioni principali): il dataset ufficiale TPER riguarda solo gli autobus. Aggiungine altre modificando `STAZIONI_TRENO` in `scripts/converti-fermate-autobus.py`.
+- I prezzi dei treni regionali sono stime a zone: il prezzo reale di Trenitalia Tper dipende dai chilometri effettivi della tratta.
+- Il dataset aggiornato copre l'intera rete TPER (anche zone di Ferrara/Imola oltre al bacino di Bologna): per queste zone più lontane l'app applica comunque la stessa logica generale urbano/extraurbano, ma le regole di confine specifiche (Zola Predosa, Sasso Marconi) restano pensate per il bacino di Bologna.
+- La logica di calcolo gestisce i casi "urbano↔urbano" e "urbano↔extraurbano" con regole precise; per tratte tra due zone extraurbane l'app rimanda al calcolatore ufficiale TPER, perché il numero di scatti dipende dal percorso esatto.
+- **Percorso**: il pianificatore usa gli orari programmati del GTFS e parte dalla data e ora scelte. La domenica il feed TPER include soprattutto corse extraurbane: per molte fermate urbane il risultato può essere "nessun collegamento", ed è un limite del dato, non dell'app. Per le stazioni ferroviarie (codici `TRN…`) non ci sono orari bus: in quel caso l'app suggerisce una fermata vicina.
+- **Orari in tempo reale**: il tab "In tempo reale" interroga HelloBus, il servizio TPER con la posizione GPS dei bus. Il servizio non abilita CORS, quindi dal browser si passa da un relay pubblico (`proxy.corsfix.com`, con fallback su allorigins). I relay gratuiti possono essere lenti o non raggiungibili: in quel caso l'app mostra un messaggio con "Riprova" e il pulsante "Usa il relay predefinito". Nel tab Info puoi incollare un relay tuo (`https://tuo-relay/?url={url}`) per non dipendere da servizi terzi.
+- Alcuni codici fermata del dataset regionale non sono gestiti da HelloBus o non hanno corse nelle ore serali: l'app lo segnala con un messaggio invece di mostrare un elenco vuoto.
+- Le tile della mappa arrivano da CARTO/OpenStreetMap: senza connessione la mappa resta grigia, ma ricerca fermate, zone e prezzi continuano a funzionare con i dati in cache.
+
+## Funzionamento offline
+
+Al primo caricamento online, l'app salva in cache (Service Worker + localStorage) i file statici e i dati delle fermate. Alle visite successive, anche senza connessione, l'app si apre normalmente e mostra l'ultimo dataset scaricato, con una stale-while-revalidate per aggiornare i dati in background appena torna la connessione.
+
+Se il dataset remoto non è raggiungibile e non esiste ancora una cache locale, l'app mostra un elenco ridotto di fermate principali (fallback hardcoded) e un messaggio con pulsante "Riprova".
