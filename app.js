@@ -2026,18 +2026,24 @@
     if (stato === 'meta') return Math.round(altezza * 0.46);
     // La posizione ridotta mostra testata, tab e riga data/ora: si misura
     // quanto occupano davvero, così un titolo su due righe non la taglia.
+    // Nei tab Live/Info il blocco data/ora è nascosto (rect 0): senza il
+    // controllo su height il pannello finiva fuori dallo schermo.
+    const meta = Math.round(altezza * 0.46);
     const quando = document.querySelector('.quando');
-    if (quando) {
-      const distanza = quando.getBoundingClientRect().bottom - sheet.getBoundingClientRect().top;
-      return Math.max(0, Math.round(altezza - distanza - 12));
-    }
-    return Math.max(0, altezza - 190);
+    const rect = quando ? quando.getBoundingClientRect() : null;
+    const distanza = rect && rect.height > 0
+      ? rect.bottom - sheet.getBoundingClientRect().top : 0;
+    const peek = distanza > 0 ? altezza - distanza - 12 : altezza - 190;
+    return Math.max(meta, Math.round(peek));
   }
 
-  function applicaTrasformazione(pixel, animato) {
+  function applicaTrasformazione(pixel, animato, silenzioso) {
     const sheet = $('sheet');
-    sheet.style.transition = animato ? 'transform .3s cubic-bezier(.2,.8,.2,1)' : 'none';
+    sheet.style.transition = animato ? 'transform .34s cubic-bezier(.22,.9,.28,1)' : 'none';
     sheet.style.transform = 'translate(-50%,' + pixel + 'px)';
+    // Durante il dito niente letture di layout a ogni pointermove: erano la
+    // causa degli scatti. Si aggiorna tutto una volta allo snap.
+    if (silenzioso) return;
     const visibile = altezzaVisibile();
     const fab = document.querySelector('.col-fab');
     if (fab) fab.classList.toggle('nascosto', pixel <= 8 || visibile > window.innerHeight * 0.6);
@@ -2088,48 +2094,170 @@
     else impostaSheet('meta');
   }
 
+  function traslazioneAttuale() {
+    const matrice = new DOMMatrixReadOnly(getComputedStyle($('sheet')).transform);
+    return Math.max(0, Math.abs(matrice.m42));
+  }
+
+  // Punti di aggancio reali, non una stima: così lo snap non salta quando la
+  // posizione ridotta dipende dall'altezza della riga data/ora.
+  function puntiSheet() {
+    return [
+      { stato: 'piena', valore: traslazionePer('piena') },
+      { stato: 'meta', valore: traslazionePer('meta') },
+      { stato: 'peek', valore: traslazionePer('peek') }
+    ].sort((a, b) => a.valore - b.valore);
+  }
+
+  function concludiTrascinamento(velocita) {
+    const sheet = $('sheet');
+    trascinando = false;
+    sheet.classList.remove('trascinando');
+    const attuale = traslazioneAttuale();
+    const punti = puntiSheet();
+    let scelto = null;
+    // La direzione del gesto vince sulla sola distanza: un colpo veloce apre o
+    // chiude anche se il pannello è più vicino all'altro stato.
+    if (velocita > 0.4) {
+      scelto = punti.find((p) => p.valore > attuale + 2) || punti[punti.length - 1];
+    } else if (velocita < -0.4) {
+      scelto = punti.slice().reverse().find((p) => p.valore < attuale - 2) || punti[0];
+    }
+    if (!scelto) {
+      scelto = punti.reduce((migliore, p) =>
+        Math.abs(p.valore - attuale) < Math.abs(migliore.valore - attuale) ? p : migliore, punti[0]);
+    }
+    sopprimiClick = true;
+    setTimeout(() => { sopprimiClick = false; }, 350);
+    impostaSheet(scelto.stato);
+  }
+
   function abilitaTrascinamento(elemento) {
+    let idPuntatore = null;
+    let inizioY = 0;
+    let inizioX = 0;
+    let iniziale = 0;
+    let ultimoY = 0;
+    let ultimoT = 0;
+    let velocita = 0;
+    let attivo = false;
+    const sheet = $('sheet');
+
+    const muovi = (evento) => {
+      if (evento.pointerId !== idPuntatore) return;
+      const dy = evento.clientY - inizioY;
+      if (!attivo) {
+        if (Math.abs(dy) < 4) return;
+        if (Math.abs(evento.clientX - inizioX) > Math.abs(dy) * 1.5) return;
+        attivo = true;
+        trascinando = true;
+        sheet.classList.add('trascinando');
+        sheet.style.transition = 'none';
+      }
+      if (evento.cancelable) evento.preventDefault();
+      const ora = performance.now();
+      if (ora > ultimoT) velocita = (evento.clientY - ultimoY) / (ora - ultimoT);
+      ultimoY = evento.clientY;
+      ultimoT = ora;
+      let pixel = iniziale + dy;
+      const massimo = Math.max(0, sheet.offsetHeight - 120);
+      // Oltre il fondo si oppone resistenza, così il gesto non si blocca.
+      if (pixel < 0) pixel = 0;
+      else if (pixel > massimo) pixel = massimo + Math.min(36, (pixel - massimo) * 0.35);
+      applicaTrasformazione(pixel, false, true);
+    };
+
+    const fine = (evento) => {
+      if (evento.pointerId !== idPuntatore) return;
+      idPuntatore = null;
+      elemento.removeEventListener('pointermove', muovi);
+      elemento.removeEventListener('pointerup', fine);
+      elemento.removeEventListener('pointercancel', fine);
+      if (!attivo) return;
+      attivo = false;
+      if (performance.now() - ultimoT > 140) velocita = 0;
+      concludiTrascinamento(velocita);
+    };
+
     elemento.addEventListener('pointerdown', (evento) => {
+      if (idPuntatore !== null) return;
       if (evento.button !== undefined && evento.button !== 0) return;
-      trascinando = true;
-      const sheet = $('sheet');
-      const partenza = evento.clientY;
-      const iniziale = traslazionePer(statoSheet);
-      sheet.style.transition = 'none';
-      elemento.setPointerCapture(evento.pointerId);
-      const muovi = (ev) => {
-        if (!trascinando) return;
-        const delta = ev.clientY - partenza;
-        const pixel = Math.min(Math.max(0, iniziale + delta), sheet.offsetHeight - 120);
-        applicaTrasformazione(pixel, false);
-      };
-      const fine = () => {
-        if (!trascinando) return;
-        trascinando = false;
-        elemento.removeEventListener('pointermove', muovi);
-        elemento.removeEventListener('pointerup', fine);
-        elemento.removeEventListener('pointercancel', fine);
-        const attuale = (function () {
-          const matrice = new DOMMatrixReadOnly(getComputedStyle(sheet).transform);
-          return Math.abs(matrice.m42);
-        })();
-        const altezza = sheet.offsetHeight || 600;
-        if (Math.abs(attuale - iniziale) > 8) {
-          sopprimiClick = true;
-          setTimeout(() => { sopprimiClick = false; }, 320);
-        }
-        const opzioni = [
-          { stato: 'piena', valore: 0 },
-          { stato: 'meta', valore: Math.round(altezza * 0.46) },
-          { stato: 'peek', valore: Math.max(0, altezza - 190) }
-        ];
-        opzioni.sort((a, b) => Math.abs(a.valore - attuale) - Math.abs(b.valore - attuale));
-        impostaSheet(opzioni[0].stato);
-      };
+      idPuntatore = evento.pointerId;
+      inizioY = ultimoY = evento.clientY;
+      inizioX = evento.clientX;
+      // Se si afferra durante l'animazione, si parte da dove il pannello è
+      // davvero: prima si saltava al valore dello stato già impostato.
+      iniziale = traslazioneAttuale();
+      ultimoT = performance.now();
+      velocita = 0;
+      attivo = false;
+      try { elemento.setPointerCapture(evento.pointerId); } catch (errore) { /* mouse sintetico */ }
       elemento.addEventListener('pointermove', muovi);
       elemento.addEventListener('pointerup', fine);
       elemento.addEventListener('pointercancel', fine);
     });
+  }
+
+  // Trascinamento dalla parte scorrevole: su si apre, giù si chiude solo
+  // quando il contenuto è in cima. Altrimenti resta lo scroll nativo.
+  function abilitaScorrimentoSheet() {
+    const corpo = $('sheet-corpo');
+    const sheet = $('sheet');
+    let inizioY = 0;
+    let inizioX = 0;
+    let iniziale = 0;
+    let ultimoY = 0;
+    let ultimoT = 0;
+    let velocita = 0;
+    let attivo = false;
+
+    const muovi = (evento) => {
+      if (evento.touches.length !== 1) return;
+      const tocco = evento.touches[0];
+      const dy = tocco.clientY - inizioY;
+      if (!attivo) {
+        if (Math.abs(dy) < 6) return;
+        if (Math.abs(tocco.clientX - inizioX) > Math.abs(dy)) return;
+        // Giù solo dal bordo superiore del contenuto; su solo se c'è ancora
+        // pannello da mostrare. Negli altri casi lo scroll resta del browser.
+        if (dy > 0 ? corpo.scrollTop > 0 : statoSheet === 'piena') return;
+        attivo = true;
+        trascinando = true;
+        sheet.classList.add('trascinando');
+        sheet.style.transition = 'none';
+      }
+      if (evento.cancelable) evento.preventDefault();
+      const ora = performance.now();
+      if (ora > ultimoT) velocita = (tocco.clientY - ultimoY) / (ora - ultimoT);
+      ultimoY = tocco.clientY;
+      ultimoT = ora;
+      let pixel = iniziale + dy;
+      const massimo = Math.max(0, sheet.offsetHeight - 120);
+      if (pixel < 0) pixel = 0;
+      else if (pixel > massimo) pixel = massimo + Math.min(36, (pixel - massimo) * 0.35);
+      applicaTrasformazione(pixel, false, true);
+    };
+
+    const fine = () => {
+      if (!attivo) return;
+      attivo = false;
+      if (performance.now() - ultimoT > 140) velocita = 0;
+      concludiTrascinamento(velocita);
+    };
+
+    corpo.addEventListener('touchstart', (evento) => {
+      if (trascinando || evento.touches.length !== 1) return;
+      const tocco = evento.touches[0];
+      inizioY = ultimoY = tocco.clientY;
+      inizioX = tocco.clientX;
+      iniziale = traslazioneAttuale();
+      ultimoT = performance.now();
+      velocita = 0;
+      attivo = false;
+    }, { passive: true });
+    corpo.addEventListener('touchmove', muovi, { passive: false });
+    corpo.addEventListener('touchend', fine);
+    corpo.addEventListener('touchcancel', fine);
   }
 
   /* ------------------------------------------------------------------ *
@@ -2401,11 +2529,17 @@
     });
     abilitaTrascinamento($('grab'));
     abilitaTrascinamento($('sheet-testa'));
+    abilitaScorrimentoSheet();
 
     $('sheet-corpo').addEventListener('scroll', aggiornaScrim, { passive: true });
 
     $('sheet-corpo').addEventListener('click', (evento) => {
-      if (sopprimiClick) { sopprimiClick = false; return; }
+      if (sopprimiClick) {
+        evento.preventDefault();
+        evento.stopPropagation();
+        sopprimiClick = false;
+        return;
+      }
       const pulsante = evento.target.closest('[data-azione]');
       if (pulsante) {
         const azione = pulsante.getAttribute('data-azione');
