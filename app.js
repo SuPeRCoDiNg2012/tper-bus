@@ -4,6 +4,10 @@
 (function () {
   'use strict';
 
+  // Le logiche pure vivono in moduli separati, così sono testabili a parte.
+  const Tariffe = window.Tariffe;
+  const Piedi = window.Piedi;
+
   /* ------------------------------------------------------------------ *
    * Configurazione
    * ------------------------------------------------------------------ */
@@ -25,11 +29,8 @@
   const INTERVALLO_LIVE = 30000;
   const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
   const NOMINATIM_PAUSA = 1100;      // ms tra due richieste: è la policy d'uso di OSM
-  const INDIRIZZI_MIN = 3;           // caratteri minimi prima di cercare un indirizzo
+  const LUOGHI_MIN = 3;              // caratteri minimi prima di cercare un luogo o indirizzo
 
-  const ZONE_URBANE = new Set(['500', '501', '502', '503', '504', '505', '506', '507', '508', '509']);
-  const TARIFFE_BUS = { 1: 2.30, 2: 2.90, 3: 3.70, 4: 4.50 };
-  const TARIFFE_TRENO = { 1: 2.30, 2: 3.10, 3: 3.90 };
 
   const FERMATE_FALLBACK = [
     { id: 'BO0001', nome: 'Bologna - Piazza Maggiore', tipo: 'bus', zona: '500', lat: 44.494373, lon: 11.343674 },
@@ -72,13 +73,15 @@
   const live = { items: [], ts: 0, stato: 'idle', caricamento: false, errore: null, stopId: null };
 
   const $ = (id) => document.getElementById(id);
-  const ICONA_BUS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="4" width="17" height="12.5" rx="3" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 12h17" stroke="currentColor" stroke-width="1.5"/><circle cx="7.6" cy="18.6" r="1.5" fill="currentColor"/><circle cx="16.4" cy="18.6" r="1.5" fill="currentColor"/></svg>';
-  const ICONA_TRENO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="3" width="14" height="14" rx="4.5" stroke="currentColor" stroke-width="1.7"/><path d="M5 10h14" stroke="currentColor" stroke-width="1.5"/><circle cx="8.6" cy="19.4" r="1.4" fill="currentColor"/><circle cx="15.4" cy="19.4" r="1.4" fill="currentColor"/></svg>';
-  const ICONA_LUOGO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s6.5-6.8 6.5-11.4A6.5 6.5 0 0 0 5.5 9.6C5.5 14.2 12 21 12 21z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="9.6" r="2.4" stroke="currentColor" stroke-width="1.7"/></svg>';
-  // L'icona pedana vive con il resto della grafica del percorso.
-  const ICONA_PEDANA = VistaPercorso.ICONA_PEDANA;
-  const ICONA_REFRESH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M20 4.5V10h-5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const ICONA_INFO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 10.5v6M12 7.4v.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
+  // Set unico di icone: Lucide inline, nessuna CDN e nessun font esterno.
+  const Icone = window.Icone;
+  const ICONA_BUS = Icone.svg('bus-front', 18);
+  const ICONA_TRENO = Icone.svg('train-front', 18);
+  const ICONA_LUOGO = Icone.svg('map-pin', 18);
+  const ICONA_ACCESSIBILITA = Icone.svg('accessibility', 16);
+  const ICONA_REFRESH = Icone.svg('refresh-cw', 18);
+  const ICONA_INFO = Icone.svg('info', 18);
+  const ICONA_CHEVRON = Icone.svg('chevron-right', 18, 'voce-freccia');
 
   /* ------------------------------------------------------------------ *
    * Utility
@@ -181,10 +184,19 @@
     return !!luogo && luogo.tipo === 'indirizzo';
   }
 
-  // Codice palina e indirizzo breve: servono a riconoscere la fermata sul posto.
+  // I luoghi trovati su OpenStreetMap hanno tipo 'indirizzo' per continuare a
+  // usare coordinate e percorso esatti; genere e categoria sono solo per la UI.
+  function etichettaGenere(luogo) {
+    if (!luogo) return '';
+    return luogo.genere === 'luogo'
+      ? (luogo.categoria || 'Luogo') + ' · zona ' + luogo.zona
+      : 'Indirizzo · zona ' + luogo.zona;
+  }
+
+  // Codice palina e riferimento breve: servono a riconoscere la fermata sul posto.
   function riferimentoFermata(f) {
     if (!f) return '';
-    if (eIndirizzo(f)) return f.indirizzo || 'Indirizzo';
+    if (eIndirizzo(f)) return f.indirizzo || f.nome || 'Indirizzo';
     return 'Palina ' + f.id + (f.indirizzo ? ' · ' + f.indirizzo : '');
   }
   function mostraToast(messaggio, durata) {
@@ -320,10 +332,11 @@
     elemento.className = 'pin-mappa';
     elemento.setAttribute('role', 'button');
     elemento.setAttribute('aria-label', ruolo === 'partenza' ? 'Fermata di partenza' : 'Fermata di destinazione');
-    elemento.innerHTML = '<svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true">' +
-      '<path d="M12 22.5s7.3-7.7 7.3-12.7A7.3 7.3 0 0 0 4.7 9.8C4.7 14.8 12 22.5 12 22.5z" fill="' +
-      (ruolo === 'partenza' ? '#C1121F' : '#1A1A1A') + '" stroke="#fff" stroke-width="1.3"/>' +
-      '<circle cx="12" cy="9.7" r="2.6" fill="#fff"/></svg>';
+    elemento.innerHTML = Icone.svg('map-pin-pieno', 34, '', {
+      fill: ruolo === 'partenza' ? '#C1121F' : '#1A1A1A',
+      stroke: '#fff',
+      strokeWidth: 1.3
+    });
     elemento.addEventListener('click', (evento) => {
       evento.stopPropagation();
       stopLiveRuolo = ruolo;
@@ -433,13 +446,23 @@
     mappa.addSource('percorso', { type: 'geojson', data: vuoto });
     mappa.addSource('percorso-fermate', { type: 'geojson', data: vuoto });
     mappa.addSource('percorso-nodi', { type: 'geojson', data: vuoto });
+    // Un bordo chiaro separa il tratteggio pedonale dallo sfondo e dalle linee
+    // del bus, soprattutto quando il cammino è breve e vicino alle fermate.
+    mappa.addLayer({
+      id: 'percorso-piedi-bordo',
+      type: 'line',
+      source: 'percorso',
+      filter: ['==', ['get', 'modo'], 'piedi'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#FFFFFF', 'line-width': 7, 'line-opacity': 0.72 }
+    });
     mappa.addLayer({
       id: 'percorso-piedi',
       type: 'line',
       source: 'percorso',
       filter: ['==', ['get', 'modo'], 'piedi'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#1A1A1A', 'line-width': 3, 'line-opacity': 0.45, 'line-dasharray': [1.5, 1.6] }
+      paint: { 'line-color': '#1A1A1A', 'line-width': 3, 'line-opacity': 0.72, 'line-dasharray': [1.5, 1.6] }
     });
     mappa.addLayer({
       id: 'percorso-bordo',
@@ -586,12 +609,96 @@
    * si disegna il tracciato ufficiale, e se manca anche quello la linea dritta.
    * ------------------------------------------------------------------- */
   const URL_SNAP = 'https://router.project-osrm.org/match/v1/driving/';
-  const K_SNAP = 'tperzc_snap_v3';
+  // v4: le geometrie ferroviarie non vengono più agganciate alle strade.
+  const K_SNAP = 'tperzc_snap_v4';
   const SNAP_MAX_PUNTI = 9;   // limite del servizio pubblico
   const SNAP_MAX_RICHIESTE = 40;
   let snapCache = null;
   let snapGenerazione = 0;
   let snapRichieste = 0;
+
+  // Percorsi pedonali: OSRM pubblico FOSSGIS, profilo foot. Le coordinate
+  // vengono inviate solo per calcolare il tratto a piedi; il risultato resta
+  // in cache locale e, se il servizio non risponde, si usa il segmento diritto.
+  const K_PIEDI = 'tperzc_piedi_v4';
+  const PIEDI_MAX_METRI = 2500;   // nessun tratto pedonale dell'app è più lungo
+  let piediCache = null;
+  const piediInCorso = new Set();
+  const piediFalliti = new Set();
+
+  function piediCaricati() {
+    if (piediCache) return piediCache;
+    piediCache = new Map();
+    const salvate = leggiJSON(K_PIEDI);
+    if (Array.isArray(salvate)) salvate.forEach((voce) => {
+      // Butta le geometrie vecchie o impossibili: una cache con coordinate
+      // invertite o un percorso lungo decine di chilometri rovinava la mappa.
+      if (voce && voce[0] && Piedi.valida(voce[1], PIEDI_MAX_METRI)) piediCache.set(voce[0], voce[1]);
+    });
+    return piediCache;
+  }
+
+  function piediSalvati() {
+    if (!piediCache) return;
+    const voci = Array.from(piediCache.entries()).slice(-100);
+    const testo = JSON.stringify(voci);
+    if (testo.length < 1200000) scrivi(K_PIEDI, testo);
+  }
+
+  function geometriaPiedi(da, a) {
+    if (!da || !a) return null;
+    if (distanzaTra(da, a) < 25) return [da, a];
+    const geometria = piediCaricati().get(Piedi.chiave(da, a));
+    return geometria && Piedi.valida(geometria, PIEDI_MAX_METRI) ? geometria : null;
+  }
+
+  function chiediPiedi(da, a) {
+    if (!da || !a || !navigator.onLine) return;
+    const chiave = Piedi.chiave(da, a);
+    if (distanzaTra(da, a) > PIEDI_MAX_METRI) {
+      piediFalliti.add(chiave);
+      return;
+    }
+    if (piediInCorso.has(chiave) || piediFalliti.has(chiave) || piediCaricati().has(chiave)) return;
+    piediInCorso.add(chiave);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 9000);
+    fetch(Piedi.url(da, a) + '?overview=full&geometries=geojson&steps=false', { signal: controller.signal })
+      .then((risposta) => (risposta.ok ? risposta.json() : null))
+      .then((dati) => {
+        const coordinate = Piedi.geometriaRisposta(dati);
+        if (!coordinate || !Piedi.valida(coordinate, PIEDI_MAX_METRI)) {
+          piediFalliti.add(chiave);
+          return;
+        }
+        // La GeoJSON di OSRM è [lon, lat], lo stesso ordine usato dall'app.
+        piediCaricati().set(chiave, coordinate);
+        piediSalvati();
+        // Un percorso composto solo da cammino non ha tappe bus: aggiorna
+        // distanza e tempo con la geometria vera, poi ridisegna anche la riga.
+        if (routing.stato === 'piedi' && routing.piedi && routing.piedi.chiave === chiave) {
+          routing.piedi.metri = Math.round(Piedi.lunghezza(coordinate));
+          routing.piedi.minuti = minuti(routing.piedi.metri * 1.3 / 1.2);
+          disegnaPercorso();
+        } else if (routing.stato === 'ok') {
+          disegnaTracciato();
+        }
+      })
+      .catch(() => { piediFalliti.add(chiave); })
+      .finally(() => {
+        clearTimeout(timer);
+        piediInCorso.delete(chiave);
+      });
+  }
+
+  // Un tratto a piedi usa la geometria pedonale se è già in cache; altrimenti
+  // disegna subito il segmento diritto e lo sostituisce appena arriva OSRM.
+  function segmentoPiedi(da, a) {
+    if (!da || !a) return null;
+    const geometria = geometriaPiedi(da, a);
+    if (!geometria) chiediPiedi(da, a);
+    return segmento('piedi', geometria || [da, a]);
+  }
 
   function snapCaricate() {
     if (snapCache) return snapCache;
@@ -643,7 +750,10 @@
   // Aggancia il tracciato ufficiale alla rete stradale, a pezzi di pochi punti
   // (limite del servizio) e ricucendo il risultato. La forma resta quella del
   // bus: il matching la porta sulle strade senza inventare percorsi.
+  // I treni non passano da OSRM: la loro shape GTFS è già la geometria dei
+  // binari e il profilo driving la sposterebbe sulle strade.
   async function agganciaTratta(tappa, geometria) {
+    if (!tappa || tappa.tipo === 1 || tappa.tipo === 2) return null;
     if (geometria.length < 3) return null;
     const chiave = chiaveSnap(tappa, geometria);
     const cache = snapCaricate();
@@ -718,13 +828,27 @@
     const fermate = [];
     const nodi = [];
     let senzaTracciato = 0;
+    // Un viaggio molto breve è tutto a piedi: non passa dal pianificatore bus,
+    // ma deve comunque avere la sua linea sulla mappa.
+    if (routing.stato === 'piedi' && routing.piedi &&
+        sel.partenza && sel.destinazione &&
+        sel.partenza.lat != null && sel.partenza.lon != null &&
+        sel.destinazione.lat != null && sel.destinazione.lon != null) {
+      const da = [sel.partenza.lon, sel.partenza.lat];
+      const a = [sel.destinazione.lon, sel.destinazione.lat];
+      const tratto = segmentoPiedi(da, a);
+      if (tratto) features.push(tratto);
+      nodi.push(nodo('partenza', da));
+      nodi.push(nodo('arrivo', a));
+    }
     const esito = routing.stato === 'ok' ? routing.esito : null;
     if (esito && esito.tappe && esito.tappe.length) {
       const tappe = esito.tappe;
       const ufficiali = geometrieUfficiali(tappe);
       if (sel.partenza && sel.partenza.lat != null && esito.camminoIniziale > 0) {
         const prima = coordinateFermata(tappe[0].da);
-        if (prima) features.push(segmento('piedi', [[sel.partenza.lon, sel.partenza.lat], prima]));
+        const tratto = prima ? segmentoPiedi([sel.partenza.lon, sel.partenza.lat], prima) : null;
+        if (tratto) features.push(tratto);
       }
       tappe.forEach((tappa, indice) => {
         const voce = ufficiali[indice];
@@ -734,12 +858,14 @@
         if (tappa.camminoPrima) {
           const da = coordinateFermata(tappa.camminoPrima.da);
           const a = coordinateFermata(tappa.da);
-          if (da && a) features.push(segmento('piedi', [da, a]));
+          const tratto = da && a ? segmentoPiedi(da, a) : null;
+          if (tratto) features.push(tratto);
         }
         let disegnata = null;
         if (geometria && geometria.length > 1) {
           disegnata = estendiAgliEstremi(geometria, coordinateFermata(tappa.da), coordinateFermata(tappa.a));
-          features.push(segmento('bus', disegnata, ufficiale, coloreTracciato(tappa.linea)));
+          const colore = (tappa.tipo === 1 || tappa.tipo === 2) ? '#5B5B5B' : coloreTracciato(tappa.linea);
+          features.push(segmento('bus', disegnata, ufficiale, colore));
           if (!ufficiale) senzaTracciato += 1;
         } else {
           senzaTracciato += 1;
@@ -760,7 +886,8 @@
       });
       if (sel.destinazione && sel.destinazione.lat != null && esito.camminoFinale > 0) {
         const ultima = coordinateFermata(tappe[tappe.length - 1].a);
-        if (ultima) features.push(segmento('piedi', [ultima, [sel.destinazione.lon, sel.destinazione.lat]]));
+        const tratto = ultima ? segmentoPiedi([ultima[0], ultima[1]], [sel.destinazione.lon, sel.destinazione.lat]) : null;
+        if (tratto) features.push(tratto);
       }
 
       // Punti da evidenziare: partenza, ogni cambio e arrivo (una volta sola).
@@ -783,6 +910,7 @@
         const richieste = ufficiali.map((voce, indice) => {
           const tappa = tappe[indice];
           if (!voce || !voce.ufficiale || voce.punti.length < 3 || !(tappa.forma >= 0)) return Promise.resolve(null);
+          if (tappa.tipo === 1 || tappa.tipo === 2) return Promise.resolve(null);
           return agganciaTratta(tappa, voce.punti);
         });
         Promise.all(richieste).then((risultati) => {
@@ -840,7 +968,7 @@
       '<span class="voce-testo"><span class="voce-nome">' + esc(f.nome) + '</span>' +
       (f.indirizzo ? '<span class="voce-indirizzo">' + esc(f.indirizzo) + '</span>' : '') +
       '<span class="voce-meta">' + esc(metaFermata(f)) + '</span></span>' +
-      '<svg class="voce-freccia" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      ICONA_CHEVRON +
       '</button>';
   }
 
@@ -866,16 +994,64 @@
     return risultati.length ? [{ titolo: 'Fermate', items: risultati }] : [];
   }
 
-  // Indirizzo trovato su Nominatim: usa la zona della fermata più vicina per il
-  // prezzo, mentre il percorso parte e arriva dalle coordinate esatte.
-  function indirizzoHTML(luogo, ruolo) {
+  // Etichette italiane per i risultati Nominatim. Il tipo OSM è più preciso
+  // della categoria: "pharmacy" diventa Farmacia, "park" diventa Parco.
+  const CATEGORIE_NOMINATIM = {
+    marketplace: 'Mercato', restaurant: 'Ristorante', fast_food: 'Fast food',
+    cafe: 'Caffè', bar: 'Bar', pub: 'Pub', pharmacy: 'Farmacia',
+    hospital: 'Ospedale', clinic: 'Ambulatorio', doctors: 'Studio medico',
+    dentist: 'Dentista', school: 'Scuola', university: 'Università',
+    college: 'Università', kindergarten: 'Asilo', library: 'Biblioteca',
+    bank: 'Banca', atm: 'Bancomat', fuel: 'Distributore', parking: 'Parcheggio',
+    bus_station: 'Stazione bus', station: 'Stazione', theatre: 'Teatro',
+    cinema: 'Cinema', museum: 'Museo', hotel: 'Hotel', hostel: 'Ostello',
+    supermarket: 'Supermercato', mall: 'Centro commerciale', bakery: 'Panetteria',
+    butcher: 'Macelleria', place_of_worship: 'Luogo di culto', police: 'Polizia',
+    post_office: 'Ufficio postale', townhall: 'Municipio', sports_centre: 'Centro sportivo',
+    park: 'Parco', garden: 'Giardino', playground: 'Parco giochi', attraction: 'Attrazione',
+    viewpoint: 'Panorama', monument: 'Monumento', memorial: 'Memoriale', artwork: 'Opera'
+  };
+  const CATEGORIE_GENERICHE = {
+    shop: 'Negozio', tourism: 'Luogo turistico', leisure: 'Tempo libero',
+    historic: 'Luogo storico', amenity: 'Servizio', building: 'Edificio',
+    office: 'Ufficio', craft: 'Artigianato', healthcare: 'Salute',
+    place: 'Luogo', highway: 'Strada', boundary: 'Area', natural: 'Luogo naturale',
+    waterway: 'Corso d\'acqua', railway: 'Ferrovia', man_made: 'Luogo'
+  };
+
+  function nomeNominatim(voce) {
+    const dettagli = voce.namedetails || {};
+    return dettagli['name:it'] || dettagli.name || voce.name || '';
+  }
+
+  function genereNominatim(voce) {
+    if (!nomeNominatim(voce)) return 'indirizzo';
+    const categoria = String(voce.category || '').toLowerCase();
+    const tipo = String(voce.type || '').toLowerCase();
+    if (categoria === 'place') return ['house', 'road', 'postcode'].includes(tipo) ? 'indirizzo' : 'luogo';
+    if (['highway', 'boundary', 'waterway', 'railway', 'natural', 'landuse'].includes(categoria)) return 'indirizzo';
+    return 'luogo';
+  }
+
+  function categoriaNominatim(voce) {
+    const tipo = String(voce.type || '').toLowerCase();
+    const categoria = String(voce.category || '').toLowerCase();
+    return CATEGORIE_NOMINATIM[tipo] || CATEGORIE_GENERICHE[categoria] || 'Luogo';
+  }
+
+  // Luogo o indirizzo trovato su Nominatim: usa la zona della fermata più vicina
+  // per il prezzo, mentre il percorso parte e arriva dalle coordinate esatte.
+  function luogoHTML(luogo, ruolo) {
+    const genere = luogo.genere === 'luogo' ? 'luogo' : 'indirizzo';
+    const categoria = luogo.categoria || (genere === 'luogo' ? 'Luogo' : 'Indirizzo');
     return '<button class="voce" role="option" data-indirizzo="1" data-lat="' + luogo.lat + '" data-lon="' + luogo.lon +
-      '" data-nome="' + esc(luogo.nome) + '" data-dettaglio="' + esc(luogo.indirizzo || '') + '" data-ruolo="' + esc(ruolo) + '">' +
-      '<span class="voce-ico geo">' + ICONA_LUOGO + '</span>' +
+      '" data-nome="' + esc(luogo.nome) + '" data-dettaglio="' + esc(luogo.indirizzo || '') +
+      '" data-genere="' + genere + '" data-categoria="' + esc(categoria) + '" data-ruolo="' + esc(ruolo) + '">' +
+      '<span class="voce-ico ' + (genere === 'luogo' ? 'luogo' : 'geo') + '">' + ICONA_LUOGO + '</span>' +
       '<span class="voce-testo"><span class="voce-nome">' + esc(luogo.nome) + '</span>' +
       (luogo.indirizzo ? '<span class="voce-indirizzo">' + esc(luogo.indirizzo) + '</span>' : '') +
-      '<span class="voce-meta">Indirizzo · zona ' + esc(luogo.zona) + '</span></span>' +
-      '<svg class="voce-freccia" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '<span class="voce-meta">' + esc(categoria) + ' · zona ' + esc(luogo.zona) + '</span></span>' +
+      ICONA_CHEVRON +
       '</button>';
   }
 
@@ -886,20 +1062,28 @@
       return '<div class="gruppo-titolo">' + esc(gruppo.titolo) + '</div>' +
         gruppo.items.map((f) => voceHTML(f, campo)).join('');
     }).join('');
-    if (suggerimenti.indirizzi.length) {
+    const luoghi = suggerimenti.indirizzi.filter((luogo) => luogo.genere === 'luogo');
+    const indirizzi = suggerimenti.indirizzi.filter((luogo) => luogo.genere !== 'luogo');
+    if (luoghi.length) {
+      html += '<div class="gruppo-titolo">Luoghi</div>' +
+        luoghi.map((luogo) => luogoHTML(luogo, campo)).join('');
+    }
+    if (indirizzi.length) {
       html += '<div class="gruppo-titolo">Indirizzi</div>' +
-        suggerimenti.indirizzi.map((luogo) => indirizzoHTML(luogo, campo)).join('') +
-        '<p class="testo-intro" style="padding:6px 10px 10px;font-size:11px">Indirizzi © OpenStreetMap contributors (ODbL)</p>';
+        indirizzi.map((luogo) => luogoHTML(luogo, campo)).join('');
+    }
+    if (luoghi.length || indirizzi.length) {
+      html += '<p class="testo-intro" style="padding:6px 10px 10px;font-size:11px">Luoghi e indirizzi © OpenStreetMap contributors (ODbL)</p>';
     }
     if (suggerimenti.caricamento) {
-      html += '<div class="gruppo-titolo">Indirizzi</div>' +
+      html += '<div class="gruppo-titolo">Luoghi e indirizzi</div>' +
         '<p class="testo-intro" style="padding:2px 10px 12px">Cerco su OpenStreetMap…</p>';
     }
     if (suggerimenti.errore) {
-      html += '<p class="testo-intro" style="padding:8px 10px 12px">Ricerca indirizzi non disponibile: le fermate qui sopra funzionano lo stesso.</p>';
+      html += '<p class="testo-intro" style="padding:8px 10px 12px">Ricerca di luoghi e indirizzi non disponibile: le fermate qui sopra funzionano lo stesso.</p>';
     }
     if (!html) {
-      html = '<p class="testo-intro" style="padding:16px 8px 12px">Nessuna fermata o indirizzo trovato. Prova con un altro nome.</p>';
+      html = '<p class="testo-intro" style="padding:16px 8px 12px">Nessuna fermata, luogo o indirizzo trovato. Prova con un altro nome.</p>';
     }
     lista.innerHTML = html;
   }
@@ -913,7 +1097,7 @@
     ultimaRichiestaIndirizzi = Date.now();
     if (indirizziAbort) indirizziAbort.abort();
     indirizziAbort = new AbortController();
-    const url = NOMINATIM + '?format=jsonv2&addressdetails=1&limit=6&dedupe=1&accept-language=it&countrycodes=it' +
+    const url = NOMINATIM + '?format=jsonv2&addressdetails=1&namedetails=1&limit=8&dedupe=1&accept-language=it&countrycodes=it' +
       '&viewbox=11.20,44.62,11.50,44.34&q=' + encodeURIComponent(testo);
     const risposta = await fetch(url, { signal: indirizziAbort.signal, headers: { Accept: 'application/json' } });
     if (!risposta.ok) throw new Error('Nominatim: ' + risposta.status);
@@ -931,20 +1115,27 @@
       const indirizzo = voce.address || {};
       const via = indirizzo.road || indirizzo.pedestrian || indirizzo.footway || indirizzo.square || indirizzo.neighbourhood || '';
       const civico = indirizzo.house_number ? ' ' + indirizzo.house_number : '';
-      const nome = voce.name || ((via + civico).trim() || String(voce.display_name || '').split(',')[0].trim());
+      const nome = nomeNominatim(voce) || ((via + civico).trim() || String(voce.display_name || '').split(',')[0].trim());
+      const genere = genereNominatim(voce);
+      const categoria = genere === 'luogo' ? categoriaNominatim(voce) : 'Indirizzo';
+      // Per un POI il nome è già il titolo: sotto si mostra via e città, non
+      // l'indirizzo completo ripetuto. Per un indirizzo resta il contesto via/città.
       const contesto = [via && (via + civico), indirizzo.suburb, indirizzo.city || indirizzo.town || indirizzo.village, indirizzo.postcode]
         .filter(Boolean)
+        .filter((parte) => normalizza(parte) !== normalizza(nome))
         .filter((parte, indice, tutte) => tutte.indexOf(parte) === indice)
         .join(' · ');
       const vicina = fermateVicine(lat, lon, 1)[0];
       trovati.push({
         id: 'geo:' + chiave,
-        nome: nome || 'Indirizzo',
+        nome: nome || 'Luogo',
         indirizzo: contesto,
         lat: lat,
         lon: lon,
         zona: vicina ? vicina.zona : '500',
-        tipo: 'indirizzo'
+        tipo: 'indirizzo',
+        genere: genere,
+        categoria: categoria
       });
     });
     return trovati;
@@ -1000,7 +1191,7 @@
     $('overlay-titolo').textContent = campo === 'partenza' ? 'Da dove parti' : 'Dove vai';
     $('overlay-ricerca').hidden = false;
     $('backdrop').hidden = false;
-    if (testo.length >= INDIRIZZI_MIN) cercaIndirizzi(testo);
+    if (testo.length >= LUOGHI_MIN) cercaIndirizzi(testo);
     else disegnaSuggerimenti();
   }
 
@@ -1062,7 +1253,8 @@
     if (!luogo) return null;
     return {
       id: luogo.id, nome: luogo.nome, indirizzo: luogo.indirizzo || '',
-      lat: luogo.lat, lon: luogo.lon, zona: luogo.zona, tipo: luogo.tipo
+      lat: luogo.lat, lon: luogo.lon, zona: luogo.zona, tipo: luogo.tipo,
+      genere: luogo.genere || '', categoria: luogo.categoria || ''
     };
   }
 
@@ -1097,67 +1289,6 @@
   /* ------------------------------------------------------------------ *
    * Calcolo zone e prezzo
    * ------------------------------------------------------------------ */
-  function isZonaUrbana(zona) { return ZONE_URBANE.has(String(zona)); }
-
-  function avvisoConfine(fermataExtraurbana) {
-    const zona = String(fermataExtraurbana.zona);
-    if (zona === '571') {
-      return 'L\'abbonamento urbano vale fino a Ceretolo - Vivaldi / Riale - Centro (linee 94/83) oppure fino a Casalecchio - Garibaldi (treno per Vignola). Da lì in poi serve l\'integrazione per Zola Predosa.';
-    }
-    if (zona === '581' || zona === '582') {
-      return 'L\'abbonamento urbano copre fino a Casalecchio - Garibaldi. Da lì in poi serve l\'integrazione per raggiungere ' + fermataExtraurbana.nome + '.';
-    }
-    return 'L\'abbonamento urbano copre la zona 500 e le zone neutre (501–509). Per raggiungere ' + fermataExtraurbana.nome + ' (zona ' + zona + ') serve un\'integrazione extraurbana.';
-  }
-
-  function calcola(partenza, destinazione, conAbbonamento) {
-    const pUrbana = isZonaUrbana(partenza.zona);
-    const dUrbana = isZonaUrbana(destinazione.zona);
-
-    if (pUrbana && dUrbana) {
-      return {
-        badge: conAbbonamento ? 'verde' : 'rosso',
-        titolo: conAbbonamento ? 'Coperto dall\'abbonamento urbano' : 'Biglietto urbano necessario',
-        prezzo: conAbbonamento ? 0 : TARIFFE_BUS[1],
-        prezzoNota: conAbbonamento ? 'Nessun costo aggiuntivo' : '1 zona · Area Urbana Bologna',
-        avviso: null
-      };
-    }
-
-    if (!pUrbana && !dUrbana) {
-      return {
-        badge: 'info',
-        titolo: 'Tratta complessa',
-        prezzo: null,
-        prezzoNota: 'Numero di scatti variabile',
-        avviso: 'Tratta tra due zone extraurbane: il numero di scatti dipende dal percorso esatto. Usa il calcolatore ufficiale TPER per il prezzo preciso.'
-      };
-    }
-
-    const extraurbana = pUrbana ? destinazione : partenza;
-    const urbana = pUrbana ? partenza : destinazione;
-    const trattaTreno = extraurbana.tipo === 'treno' || urbana.tipo === 'treno';
-    const tariffe = trattaTreno ? TARIFFE_TRENO : TARIFFE_BUS;
-
-    if (conAbbonamento) {
-      return {
-        badge: 'arancio',
-        titolo: 'Integrazione extraurbana necessaria',
-        prezzo: tariffe[1],
-        prezzoNota: '1 zona extraurbana oltre all\'abbonamento' + (trattaTreno ? ' · stima treno' : ''),
-        avviso: avvisoConfine(extraurbana)
-      };
-    }
-
-    return {
-      badge: 'rosso',
-      titolo: 'Biglietto a 2 zone necessario',
-      prezzo: tariffe[2],
-      prezzoNota: '2 zone' + (trattaTreno ? ' · stima treno, dipende dai km' : ''),
-      avviso: null
-    };
-  }
-
   /* ------------------------------------------------------------------ *
    * Rendering: tab Viaggio
    * ------------------------------------------------------------------ */
@@ -1171,8 +1302,8 @@
       sotto = 'Partenza da ' + nomeBreve(p.nome);
     } else if (p && d) {
       titolo = nomeBreve(p.nome) + ' → ' + nomeBreve(d.nome);
-      const zp = eIndirizzo(p) ? 'Indirizzo · zona ' + p.zona : 'Zona ' + p.zona;
-      const zd = eIndirizzo(d) ? 'Indirizzo · zona ' + d.zona : 'Zona ' + d.zona;
+      const zp = eIndirizzo(p) ? etichettaGenere(p) : 'Zona ' + p.zona;
+      const zd = eIndirizzo(d) ? etichettaGenere(d) : 'Zona ' + d.zona;
       sotto = zp + ' → ' + zd;
     }
     $('sheet-titolo').textContent = titolo;
@@ -1190,12 +1321,19 @@
   }
 
   function htmlRisultato(r) {
-    let html = '<div id="blocco-percorso" class="blocco-percorso"></div>' + htmlBiglietto(r) + htmlInterruttore();
+    // Sotto i 400 m il pianificatore usa solo il cammino: non serve un
+    // biglietto e non ha senso proporre gli orari in tempo reale.
+    const soloPiedi = !!(sel.partenza && sel.destinazione &&
+      sel.partenza.lat != null && sel.partenza.lon != null &&
+      sel.destinazione.lat != null && sel.destinazione.lon != null &&
+      distanzaMetri(sel.partenza, sel.destinazione) < 400);
+    let html = '<div id="blocco-percorso" class="blocco-percorso"></div>' +
+      (soloPiedi ? '' : htmlBiglietto(r) + htmlInterruttore());
     if (r.avviso) {
       html += '<div class="avviso">' + ICONA_INFO + '<span>' + esc(r.avviso) + '</span></div>';
     }
     html += '<div class="azioni">' +
-      '<button class="btn btn-primario" data-azione="live">Orari in tempo reale</button>' +
+      (soloPiedi ? '' : '<button class="btn btn-primario" data-azione="live">Orari in tempo reale</button>') +
       '<button class="btn btn-secondario" data-azione="inverti">Inverti</button>' +
       '</div>';
     html += '<a class="link-ufficiale" href="' + URL_UFFICIALE + '" target="_blank" rel="noopener">Verifica sul calcolatore ufficiale TPER</a>';
@@ -1228,7 +1366,7 @@
   }
 
   function renderViaggio() {
-    const risultato = (sel.partenza && sel.destinazione) ? calcola(sel.partenza, sel.destinazione, abbonamento) : null;
+    const risultato = (sel.partenza && sel.destinazione) ? Tariffe.calcola(sel.partenza, sel.destinazione, abbonamento) : null;
     aggiornaTestata();
     aggiornaChipAbbonamento();
 
@@ -1396,6 +1534,39 @@
     return d.getHours() * 3600 + d.getMinutes() * 60;
   }
 
+  // Sequenza dei modi di trasporto: P = a piedi, B = bus, T = treno.
+  // Serve a tenere nelle alternative almeno una combinazione diversa, non solo
+  // quattro varianti della stessa linea bus.
+  function firmaModi(e) {
+    const pezzi = [];
+    if (e.camminoIniziale > 0) pezzi.push('P');
+    e.tappe.forEach((tappa) => {
+      if (tappa.camminoPrima && tappa.camminoPrima.secondi > 0) pezzi.push('P');
+      pezzi.push(tappa.tipo === 1 || tappa.tipo === 2 ? 'T' : 'B');
+    });
+    if (e.camminoFinale > 0) pezzi.push('P');
+    return pezzi.join('');
+  }
+
+  function selezionaEsiti(esiti) {
+    // Prima una soluzione per ogni combinazione di modi, in ordine di
+    // partenza; poi si riempie fino a quattro con le altre alternative.
+    const ordine = esiti.slice().sort((a, b) => a.partenza - b.partenza || a.arrivo - b.arrivo);
+    const scelti = [];
+    const firme = new Set();
+    ordine.forEach((esito) => {
+      const firma = firmaModi(esito);
+      if (firme.has(firma)) return;
+      firme.add(firma);
+      scelti.push(esito);
+    });
+    ordine.forEach((esito) => {
+      if (scelti.length >= 4) return;
+      if (!scelti.includes(esito)) scelti.push(esito);
+    });
+    return scelti.slice(0, 4).sort((a, b) => a.partenza - b.partenza || a.arrivo - b.arrivo);
+  }
+
   // Il motore calcola l'arrivo più presto a una data ora di partenza. Per avere
   // più alternative si prova qualche partenza in più; in modalità arrivo si
   // arretra dalla scadenza e si tengono solo i viaggi che arrivano in tempo.
@@ -1410,9 +1581,8 @@
     const visti = new Set();
     const esiti = [];
     let errore = null;
-    tentativi.forEach((offset) => {
-      const quando = new Date(base.getTime() + (arrivo ? -offset : offset) * 60000);
-      const esito = TPERRouting.calcola(da, a, quando, { maxCambi: 3 });
+
+    function aggiungi(esito, quando) {
       if (!esito) return;
       if (esito.errore) { errore = errore || esito; return; }
       // Arrivo reale a destinazione: quello del bus più il tratto a piedi
@@ -1426,8 +1596,30 @@
       if (visti.has(firma)) return;
       visti.add(firma);
       esiti.push(esito);
+    }
+
+    tentativi.forEach((offset) => {
+      const quando = new Date(base.getTime() + (arrivo ? -offset : offset) * 60000);
+      aggiungi(TPERRouting.calcola(da, a, quando, { maxCambi: 3 }), quando);
     });
-    return { esiti: esiti.slice(0, 4), errore: errore };
+
+    // Le combinazioni treno + bus non sono per forza le più veloci: se il
+    // pianificatore restituisse solo la soluzione migliore, una linea bus
+    // diretta nasconderebbe per sempre il treno. Si provano anche le coppie
+    // singole di fermate vicine, ma solo quando c'è una stazione nell'elenco.
+    const conTreno = da.concat(a).some((fermata) => fermata.tipo === 'treno' || fermata.tipo === 'entrambi');
+    if (conTreno) {
+      const offset = arrivo ? tentativi[0] : 0;
+      const quando = new Date(base.getTime() + (arrivo ? -offset : offset) * 60000);
+      da.forEach((origine) => {
+        a.forEach((destinazione) => {
+          if (origine.id === destinazione.id) return;
+          aggiungi(TPERRouting.calcola([origine], [destinazione], quando, { maxCambi: 3 }), quando);
+        });
+      });
+    }
+
+    return { esiti: selezionaEsiti(esiti), errore: errore };
   }
 
   function dataDaGiornoEOra(giorno, ora) {
@@ -1474,14 +1666,27 @@
   function candidatiPercorso(fermata) {
     const disponibili = fermateConOrari();
     const elenco = [];
-    if (disponibili.has(fermata.id)) elenco.push({ id: fermata.id, cammino: 0 });
+    if (disponibili.has(fermata.id)) elenco.push({ id: fermata.id, cammino: 0, tipo: fermata.tipo });
     if (fermata.lat == null || fermata.lon == null) return elenco;
-    fermateVicine(fermata.lat, fermata.lon, 40, fermata.id).forEach((vicina) => {
+    // Le stazioni ferroviarie non devono sparire solo perché ci sono cinque
+    // paline bus più vicine: senza di loro non può nascere nessuna
+    // combinazione bus + treno.
+    const vicini = fermateVicine(fermata.lat, fermata.lon, 40, fermata.id)
+      .filter((vicina) => disponibili.has(vicina.id))
+      .map((vicina) => ({ fermata: vicina, distanza: distanzaMetri(fermata, vicina) }))
+      .filter((voce) => voce.distanza <= 500)
+      .sort((a, b) => {
+        const trenoA = a.fermata.tipo === 'treno' || a.fermata.tipo === 'entrambi' ? 0 : 1;
+        const trenoB = b.fermata.tipo === 'treno' || b.fermata.tipo === 'entrambi' ? 0 : 1;
+        return trenoA - trenoB || a.distanza - b.distanza;
+      });
+    vicini.forEach((voce) => {
       if (elenco.length >= 5) return;
-      if (!disponibili.has(vicina.id)) return;
-      const distanza = distanzaMetri(fermata, vicina);
-      if (distanza > 500) return;
-      elenco.push({ id: vicina.id, cammino: Math.round(distanza * 1.15) });
+      elenco.push({
+        id: voce.fermata.id,
+        cammino: Math.round(voce.distanza * 1.15),
+        tipo: voce.fermata.tipo
+      });
     });
     return elenco;
   }
@@ -1603,7 +1808,14 @@
 
     if (distanza != null && distanza < 400) {
       routing.stato = 'piedi';
-      routing.piedi = { metri: Math.round(distanza), minuti: minuti(distanza * 1.3 / 1.2) };
+      routing.piedi = {
+        metri: Math.round(distanza),
+        minuti: minuti(distanza * 1.3 / 1.2),
+        chiave: Piedi.chiave(
+          [sel.partenza.lon, sel.partenza.lat],
+          [sel.destinazione.lon, sel.destinazione.lat]
+        )
+      };
       disegnaPercorso();
       return;
     }
@@ -1904,7 +2116,7 @@
         '<div class="arrivo-testo"><div class="arrivo-tempo">' + tempo + '</div>' +
         '<div class="arrivo-meta">' + meta + '</div></div>' +
         '<span class="' + (arrivo.tipo === 'live' ? 'tag-live' : 'tag-orario') + '">' + (arrivo.tipo === 'live' ? 'LIVE' : 'ORARIO') + '</span>' +
-        (arrivo.pedana ? '<span class="icona-pedana" title="Accessibile in carrozzina">' + ICONA_PEDANA + '</span>' : '') +
+        (arrivo.pedana ? '<span class="icona-pedana" title="Accessibile in carrozzina">' + ICONA_ACCESSIBILITA + '</span>' : '') +
         '</li>';
     }).join('') + '</ul>';
   }
@@ -2271,7 +2483,7 @@
       '<div class="scheda"><h2>Come funziona il tempo reale</h2>' +
       '<p>Gli arrivi vengono letti dal web service pubblico HelloBus di TPER, lo stesso usato dagli SMS alle fermate. I passaggi con etichetta LIVE sono bus localizzati via satellite; gli altri sono orari di tabella.</p></div>' +
       '<div class="scheda"><h2>Dati del servizio</h2>' +
-      '<p>Fermate, zone e linee: open data TPER / Regione Emilia-Romagna (CC BY 3.0 IT).<br>Orari dei percorsi: GTFS ufficiale TPER (orari programmati).<br>Database fermate aggiornato al: ' + esc(aggiornato || 'non disponibile') + '.<br>Prezzi indicativi: verifica sempre su tper.it.</p>' +
+      '<p>Fermate, zone e linee: open data TPER / Regione Emilia-Romagna (CC BY 3.0 IT).<br>Orari dei bus: GTFS ufficiale TPER.<br>Orari dei treni: GTFS nazionale Trenitalia via NAP (CC BY 4.0), conversione deryclem/trenitalia-gtfs; copre Bologna C.le, Imola e il ramo Bologna–Pianoro. Le fermate di Vignola e Porretta sono presenti, ma non hanno un GTFS aperto con gli orari intermedi.<br>Percorsi a piedi: OSRM pedonale FOSSGIS / OpenStreetMap.<br>Database fermate aggiornato al: ' + esc(aggiornato || 'non disponibile') + '.<br>Prezzi indicativi: verifica sempre su tper.it.</p>' +
       '<a class="mini" href="https://www.tper.it" target="_blank" rel="noopener">Apri tper.it</a></div>' +
       '<div class="scheda"><h2>Relay per gli orari</h2>' +
       '<p>HelloBus non consente le chiamate dirette dal browser (manca l\'autorizzazione CORS): l\'app passa da un relay pubblico. Se ne hai uno tuo, incollalo qui sotto con <code>{url}</code> al posto dell\'indirizzo da chiamare.</p>' +
@@ -2505,12 +2717,14 @@
         const ruolo = indirizzo.getAttribute('data-ruolo') || campoAttivo || 'destinazione';
         selezionaFermata(ruolo, {
           id: 'geo:' + lat.toFixed(5) + ',' + lon.toFixed(5),
-          nome: indirizzo.getAttribute('data-nome') || 'Indirizzo',
+          nome: indirizzo.getAttribute('data-nome') || 'Luogo',
           indirizzo: indirizzo.getAttribute('data-dettaglio') || '',
           lat: lat,
           lon: lon,
           zona: vicina ? vicina.zona : '500',
-          tipo: 'indirizzo'
+          tipo: 'indirizzo',
+          genere: indirizzo.getAttribute('data-genere') || 'indirizzo',
+          categoria: indirizzo.getAttribute('data-categoria') || 'Indirizzo'
         });
         return;
       }

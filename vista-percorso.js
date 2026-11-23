@@ -6,7 +6,8 @@
 (function (globale) {
   'use strict';
 
-  const ICONA_PEDANA = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="4" r="2"/><path d="M11 7h2.2l1.3 4.3H19v1.8h-4.4l-.6-2H13v5.2a4.2 4.2 0 1 1-2-3.6V7z"/></svg>';
+  const Icone = typeof require === 'function' ? require('./icone') : globale.Icone;
+  const ICONA_PEDANA = Icone.svg('footprints', 16);
 
   function esc(valore) {
     return String(valore == null ? '' : valore)
@@ -48,19 +49,30 @@
     return '<div class="piedi">' + ICONA_PEDANA + '<span>' + testo + '</span></div>';
   }
 
-  function lineeHTML(e) {
-    const viste = new Set();
+  function piediBadge(secondi) {
+    const minutiPiedi = Math.max(1, Math.round(secondi / 60));
+    return '<span class="opzione-piedi" title="A piedi ' + minutiPiedi + ' min" aria-label="A piedi ' +
+      minutiPiedi + ' min">' + ICONA_PEDANA + '</span>';
+  }
+
+  // Sequenza compatta dei modi: piedi → linea → piedi → linea → piedi.
+  // Le linee non vengono più accorpate per nome, così un cambio bus/treno
+  // resta visibile nell'ordine in cui avviene.
+  function modiHTML(e) {
     const pezzi = [];
+    if (e.camminoIniziale > 0) pezzi.push(piediBadge(e.camminoIniziale));
     e.tappe.forEach((tappa) => {
-      if (!tappa.linea || viste.has(tappa.linea)) return;
-      viste.add(tappa.linea);
+      if (tappa.camminoPrima && tappa.camminoPrima.secondi > 0) {
+        pezzi.push(piediBadge(tappa.camminoPrima.secondi));
+      }
       const treno = tappa.tipo === 1 || tappa.tipo === 2;
       const stile = !treno && tappa.colore
         ? ' style="background:' + esc(tappa.colore) + ';color:' + esc(tappa.coloreTesto || '#FFFFFF') + '"'
         : '';
       pezzi.push('<span class="opzione-linea' + (treno ? ' treno' : '') + '"' + stile + '>' + esc(tappa.linea) + '</span>');
     });
-    return pezzi.slice(0, 4).join('');
+    if (e.camminoFinale > 0) pezzi.push(piediBadge(e.camminoFinale));
+    return pezzi.slice(0, 9).join('');
   }
 
   /** Itinerario completo di una singola opzione. */
@@ -89,7 +101,7 @@
         '<span class="corsa-badge' + (treno ? ' treno' : '') + '"' + colore + '>' + esc(tappa.linea) + '</span>' +
         '<div class="corsa-corpo">' +
         '<div class="corsa-riga"><span class="corsa-ora">' + hhmm(tappa.partenza) + '</span><span class="corsa-fermata">' + esc(etichetta(tappa.da)) + '</span></div>' +
-        '<div class="corsa-info">' + tappa.fermate + ' ' + (tappa.fermate === 1 ? 'fermata' : 'fermate') + ' · ' + durata + ' min</div>' +
+        '<div class="corsa-info">' + (treno ? 'Tratta ferroviaria' : tappa.fermate + ' ' + (tappa.fermate === 1 ? 'fermata' : 'fermate')) + ' · ' + durata + ' min</div>' +
         '<div class="corsa-riga"><span class="corsa-ora">' + hhmm(tappa.arrivo) + '</span><span class="corsa-fermata">' + esc(etichetta(tappa.a)) + '</span></div>' +
         '</div></div>';
     });
@@ -116,8 +128,8 @@
       '<span class="opzione-orari">' + hhmm(uscita) + '<span class="freccia">→</span>' + hhmm(arrivoDestinazione) + '</span>' +
       '<span class="opzione-meta">' + totale + ' min · ' + cambiTesto(e.cambi) + esc(extra) +
       (margine != null && margine >= 0 ? ' · ' + margine + ' min di margine' : '') + '</span>' +
-      '<span class="opzione-linee">' + lineeHTML(e) + '</span>' +
-      '<svg class="opzione-freccia" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '<span class="opzione-linee">' + modiHTML(e) + '</span>' +
+      Icone.svg('chevron-down', 16, 'opzione-freccia') +
       '</summary>' +
       '<div class="opzione-corpo">' + dettaglioHTML(e, etichetta) + '</div>' +
       '</details>';
@@ -144,7 +156,7 @@
     if (vista.stato === 'messaggio') {
       const codice = vista.esito && vista.esito.errore;
       let testo = 'Percorso non disponibile per queste fermate.';
-      if (codice === 'senza-orari') testo = 'Nessuna fermata con orari bus nel raggio di 500 m: le stazioni ferroviarie e i pali senza corse non hanno orari. Scegli una fermata vicina.';
+      if (codice === 'senza-orari') testo = 'Nessuna fermata con orari nel raggio di 500 m: questa stazione non ha corse disponibili (per alcune linee ferroviarie locali non esiste un GTFS aperto). Scegli una fermata bus vicina.';
       return '<div class="box-messaggio">' + esc(testo) + '</div>';
     }
     if (vista.stato === 'nessuno') {
@@ -159,15 +171,17 @@
     let html = '<div class="opzioni">' +
       opzioni.map((e, indice) => opzioneHTML(e, indice, vista, etichetta)).join('') + '</div>';
     html += '<div class="avviso nota-tracciato" id="nota-tracciato" hidden>' +
-      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4.2 21 19.8H3L12 4.2z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 10v3.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="16.6" r=".95" fill="currentColor"/></svg>' +
+      Icone.svg('triangle-alert', 16) +
       '<span>Senza tracciato GTFS per un tratto: sulla mappa è una <b>linea diritta tratteggiata</b> tra le fermate, non il percorso reale del bus.</span></div>' +
       '<p class="nota-piccola">Orari programmati: possibili variazioni.</p>';
     return html;
   }
 
-  globale.VistaPercorso = {
+  const API = {
     controlli: controlli,
     esito: esito,
     ICONA_PEDANA: ICONA_PEDANA
   };
-})(window);
+  if (typeof module !== 'undefined' && module.exports) module.exports = API;
+  else globale.VistaPercorso = API;
+})(typeof window !== 'undefined' ? window : globalThis);

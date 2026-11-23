@@ -440,15 +440,22 @@
     }
 
     const ora = secondiDa(data);
-    const risultato = pianifica(chiaveDi(data), origini, destinazioni, ora, maxCambi);
-    if (risultato) return risultato;
 
-    // Dopo mezzanotte le corse serali appartengono al giorno precedente.
+    // Dopo mezzanotte le corse serali appartengono al giorno precedente e
+    // hanno orari oltre 24:00. Non basta provare prima il giorno corrente:
+    // una corsa delle 24:30 verrebbe presa come se partisse tra 24 ore, con
+    // una durata assurda. Si calcolano entrambi e si sceglie l'arrivo più
+    // presto sullo stesso asse temporale (mezzanotte del giorno prima).
     if (data.getHours() < 4) {
       const ieri = new Date(data.getTime() - 86400000);
-      return pianifica(chiaveDi(ieri), origini, destinazioni, ora + 86400, maxCambi) || null;
+      const diIeri = pianifica(chiaveDi(ieri), origini, destinazioni, ora + 86400, maxCambi);
+      const diOggi = pianifica(chiaveDi(data), origini, destinazioni, ora, maxCambi);
+      if (!diIeri) return diOggi || null;
+      if (!diOggi) return diIeri;
+      return diIeri.arrivo <= diOggi.arrivo + 86400 ? diIeri : diOggi;
     }
-    return null;
+
+    return pianifica(chiaveDi(data), origini, destinazioni, ora, maxCambi) || null;
   }
 
   /* --- Geometria delle corse ------------------------------------------ */

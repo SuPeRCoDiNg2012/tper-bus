@@ -1,5 +1,5 @@
 {
-  "aggiornato": "2026-11-22",
+  "aggiornato": "2026-11-23",
   "fonte": "Dataset ufficiale TPER (open data) convertito con converti-fermate-autobus.py; stazioni ferroviarie integrate manualmente",
   "fermate": [
     {
@@ -15376,8 +15376,8 @@
       "nome": "Bologna - Stazione Centrale",
       "tipo": "entrambi",
       "zona": "500",
-      "lat": 44.5058,
-      "lon": 11.3426
+      "lat": 44.506234,
+      "lon": 11.342267
     },
     {
       "id": "15",
@@ -22289,8 +22289,8 @@
       "nome": "Casalecchio di Reno - Garibaldi",
       "tipo": "treno",
       "zona": "507",
-      "lat": 44.4775,
-      "lon": 11.283
+      "lat": 44.4827287,
+      "lon": 11.2727053
     },
     {
       "id": "6267",
@@ -52399,8 +52399,8 @@
       "nome": "Imola - Stazione",
       "tipo": "treno",
       "zona": "510",
-      "lat": 44.354,
-      "lon": 11.717
+      "lat": 44.359375,
+      "lon": 11.718726
     },
     {
       "id": "16017",
@@ -58052,8 +58052,8 @@
       "nome": "Marzabotto - Stazione",
       "tipo": "treno",
       "zona": "582",
-      "lat": 44.341,
-      "lon": 11.217
+      "lat": 44.3412514,
+      "lon": 11.207399
     },
     {
       "id": "80533",
@@ -68558,8 +68558,8 @@
       "nome": "Pianoro - Stazione",
       "tipo": "treno",
       "zona": "509",
-      "lat": 44.398,
-      "lon": 11.338
+      "lat": 44.380563,
+      "lon": 11.340680
     },
     {
       "id": "90597",
@@ -81293,8 +81293,8 @@
       "nome": "Sasso Marconi - Stazione",
       "tipo": "treno",
       "zona": "581",
-      "lat": 44.38,
-      "lon": 11.258
+      "lat": 44.3949461,
+      "lon": 11.254322
     },
     {
       "id": "70045",
@@ -84775,8 +84775,8 @@
       "nome": "Vignola - Stazione",
       "tipo": "treno",
       "zona": "591",
-      "lat": 44.479,
-      "lon": 11.007
+      "lat": 44.4817784,
+      "lon": 11.0084565
     },
     {
       "id": "60637",
@@ -86289,6 +86289,254 @@
       "lat": 44.615604,
       "lon": 11.369659,
       "indirizzo": "Via Galliera SP4 Km 7+480"
+    },
+    {
+      "id": "TRN012",
+      "nome": "Bologna - Borgo Panigale",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.5151514,
+      "lon": 11.2849781
+    },
+    {
+      "id": "TRN013",
+      "nome": "Casteldebole - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.5035645,
+      "lon": 11.2745798
+    },
+    {
+      "id": "TRN014",
+      "nome": "Casalecchio di Reno - Ceretolo",
+      "tipo": "treno",
+      "zona": "507",
+      "lat": 44.481463,
+      "lon": 11.2629212
+    },
+    {
+      "id": "TRN015",
+      "nome": "Casalecchio di Reno - Palasport",
+      "tipo": "treno",
+      "zona": "507",
+      "lat": 44.4846921,
+      "lon": 11.2475839
+    },
+    {
+      "id": "TRN016",
+      "nome": "Riale - Stazione",
+      "tipo": "treno",
+      "zona": "571",
+      "lat": 44.4854155,
+      "lon": 11.2410254
+    },
+    {
+      "id": "TRN017",
+      "nome": "Pilastrino - Stazione",
+      "tipo": "treno",
+      "zona": "571",
+      "lat": 44.488226,
+      "lon": 11.2294746
+    },
+    {
+      "id": "TRN018",
+      "nome": "Zola Predosa - Zola Centro",
+      "tipo": "treno",
+      "zona": "571",
+      "lat": 44.4925206,
+      "lon": 11.2181143
+    },
+    {
+      "id": "TRN019",
+      "nome": "Zola Predosa - Zola Chiesa",
+      "tipo": "treno",
+      "zona": "571",
+      "lat": 44.4941412,
+      "lon": 11.2094261
+    },
+    {
+      "id": "TRN020",
+      "nome": "Zola Predosa - Ponte Ronca",
+      "tipo": "treno",
+      "zona": "571",
+      "lat": 44.5021261,
+      "lon": 11.1919396
+    },
+    {
+      "id": "TRN021",
+      "nome": "Zola Predosa - Via Lunga",
+      "tipo": "treno",
+      "zona": "558",
+      "lat": 44.509866,
+      "lon": 11.1692096
+    },
+    {
+      "id": "TRN022",
+      "nome": "Crespellano - Stazione",
+      "tipo": "treno",
+      "zona": "558",
+      "lat": 44.5122597,
+      "lon": 11.1298768
+    },
+    {
+      "id": "TRN023",
+      "nome": "Muffa - Stazione",
+      "tipo": "treno",
+      "zona": "558",
+      "lat": 44.5104499,
+      "lon": 11.109404
+    },
+    {
+      "id": "TRN024",
+      "nome": "Bazzano - Stazione",
+      "tipo": "treno",
+      "zona": "558",
+      "lat": 44.5086013,
+      "lon": 11.0782074
+    },
+    {
+      "id": "TRN025",
+      "nome": "Savignano sul Panaro - Mulino",
+      "tipo": "treno",
+      "zona": "444",
+      "lat": 44.494138,
+      "lon": 11.0474736
+    },
+    {
+      "id": "TRN026",
+      "nome": "Savignano sul Panaro - Centro",
+      "tipo": "treno",
+      "zona": "444",
+      "lat": 44.4832914,
+      "lon": 11.0328685
+    },
+    {
+      "id": "TRN027",
+      "nome": "Casalecchio di Reno - Stazione",
+      "tipo": "treno",
+      "zona": "507",
+      "lat": 44.4743616,
+      "lon": 11.2762664
+    },
+    {
+      "id": "TRN028",
+      "nome": "Borgonuovo - Stazione",
+      "tipo": "treno",
+      "zona": "581",
+      "lat": 44.4436713,
+      "lon": 11.2751224
+    },
+    {
+      "id": "TRN029",
+      "nome": "Pontecchio Marconi - Stazione",
+      "tipo": "treno",
+      "zona": "581",
+      "lat": 44.4231153,
+      "lon": 11.2692588
+    },
+    {
+      "id": "TRN030",
+      "nome": "Lama di Reno - Stazione",
+      "tipo": "treno",
+      "zona": "582",
+      "lat": 44.3628324,
+      "lon": 11.214449
+    },
+    {
+      "id": "TRN031",
+      "nome": "Pian di Venola - Stazione",
+      "tipo": "treno",
+      "zona": "582",
+      "lat": 44.3331327,
+      "lon": 11.190203
+    },
+    {
+      "id": "TRN032",
+      "nome": "Pioppe di Salvaro - Stazione",
+      "tipo": "treno",
+      "zona": "569",
+      "lat": 44.3107789,
+      "lon": 11.161913
+    },
+    {
+      "id": "TRN033",
+      "nome": "Vergato - Stazione",
+      "tipo": "treno",
+      "zona": "569",
+      "lat": 44.2828972,
+      "lon": 11.1144021
+    },
+    {
+      "id": "TRN034",
+      "nome": "Carbona - Stazione",
+      "tipo": "treno",
+      "zona": "570",
+      "lat": 44.2470852,
+      "lon": 11.0963833
+    },
+    {
+      "id": "TRN035",
+      "nome": "Riola - Stazione",
+      "tipo": "treno",
+      "zona": "570",
+      "lat": 44.2298903,
+      "lon": 11.053558
+    },
+    {
+      "id": "TRN036",
+      "nome": "Silla - Stazione",
+      "tipo": "treno",
+      "zona": "576",
+      "lat": 44.1776897,
+      "lon": 10.9806594
+    },
+    {
+      "id": "TRN037",
+      "nome": "Porretta Terme - Stazione",
+      "tipo": "treno",
+      "zona": "573",
+      "lat": 44.1559659,
+      "lon": 10.9781072
+    },
+    {
+      "id": "TRN038",
+      "nome": "Bologna - San Vitale",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.496028,
+      "lon": 11.3730902
+    },
+    {
+      "id": "TRN039",
+      "nome": "Bologna - Mazzini",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.4826161,
+      "lon": 11.3762573
+    },
+    {
+      "id": "TRN040",
+      "nome": "Bologna - San Ruffillo",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.4626716,
+      "lon": 11.3730831
+    },
+    {
+      "id": "TRN041",
+      "nome": "Rastignano - Stazione",
+      "tipo": "treno",
+      "zona": "509",
+      "lat": 44.4432202,
+      "lon": 11.3574417
+    },
+    {
+      "id": "TRN042",
+      "nome": "Musiano - Pian di Macina",
+      "tipo": "treno",
+      "zona": "509",
+      "lat": 44.400917,
+      "lon": 11.3439518
     }
   ]
 }

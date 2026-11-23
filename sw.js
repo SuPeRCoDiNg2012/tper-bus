@@ -3,15 +3,18 @@
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'muovi-bologna-static-v31';
-const CACHE_DATI = 'muovi-bologna-data-v31';
+const CACHE_STATICA = 'muovi-bologna-static-v44';
+const CACHE_DATI = 'muovi-bologna-data-v44';
 
 const ASSET_STATICI = [
   './',
   './index.html',
   './app.js',
   './routing.js',
+  './icone.js',
   './vista-percorso.js',
+  './tariffe.js',
+  './piedi.js',
   './manifest.json',
   './icons/icon-192.svg',
   './icons/icon-512.svg',

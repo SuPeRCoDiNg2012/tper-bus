@@ -13,13 +13,18 @@ Web app mobile-first (PWA) per calcolare zone tariffarie, costo del biglietto e 
 | Dati fermate bus | Dataset open data Regione Emilia-Romagna | 0 € — licenza aperta | Va scaricato e aggiornato periodicamente a mano (non in tempo reale) | https://dati.emilia-romagna.it/dataset/tper-fermate-autobus |
 | Linee/orari (GTFS) | Feed open data GTFS ufficiale TPER | 0 € — licenza open data | File grande: va preprocessato offline con lo script incluso, non scaricato dal browser | https://solweb.tper.it/web/tools/open-data/open-data-download.aspx |
 | Orari in tempo reale | TPER HelloBus (web service XML pubblico) | 0 € — nessuna API key | Il servizio non invia header CORS: l'app passa da un relay pubblico (proxy.corsfix.com, con fallback), sostituibile dal tab Info | https://hellobuswsweb.tper.it/web-services/hellobus.asmx |
-| Calcolo del percorso | Motore RAPTOR in `routing.js` sugli orari programmati del GTFS TPER | 0 € — nessuna API esterna, nessuna key | Orari di tabella (non realtime): possono variare per traffico e lavori | https://developers.google.com/transit/gtfs |
+| Calcolo del percorso | Motore RAPTOR in `routing.js` sugli orari programmati GTFS TPER (bus) e Trenitalia (treni) | 0 € — nessuna API esterna, nessuna key | Orari di tabella (non realtime): possono variare per traffico e lavori | https://developers.google.com/transit/gtfs |
+| Percorsi a piedi | OSRM pedonale pubblico FOSSGIS (`routing.openstreetmap.de`) | 0 € — nessuna API key | Solo online: se il servizio non risponde o manca la rete si usa il segmento diritto. La richiesta contiene solo le coordinate del tratto | https://routing.openstreetmap.de |
+| Coordinate stazioni | OpenStreetMap / FER, con integrazione manuale | 0 € — ODbL | Solo per le stazioni ferroviarie; nessun dato personale | https://www.openstreetmap.org |
+| Orari dei treni | GTFS nazionale Trenitalia via NAP (CC BY 4.0), conversione `deryclem/trenitalia-gtfs` | 0 € — licenza aperta | Copre Bologna C.le, Imola e l'intero ramo Bologna–Pianoro (San Vitale, Mazzini, San Ruffillo, Rastignano, Musiano). Per Vignola e Porretta le fermate sono presenti, ma non esiste un GTFS aperto con gli orari intermedi | https://github.com/deryclem/trenitalia-gtfs |
 | Mappa | MapLibre GL + OpenFreeMap (stile Liberty) | 0 € — nessuna API key, nessun limite | Richiede connessione per stile e tile vettoriali; ricerca fermate, zone e prezzi restano offline | https://openfreemap.org |
-| Ricerca indirizzi | Nominatim (OpenStreetMap) | 0 € — nessuna API key | Solo online e con limite di 1 richiesta al secondo; il testo cercato viene inviato a OpenStreetMap. Senza connessione restano le fermate | https://nominatim.org |
+| Ricerca luoghi e indirizzi | Nominatim (OpenStreetMap) | 0 € — nessuna API key | Solo online e con limite di 1 richiesta al secondo; il testo cercato viene inviato a OpenStreetMap. Cerca sia per nome di luogo sia per indirizzo. Senza connessione restano le fermate | https://nominatim.org |
 | PWA (installabilità + offline) | `manifest.json` completo + icone PNG/maskable + Service Worker nativo del browser | 0 € — standard web nativo | Nessuno | https://developer.mozilla.org/docs/Web/Progressive_web_apps |
 | Icone app | PNG 192/512, maskable 192/512 e apple-touch 180, con sorgenti SVG incluse | 0 € | PNG generati localmente, nessun servizio esterno | — |
+| Icone interfaccia | Lucide (ISC), SVG inline in `icone.js` | 0 € | Nessuna CDN o font di icone: restano disponibili offline | https://lucide.dev |
 | Tracciato stradale | OSRM demo pubblico (map matching) per agganciare le shapes TPER alle strade | 0 € — nessuna API key | Servizio pubblico senza garanzie: se non risponde si usa il tracciato ufficiale. La richiesta contiene solo le coordinate del percorso. Geometrie agganciate salvate in locale | https://project-osrm.org |
 | Preprocessing GTFS | Script Node.js incluso (`scripts/preprocess-gtfs.js`), solo moduli nativi | 0 € — Node.js è open source | Richiede Node.js installato in locale, solo per rigenerare i dati, non per l'uso dell'app | https://nodejs.org |
+| Test automatici | Node.js test runner (`node --test tests`), nessuna dipendenza | 0 € — Node.js è open source | Solo per sviluppo: non vengono caricati dal browser | https://nodejs.org/api/test.html |
 
 Nessun componente richiede carta di credito, free trial a scadenza o abbonamento.
 
@@ -31,6 +36,9 @@ tper-zone-calc/
 ├── app.js                        # Logica: fermate, calcolo zone, orari live, mappa
 ├── routing.js                    # Calcolo del percorso (linee, orari, cambi) sugli orari GTFS
 ├── vista-percorso.js             # Rendering HTML della scheda percorso (tempi, cambi, tratti a piedi)
+├── tariffe.js                    # Logica pura di zone e prezzi (testabile senza DOM)
+├── piedi.js                      # URL, cache e parsing OSRM pedonale (coordinate [lon, lat])
+├── icone.js                      # Set unico di icone Lucide, SVG inline (ISC)
 ├── manifest.json                  # Manifest PWA
 ├── sw.js                          # Service worker (cache offline)
 ├── icons/
@@ -40,22 +48,31 @@ tper-zone-calc/
 │   ├── icon-192.svg / icon-512.svg            # Sorgenti vettoriali
 │   └── icon-maskable-192.svg / -512.svg
 ├── data/
-│   ├── fermate.json                # 9.603 fermate bus reali + stazioni ferroviarie curate a mano (9.464 con indirizzo breve)
+│   ├── fermate.json                # 9.634 fermate: bus reali + 42 stazioni ferroviarie (tutte le fermate delle linee Vignola, Porretta e Pianoro)
 │   ├── linee-per-fermata.json      # Linee che servono ciascuna fermata (dal dataset ufficiale)
 │   ├── linee-colori.json           # Colore ufficiale di ogni linea (GTFS route_color) per scheda e mappa
-│   ├── orari.json                  # Orari di tutte le corse (GTFS TPER compresso, ~5,8 MB)
-│   ├── orari.json.gz               # Stessa cosa in gzip (~279 KB): è questo che l'app scarica
-│   ├── tracciati.json              # Geometrie reali delle linee (1.617 forme, ~0,8 MB)
-│   └── tracciati.json.gz           # Stessa cosa in gzip (~166 KB): scaricata solo quando serve il percorso
+│   ├── orari.json                  # Orari di tutte le corse bus + 110 corse treno (~5,9 MB)
+│   ├── orari.json.gz               # Stessa cosa in gzip (~271 KB): è questo che l'app scarica
+│   ├── tracciati.json              # Geometrie reali di bus e treni (1.637 forme, ~1,6 MB)
+│   └── tracciati.json.gz           # Stessa cosa in gzip (~370 KB): scaricata solo quando serve il percorso
 ├── scripts/
 │   ├── converti-fermate-autobus.py # Converte il dataset ufficiale TPER (bus) nei due file dati sopra
 │   ├── estrai-colori-linee.py      # Estrae i colori ufficiali delle linee da routes.txt del GTFS
-│   ├── preprocess-orari.js         # Dal GTFS completo genera data/orari.json per il calcolo percorsi
+│   ├── preprocess-orari.js         # Dal GTFS TPER genera data/orari.json e data/tracciati.json per i bus
+│   ├── aggiungi-treni.js           # Unisce le corse del GTFS nazionale Trenitalia al dataset bus
 │   └── preprocess-gtfs.js          # (opzionale) elabora il GTFS completo, utile solo per dati extra
+├── tests/
+│   ├── dati.test.js                # Invarianti dei JSON (fermate, corse, forme, treni)
+│   ├── routing.test.js             # Percorsi, cambi, cammini, calendari e mezzanotte
+│   ├── tariffe.test.js             # Zone e prezzi bus/treno
+│   ├── piedi.test.js               # Coordinate, chiave e risposta OSRM pedonale
+│   ├── icone.test.js               # Set Lucide unico, dimensioni e semantica
+│   ├── vista.test.js               # Scheda percorso, treni, escaping e stati vuoti
+│   └── integrale.test.js           # Percorsi reali Bologna–Imola e ramo Pianoro con geometria
 └── README.md
 ```
 
-> **Dataset incluso**: i file in `data/` contengono ora il dataset reale e completo delle fermate bus TPER (9.603 fermate, con le linee che le servono), più un elenco curato a mano delle principali stazioni ferroviarie. Se TPER aggiorna il proprio dataset open data, rilancia lo script `scripts/converti-fermate-autobus.py` (vedi sotto) per rigenerare i dati.
+> **Dataset incluso**: i file in `data/` contengono ora il dataset reale e completo delle fermate bus TPER (9.603 fermate, con le linee che le servono), più 31 nuove stazioni ferroviarie per un totale di 42: tutte le fermate delle linee **Bologna–Vignola**, **Bologna–Porretta** e **Bologna–Pianoro**. Se TPER aggiorna il proprio dataset open data, rilancia lo script `scripts/converti-fermate-autobus.py` (vedi sotto) per rigenerare i dati.
 
 ## Deploy gratuito (GitHub Pages)
 
@@ -99,7 +116,17 @@ Il dataset ufficiale sopra riguarda **solo gli autobus**. Le stazioni ferroviari
 
 In alternativa, per un elenco più completo delle linee ferroviarie, resta disponibile il percorso GTFS descritto nella sezione "Metodo alternativo (GTFS)" più sotto, da cui si possono estrarre anche le stazioni.
 
-### Calcolo del percorso (orari bus)
+Le 42 stazioni coprono l'intero elenco delle fermate delle linee **Bologna–Vignola** (18), **Bologna–Porretta** (17) e **Bologna–Pianoro** (7), comprese le fermate minori come Riale, Pilastrino, Zola, Crespellano, Vergato e Rastignano.
+
+Gli **orari dei treni** vengono invece dal GTFS nazionale Trenitalia via NAP (CC BY 4.0), non dal feed TPER: il feed nazionale copre Bologna C.le, Imola e l'intero ramo Bologna–Pianoro; per Vignola e Porretta non esiste un GTFS/NeTEx aperto con le fermate intermedie. Le stazioni di quelle due linee sono quindi presenti nella ricerca, ma senza orari: il pianificatore lo segnala invece di inventare corse. Dopo aver rigenerato il dataset bus, unisci le corse ferroviarie con:
+
+```bash
+node scripts/aggiungi-treni.js gtfs-trenitalia data/orari.json data/tracciati.json
+```
+
+Lo script rifiuta di girare due volte sullo stesso dataset, così non duplica le corse. Se in futuro il GTFS nazionale includerà altre stazioni, aggiungile all'elenco `STAZIONI` in cima a `scripts/aggiungi-treni.js` (codice `stop_code` NAP e id `TRN…` usato in `data/fermate.json`).
+
+### Calcolo del percorso (bus e treni)
 
 Il blocco **Percorso** nel tab Viaggio calcola quali bus prendere, a che ora e con quanti cambi, come un pianificatore di viaggio. Non usa nessun servizio esterno: `routing.js` legge `data/orari.json.gz` (tutti i passaggi di tutte le corse TPER) e applica un algoritmo RAPTOR lato browser.
 
@@ -127,11 +154,13 @@ python3 scripts/estrai-colori-linee.py gtfs-tper/routes.txt data/linee-colori.js
 
 Nel tab Viaggio la mappa mostra la linea del bus: la geometria ufficiale viene agganciata alla rete stradale con OSRM (map matching a pezzi, cache in `localStorage`, fallback automatico sul tracciato ufficiale se il servizio non risponde o il risultato non è coerente). Senza rete si vedono comunque fermate, orari e prezzo.
 
-Lo stesso script legge anche `shapes.txt` e produce `data/tracciati.json`: la geometria reale di ogni linea (semplificata a 8 m di tolleranza e codificata come polilinea), allineata corsa per corsa a `orari.json`. È così che il tab Viaggio disegna sulla mappa il percorso del bus invece di una linea dritta tra le due fermate; i tratti a piedi restano tratteggiati. Sulla linea partenza, cambi e arrivo hanno nodi distinti (rosso, anello bianco con corona, nero), mentre i pallini delle fermate intermedie sono proiettati sul tracciato disegnato e prendono il colore della linea su cui si trovano: restano la fermata reale, ma appoggiati alla linea invece di fluttuarle accanto (oltre 60 m di scarto la geometria è considerata inaffidabile e il pallino resta sulla fermata). Se una tratta non ha la geometria GTFS viene disegnata come linea diritta tratteggiata e la scheda del percorso lo dichiara.
+Lo stesso script legge anche `shapes.txt` e produce `data/tracciati.json`: la geometria reale di ogni linea (semplificata a 8 m di tolleranza e codificata come polilinea), allineata corsa per corsa a `orari.json`. È così che il tab Viaggio disegna sulla mappa il percorso del bus invece di una linea dritta tra le due fermate; i tratti a piedi restano tratteggiati. Anche le corse ferroviarie hanno la loro geometria, presa dalle shapes del GTFS nazionale e riusata per tutte le corse con la stessa sequenza di stazioni.
+
+I **tratti a piedi** seguono le strade: l'app chiede la geometria a OSRM pedonale FOSSGIS (`routing.openstreetmap.de`), la salva in `localStorage` (massimo 100 tratti) e la riusa. Se il servizio non risponde, il tratto resta un segmento diritto tratteggiato: il calcolo del percorso non si blocca mai per il routing pedonale. Sulla linea partenza, cambi e arrivo hanno nodi distinti (rosso, anello bianco con corona, nero), mentre i pallini delle fermate intermedie sono proiettati sul tracciato disegnato e prendono il colore della linea su cui si trovano: restano la fermata reale, ma appoggiati alla linea invece di fluttuarle accanto (oltre 60 m di scarto la geometria è considerata inaffidabile e il pallino resta sulla fermata). Se una tratta non ha la geometria GTFS viene disegnata come linea diritta tratteggiata e la scheda del percorso lo dichiara.
 
 Ogni linea ha il suo colore, preso dal campo `route_color` del GTFS TPER (`data/linee-colori.json`): lo stesso compare nel badge della scheda viaggio, nei badge degli arrivi del tab "In tempo reale" e sul tracciato della mappa, così un cambio di linea si vede a colpo d'occhio. I colori ufficiali molto chiari vengono scuriti appena solo sulla mappa, per restare leggibili sul basemap chiaro; le linee senza colore nel GTFS restano rosso TPER. I treni mantengono il badge neutro.
 
-Oltre alle fermate si può cercare qualsiasi indirizzo: i suggerimenti arrivano da Nominatim (OpenStreetMap), con debounce e una richiesta al secondo come da policy d'uso. L'indirizzo viene usato con le sue coordinate esatte: il percorso parte e arriva dalla fermata più comoda entro 500 m, mentre la zona per il prezzo è quella della fermata più vicina (quindi fuori dall'area urbana la stima può essere approssimativa).
+Oltre alle fermate si possono cercare **luoghi e indirizzi**: i suggerimenti arrivano da Nominatim (OpenStreetMap), con debounce e una richiesta al secondo come da policy d'uso. Si può scrivere direttamente il nome di un posto (per esempio "Mercato di Mezzo", "Farmacia Marco Polo", "Parco di Villa Spada") senza conoscerne l'indirizzo; i risultati sono divisi in **Luoghi** e **Indirizzi** e per i luoghi è indicata la categoria (mercato, farmacia, negozio, parco…). Il luogo o indirizzo scelto viene usato con le sue coordinate esatte: il percorso parte e arriva dalla fermata più comoda entro 500 m, mentre la zona per il prezzo è quella della fermata più vicina (quindi fuori dall'area urbana la stima può essere approssimativa).
 
 Il calcolo usa anche le fermate a pochi passi da quella scelta (pali opposti, fermate della stessa via) e mostra i tratti a piedi stimati, sia nei cambi sia all'arrivo; sulla mappa sono tratteggiati. Gli orari sono quelli programmati nel GTFS: non tengono conto dei ritardi reali (per quelli c'è il tab "In tempo reale").
 
@@ -175,14 +204,25 @@ Poi apri `http://localhost:8080` nel browser: a quel punto `fetch()` funziona no
 
 Una volta pubblicata su GitHub Pages/Netlify/Vercel/Cloudflare Pages (vedi sopra), questo problema non si presenta più, perché il sito viene servito via `https://`.
 
+## Test automatici
+
+La logica critica è coperta da test Node.js senza dipendenze esterne (42 test): dati e invarianti dei JSON, RAPTOR (diretto, cambi, cammini, calendari, dopo mezzanotte), tariffe, coordinate e risposta OSRM pedonale, icone Lucide, scheda percorso e un percorso reale Bologna C.le–Imola in treno con la sua geometria.
+
+```bash
+node --test tests
+```
+
+I test non richiedono browser né rete: usano i file in `data/` e un `fetch` simulato per il motore. Vanno eseguiti dopo ogni modifica a `routing.js`, `tariffe.js`, `piedi.js`, `icone.js`, `vista-percorso.js`, agli script di preprocessing o ai dati.
+
 ## Limiti noti
 
 - Il dataset bus è reale e completo (9.603 fermate), ma alcune fermate compaiono due volte con lo stesso nome: sono i due "pali" della stessa fermata, uno per ciascun senso di marcia. È normale: selezionando l'uno o l'altro il risultato del calcolo non cambia.
-- Le stazioni ferroviarie sono una lista curata a mano (11 stazioni principali): il dataset ufficiale TPER riguarda solo gli autobus. Aggiungine altre modificando `STAZIONI_TRENO` in `scripts/converti-fermate-autobus.py`.
+- Le stazioni ferroviarie sono una lista curata a mano (11 stazioni principali): il dataset ufficiale TPER riguarda solo gli autobus. Aggiungine altre modificando `STAZIONI_TRENO` in `scripts/converti-fermate-autobus.py`. Gli orari dei treni esistono solo per le stazioni presenti nel GTFS nazionale (Bologna C.le, Imola, Pianoro): per le altre l'app suggerisce una fermata bus vicina.
 - I prezzi dei treni regionali sono stime a zone: il prezzo reale di Trenitalia Tper dipende dai chilometri effettivi della tratta.
 - Il dataset aggiornato copre l'intera rete TPER (anche zone di Ferrara/Imola oltre al bacino di Bologna): per queste zone più lontane l'app applica comunque la stessa logica generale urbano/extraurbano, ma le regole di confine specifiche (Zola Predosa, Sasso Marconi) restano pensate per il bacino di Bologna.
 - La logica di calcolo gestisce i casi "urbano↔urbano" e "urbano↔extraurbano" con regole precise; per tratte tra due zone extraurbane l'app rimanda al calcolatore ufficiale TPER, perché il numero di scatti dipende dal percorso esatto.
-- **Percorso**: il pianificatore usa gli orari programmati del GTFS e parte dalla data e ora scelte. La domenica il feed TPER include soprattutto corse extraurbane: per molte fermate urbane il risultato può essere "nessun collegamento", ed è un limite del dato, non dell'app. Per le stazioni ferroviarie (codici `TRN…`) non ci sono orari bus: in quel caso l'app suggerisce una fermata vicina.
+- **Percorso**: il pianificatore usa gli orari programmati del GTFS e parte dalla data e ora scelte. La domenica il feed TPER include soprattutto corse extraurbane: per molte fermate urbane il risultato può essere "nessun collegamento", ed è un limite del dato, non dell'app. I treni sono usabili solo su Bologna C.le, Imola e Pianoro; per le altre stazioni ferroviarie (codici `TRN…`) non ci sono orari aperti e l'app suggerisce una fermata vicina.
+- **Percorsi a piedi**: la geometria arriva da OSRM pedonale FOSSGIS, che richiede connessione. Senza rete, o se il servizio è occupato, i tratti a piedi restano segmenti diritti tratteggiati; il percorso e i prezzi funzionano comunque.
 - **Orari in tempo reale**: il tab "In tempo reale" interroga HelloBus, il servizio TPER con la posizione GPS dei bus. Il servizio non abilita CORS, quindi dal browser si passa da un relay pubblico (`proxy.corsfix.com`, con fallback su allorigins). I relay gratuiti possono essere lenti o non raggiungibili: in quel caso l'app mostra un messaggio con "Riprova" e il pulsante "Usa il relay predefinito". Nel tab Info puoi incollare un relay tuo (`https://tuo-relay/?url={url}`) per non dipendere da servizi terzi.
 - Alcuni codici fermata del dataset regionale non sono gestiti da HelloBus o non hanno corse nelle ore serali: l'app lo segnala con un messaggio invece di mostrare un elenco vuoto.
 - Le tile della mappa arrivano da CARTO/OpenStreetMap: senza connessione la mappa resta grigia, ma ricerca fermate, zone e prezzi continuano a funzionare con i dati in cache.
