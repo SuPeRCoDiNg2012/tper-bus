@@ -3,8 +3,8 @@
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'tper-zone-calc-static-v26';
-const CACHE_DATI = 'tper-zone-calc-data-v26';
+const CACHE_STATICA = 'tper-zone-calc-static-v28';
+const CACHE_DATI = 'tper-zone-calc-data-v28';
 
 const ASSET_STATICI = [
   './',
@@ -29,7 +29,11 @@ const ASSET_DATI = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_STATICA).then((cache) => cache.addAll(ASSET_STATICI))
+    // cache: 'reload' salta la cache HTTP del browser: senza, una nuova
+    // versione del service worker poteva installare i file vecchi.
+    caches.open(CACHE_STATICA).then((cache) =>
+      cache.addAll(ASSET_STATICI.map((url) => new Request(url, { cache: 'reload' })))
+    )
   );
   // La nuova versione resta in attesa finché l'utente non tocca "Aggiorna":
   // così si evita di servire metà app vecchia e metà nuova.
@@ -81,7 +85,9 @@ self.addEventListener('fetch', (event) => {
   const isApp = url.pathname.endsWith('/') || url.pathname.endsWith('/index.html') || url.pathname.endsWith('/app.js') || url.pathname.endsWith('/routing.js') || url.pathname.endsWith('/vista-percorso.js');
   if (isApp) {
     event.respondWith(
-      fetch(event.request)
+      // no-cache rivalida sempre: il network-first non basta se il browser
+      // risponde dalla propria cache HTTP con l'app.js di ieri.
+      fetch(event.request, { cache: 'no-cache' })
         .then((rispostaRete) => {
           const copia = rispostaRete.clone();
           caches.open(CACHE_STATICA).then((cache) => cache.put(event.request, copia)).catch(() => {});

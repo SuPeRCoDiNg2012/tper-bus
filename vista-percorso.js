@@ -102,15 +102,18 @@
 
   /** Riga compatta (collassata) di un'opzione: si apre al clic. */
   function opzioneHTML(e, indice, vista, etichetta) {
+    // L'orario mostrato è quello in cui si è davvero a destinazione: dopo
+    // l'ultimo bus c'è il tratto a piedi fino alla fermata scelta.
+    const arrivoDestinazione = e.arrivo + (e.camminoFinale || 0);
     const uscita = Math.max(0, e.partenza - e.camminoIniziale);
-    const totale = minuti(e.arrivo - uscita);
+    const totale = minuti(arrivoDestinazione - uscita);
     const piedi = Math.round((e.camminoIniziale + e.camminoFinale) / 60);
     const extra = piedi >= 1 ? ' · ' + piedi + ' min a piedi' : '';
-    const margine = vista.modo === 'arrivo' && vista.scadenza != null
-      ? Math.round((vista.scadenza - e.arrivo) / 60) : null;
+    const margine = vista.modo === 'arrivo' && e.margine != null
+      ? Math.round(e.margine / 60) : null;
     return '<details class="opzione" data-opzione="' + indice + '"' + (vista.aperto === indice ? ' open' : '') + '>' +
       '<summary class="opzione-testa">' +
-      '<span class="opzione-orari">' + hhmm(uscita) + '<span class="freccia">→</span>' + hhmm(e.arrivo) + '</span>' +
+      '<span class="opzione-orari">' + hhmm(uscita) + '<span class="freccia">→</span>' + hhmm(arrivoDestinazione) + '</span>' +
       '<span class="opzione-meta">' + totale + ' min · ' + cambiTesto(e.cambi) + esc(extra) +
       (margine != null && margine >= 0 ? ' · ' + margine + ' min di margine' : '') + '</span>' +
       '<span class="opzione-linee">' + lineeHTML(e) + '</span>' +

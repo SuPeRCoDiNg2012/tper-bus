@@ -386,12 +386,15 @@
     if (sel.destinazione && sel.destinazione.lat != null) punti.push([sel.destinazione.lon, sel.destinazione.lat]);
     // Il pannello inferiore copre metà schermo: tengo i pin nella parte alta.
     const copertura = Math.min(430, Math.round(window.innerHeight * 0.52));
+    // In orizzontale i 205 px fissi in alto più la copertura del pannello
+    // superavano l'altezza dello schermo e fitBounds perdeva il viaggio.
+    const sopra = Math.min(205, Math.round(window.innerHeight * 0.24));
     const durata = animato === false ? 0 : 600;
     if (punti.length === 2) {
       const limiti = new maplibregl.LngLatBounds();
       punti.forEach((punto) => limiti.extend(punto));
       mappa.fitBounds(limiti, {
-        padding: { top: 205, bottom: copertura, left: 50, right: 50 },
+        padding: { top: sopra, bottom: copertura, left: 50, right: 50 },
         maxZoom: 15,
         duration: durata
       });
@@ -1394,8 +1397,11 @@
   function calcolaOpzioni(da, a, base) {
     const arrivo = routing.modo === 'arrivo';
     const tentativi = arrivo ? [5, 10, 20, 40, 60, 90, 120, 180] : [0, 12, 25, 40];
-    const limite = arrivo ? secondiDelGiorno(base) : null;
-    routing.scadenza = limite;
+    // La scadenza si confronta come istante assoluto: dopo mezzanotte i
+    // secondi del giorno ripartono da zero, mentre le corse serali hanno
+    // orari oltre 86400 (es. 00:39 = 88740).
+    const limite = arrivo ? base.getTime() : null;
+    routing.scadenza = arrivo ? secondiDelGiorno(base) : null;
     const visti = new Set();
     const esiti = [];
     let errore = null;
@@ -1404,7 +1410,13 @@
       const esito = TPERRouting.calcola(da, a, quando, { maxCambi: 3 });
       if (!esito) return;
       if (esito.errore) { errore = errore || esito; return; }
-      if (arrivo && esito.arrivo > limite) return;
+      // Arrivo reale a destinazione: quello del bus più il tratto a piedi
+      // finale (una stazione o un indirizzo non sono la fermata del bus).
+      const arrivoDestinazione = quando.getTime() +
+        (esito.arrivo - esito.richiesta) * 1000 +
+        (esito.camminoFinale || 0) * 1000;
+      if (arrivo && arrivoDestinazione > limite) return;
+      esito.margine = arrivo ? Math.round((limite - arrivoDestinazione) / 1000) : null;
       const firma = esito.tappe.map((t) => t.linea + '|' + t.da + '|' + t.a + '|' + t.partenza).join(';');
       if (visti.has(firma)) return;
       visti.add(firma);
@@ -1720,12 +1732,16 @@
   }
 
   function minutiA(ora) {
-    const parti = ora.split(':');
+    const parti = String(ora || '').split(':');
+    const ore = parseInt(parti[0], 10);
+    const minuti = parseInt(parti[1], 10);
+    if (!isFinite(ore) || !isFinite(minuti)) return 0;
+    // Orario circolare: 23:58 visto alle 00:10 è un bus passato da 12 minuti,
+    // non uno in arrivo tra 1428. Il valore resta nell'intervallo -720..720.
+    const target = ((ore % 24) * 60 + minuti) % 1440;
     const oraLocale = new Date();
-    const target = parseInt(parti[0], 10) * 60 + parseInt(parti[1], 10);
-    let differenza = target - (oraLocale.getHours() * 60 + oraLocale.getMinutes());
-    if (differenza < -180) differenza += 1440;
-    return differenza;
+    const adesso = oraLocale.getHours() * 60 + oraLocale.getMinutes();
+    return ((target - adesso + 720 + 1440) % 1440) - 720;
   }
 
   function parseHellobus(testo) {
@@ -1742,7 +1758,7 @@
       arrivi.push({
         linea: m[1].toUpperCase(),
         tipo: /dasatellite/i.test(m[2]) ? 'live' : 'orario',
-        ora: String(parseInt(m[3], 10)).padStart(2, '0') + ':' + m[4],
+        ora: String(parseInt(m[3], 10) % 24).padStart(2, '0') + ':' + m[4],
         bus: bus,
         pedana: /CON PEDANA/i.test(extra),
         minuti: minutiA(m[3] + ':' + m[4])
@@ -2046,7 +2062,9 @@
     if (!sheet) return;
     const strato = document.querySelector('.strato-alto');
     const fondo = strato ? Math.round(strato.getBoundingClientRect().bottom) : 114;
-    const altezza = Math.max(320, Math.min(760, window.innerHeight - fondo - 12));
+    // In orizzontale lo schermo è basso: 320 px di altezza minima lasciavano
+    // quasi nessuna mappa. Con 240 la scheda resta usabile anche a 390 px.
+    const altezza = Math.max(240, Math.min(760, window.innerHeight - fondo - 12));
     if (Math.abs((sheet.offsetHeight || 0) - altezza) > 1) sheet.style.height = altezza + 'px';
   }
 
@@ -2444,14 +2462,25 @@
       }
     });
 
-    window.addEventListener('resize', debounce(() => {
+    // Rotazione e tastiera virtuale cambiano l'altezza utile: il canvas della
+    // mappa non segue da solo il contenitore e la scheda resta traslata sulla
+    // misura precedente. Si riadatta tutto e si reinquadra il percorso.
+    const adattaAllaVista = debounce(() => {
       if (trascinando) return;
-      // Il canvas della mappa non segue da solo il contenitore: senza resize
-      // resta della misura precedente e pin e percorso risultano spostati.
       if (mappa) mappa.resize();
       adattaAltezzaSheet();
       applicaTrasformazione(traslazionePer(statoSheet), false);
-    }, 120));
+      aggiornaScrim();
+      if (routing.stato === 'ok' && ultimeFeatures.length) inquadraPercorso(0);
+      else if (sel.partenza || sel.destinazione) inquadra(false);
+    }, 150);
+    window.addEventListener('resize', adattaAllaVista);
+    // Su iOS orientationchange può arrivare prima che il viewport sia
+    // aggiornato; il debounce fa vincere l'ultimo evento (di solito resize).
+    window.addEventListener('orientationchange', adattaAllaVista);
+    if (window.screen && screen.orientation && screen.orientation.addEventListener) {
+      screen.orientation.addEventListener('change', adattaAllaVista);
+    }
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && tabAttivo === 'live' && Date.now() - live.ts > INTERVALLO_LIVE) {

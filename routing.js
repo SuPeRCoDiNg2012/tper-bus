@@ -121,6 +121,10 @@
       let tempo = voce[3];
       fermate[0] = fermata;
       orari[0] = tempo;
+      // Anche la prima fermata della corsa va indicizzata: da lì si sale
+      // esattamente come dalle altre. Senza, una corsa che parte dalla
+      // fermata scelta risultava inesistente.
+      conteggio[fermata] += 1;
       for (let j = 4; j < voce.length; j += 2) {
         const posizione = (j - 2) / 2;
         fermata += voce[j];
@@ -150,7 +154,7 @@
     const perCorsa = new Uint32Array(somma);
     const perPosizione = new Uint16Array(somma);
     corse.forEach((corsa, indiceCorsa) => {
-      for (let p = 1; p < corsa.fermate.length; p += 1) {
+      for (let p = 0; p < corsa.fermate.length; p += 1) {
         const fermata = corsa.fermate[p];
         const posto = conteggio[fermata];
         perCorsa[posto] = indiceCorsa;
