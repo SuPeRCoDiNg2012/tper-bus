@@ -132,7 +132,12 @@
   // scheda viaggio e sul tracciato in mappa.
   function coloreLinea(nome) {
     if (nome == null) return null;
-    const chiavi = [String(nome), String(nome).toUpperCase()];
+    const testo = String(nome).trim();
+    const chiavi = [testo, testo.toUpperCase()];
+    // HelloBus aggiunge la variante alla linea (es. 60A, 20A), mentre il GTFS
+    // colora la linea base (60, 20): senza questo il badge reale restava rosso.
+    const variante = /^(\d+)[A-Za-z]+$/.exec(testo);
+    if (variante) chiavi.push(variante[1]);
     for (let i = 0; i < chiavi.length; i += 1) {
       const chiave = chiavi[i];
       if (!Object.prototype.hasOwnProperty.call(coloriLinee, chiave)) continue;
