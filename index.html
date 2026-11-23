@@ -106,6 +106,7 @@
   .voce-ico{width:34px;height:34px;border-radius:11px;background:var(--sabbia);color:var(--testo-2);display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
   .voce-ico.bus{background:var(--rosso-soft);color:var(--rosso);}
   .voce-ico.treno{background:#EFEDE7;color:var(--testo);}
+  .voce-ico.geo{background:#E9EEF7;color:#2F5FA8;}
   .voce-testo{flex:1;min-width:0;}
   .voce-nome{display:block;font-size:14px;font-weight:500;color:var(--testo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px;}
   .voce-indirizzo{display:block;font-size:12px;color:var(--testo);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.05px;}
@@ -161,11 +162,32 @@
   .quando .adesso{margin-left:auto;border:0;background:transparent;color:var(--testo-2);font-size:11.5px;font-weight:600;padding:8px 9px;border-radius:8px;cursor:pointer;transition:color .15s,background .15s;}
   .quando .adesso:hover{color:var(--rosso);background:var(--rosso-soft);}
 
+  .modo-quando{display:flex;gap:2px;background:var(--sfondo);border:1px solid var(--bordo);border-radius:500px;padding:3px;}
+  .modo-quando button{flex:1;border:0;background:transparent;border-radius:500px;padding:7px 10px;font:inherit;font-size:12px;font-weight:600;color:var(--testo-2);cursor:pointer;transition:background .15s,color .15s;}
+  .modo-quando button.attivo{background:var(--sup);color:var(--testo);box-shadow:var(--ombra-1);}
+
   .riepilogo{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--sup);border:1px solid var(--bordo);border-radius:var(--r);padding:14px 16px;}
   .riep-orari{display:flex;align-items:baseline;gap:8px;font-size:22px;font-weight:600;letter-spacing:-.7px;font-variant-numeric:tabular-nums;}
   .riep-orari .freccia{color:var(--testo-3);font-size:15px;font-weight:400;letter-spacing:0;}
   .riep-durata{text-align:right;font-size:11.5px;color:var(--testo-2);line-height:1.4;}
   .riep-durata b{display:block;font-size:13px;font-weight:600;color:var(--testo);letter-spacing:-.1px;}
+
+  /* Opzioni di percorso: chiuse come righe compatte, si aprono al clic. */
+  .opzioni{display:flex;flex-direction:column;gap:8px;}
+  .opzione{background:var(--sup);border:1px solid var(--bordo);border-radius:var(--r);overflow:hidden;}
+  .opzione[open]{border-color:var(--bordo-2);box-shadow:var(--ombra-1);}
+  .opzione-testa{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;list-style:none;}
+  .opzione-testa::-webkit-details-marker{display:none;}
+  .opzione-orari{display:flex;align-items:baseline;gap:5px;font-size:16px;font-weight:600;letter-spacing:-.4px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .opzione-orari .freccia{color:var(--testo-3);font-size:12px;font-weight:400;}
+  .opzione-meta{font-size:11.5px;color:var(--testo-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .opzione-linee{display:flex;gap:3px;margin-left:auto;flex:0 0 auto;}
+  .opzione-linea{min-width:24px;height:20px;padding:0 5px;border-radius:6px;font-size:10.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;background:var(--rosso-soft);color:var(--rosso-scuro);}
+  .opzione-linea.treno{background:var(--sabbia);color:var(--testo);}
+  .opzione-freccia{color:var(--testo-3);flex:0 0 auto;transition:transform .18s;}
+  .opzione[open] .opzione-freccia{transform:rotate(180deg);}
+  .opzione-corpo .viaggio{border:0;border-top:1px solid var(--bordo);border-radius:0;padding:2px 14px;}
+  @media (max-width: 390px){.opzione-meta{display:none;}}
 
   .viaggio{display:flex;flex-direction:column;background:var(--sup);border:1px solid var(--bordo);border-radius:var(--r);padding:2px 15px;}
   .corsa{display:flex;gap:12px;padding:12px 0;}
@@ -272,7 +294,7 @@
     <div class="campi">
       <div class="riga-campo">
         <span class="pallino pallino-p" aria-hidden="true"></span>
-        <input id="input-partenza" type="text" placeholder="Da dove parti?" autocomplete="off" enterkeyhint="search" aria-label="Fermata di partenza">
+        <input id="input-partenza" type="text" placeholder="Da dove parti?" autocomplete="off" enterkeyhint="search" aria-label="Fermata o indirizzo di partenza">
         <button class="btn-pulisci" data-pulisci="partenza" aria-label="Cancella partenza" hidden>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
         </button>
@@ -280,7 +302,7 @@
       <div class="separatore"></div>
       <div class="riga-campo">
         <span class="pallino pallino-d" aria-hidden="true"></span>
-        <input id="input-destinazione" type="text" placeholder="Dove vai?" autocomplete="off" enterkeyhint="search" aria-label="Fermata di destinazione">
+        <input id="input-destinazione" type="text" placeholder="Dove vai?" autocomplete="off" enterkeyhint="search" aria-label="Fermata o indirizzo di destinazione">
         <button class="btn-pulisci" data-pulisci="destinazione" aria-label="Cancella destinazione" hidden>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
         </button>

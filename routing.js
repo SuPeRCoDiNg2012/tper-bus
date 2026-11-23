@@ -8,11 +8,15 @@
   'use strict';
 
   const CAMBIO_MINIMO = 150;      // secondi minimi per un cambio
+  const CAMMINO_CAMBIO_MASSIMO = 300;   // secondi di cammino per un cambio a piedi
   const INF = 0x7fffffff;
 
   let dati = null;
   let indiceFermate = null;
   let tracciati = null;            // geometrie reali delle linee (data/tracciati.json)
+  // Fermate vicine raggiungibili a piedi: Map indice → [[indice, secondi]].
+  // Servono per i cambi tra paline opposte o fermate della stessa piazza.
+  let cammini = new Map();
   let caricamentoTracciati = null;
   const formeDecodificate = new Map();
   const reti = new Map();
@@ -178,13 +182,17 @@
 
   /**
    * RAPTOR: ad ogni round si può salire su una corsa in più.
-   * orario[fermata] = prima ora di arrivo conosciuta; prec[fermata] = ultima tratta.
+   * orario[fermata] = prima ora di arrivo conosciuta; giri[fermata] = con
+   * quante corse ci si arriva; predecessori[giro][fermata] = la corsa usata
+   * in quel giro. Le tratte stanno per giro (e non per fermata), così la
+   * ricostruzione non può entrare in loop quando una fermata migliora due volte.
    */
   function pianifica(chiave, origini, destinazioni, oraPartenza, maxCambi) {
     const rete = costruisciRete(chiave);
     const numeroFermate = dati.fermate.length;
-    const orario = new Int32Array(numeroFermate).fill(INF);
-    const prec = new Array(numeroFermate).fill(null);
+    let orario = new Int32Array(numeroFermate).fill(INF);
+    const giri = new Int32Array(numeroFermate).fill(-1);
+    const predecessori = [];
     const camminoOrigine = new Map();
 
     let marcate = [];
@@ -192,14 +200,56 @@
       const etichetta = oraPartenza + (origine.cammino || 0);
       if (etichetta < orario[origine.indice]) {
         orario[origine.indice] = etichetta;
-        prec[origine.indice] = null;
+        giri[origine.indice] = 0;
         camminoOrigine.set(origine.indice, origine.cammino || 0);
         marcate.push(origine.indice);
       }
     });
 
+    // Etichette a doppio buffer: in un round si sale solo sulle fermate
+    // raggiunte nei round precedenti. Senza questo, una corsa presa nello
+    // stesso round ne apriva un'altra e l'itinerario usava molti più cambi di
+    // quelli richiesti (arrivando anche prima, ma con giri assurdi).
     for (let round = 0; round <= maxCambi && marcate.length; round += 1) {
-      const nuove = [];
+      // Cambio a piedi tra fermate vicine: non consuma un cambio di bus, quindi
+      // si applica prima di salire e resta nello stesso giro. Senza questo una
+      // palina opposta sembrava un'altra città e l'itinerario faceva giri di ore.
+      if (cammini.size) {
+        if (!predecessori[round]) predecessori[round] = new Array(numeroFermate).fill(null);
+        // Si chiude a punto fisso, così etichette e predecessori restano
+        // coerenti anche quando si attraversano due paline di fila. Il cammino
+        // totale è limitato: un cambio a piedi resta un cambio, non una gita.
+        const piediTotali = new Int32Array(numeroFermate);
+        const coda = marcate.slice();
+        const inCoda = new Set(coda);
+        const migliorate = [];
+        let passi = 0;
+        while (coda.length && passi < 200000) {
+          const fermata = coda.shift();
+          inCoda.delete(fermata);
+          passi += 1;
+          const vicini = cammini.get(fermata);
+          if (!vicini) continue;
+          for (let v = 0; v < vicini.length; v += 1) {
+            const altra = vicini[v][0];
+            const secondi = vicini[v][1];
+            if (piediTotali[fermata] + secondi > CAMMINO_CAMBIO_MASSIMO) continue;
+            const arrivo = orario[fermata] + secondi;
+            if (arrivo >= orario[altra]) continue;
+            orario[altra] = arrivo;
+            giri[altra] = giri[fermata];
+            piediTotali[altra] = piediTotali[fermata] + secondi;
+            predecessori[round][altra] = { piedi: true, da: fermata, secondi: secondi };
+            migliorate.push(altra);
+            if (!inCoda.has(altra)) { coda.push(altra); inCoda.add(altra); }
+          }
+        }
+        if (migliorate.length) marcate = marcate.concat(migliorate);
+      }
+      const nuovo = orario.slice();
+      const predecessoreGiro = new Array(numeroFermate).fill(null);
+      const migliorCorsa = new Map();   // corsa → istante di salita già valutato
+      const cambiate = new Set();
       // Le fermate con arrivo più basso per prime: si sale prima sulla corsa migliore.
       marcate.sort((a, b) => orario[a] - orario[b]);
 
@@ -211,43 +261,62 @@
           const posizione = rete.perPosizione[k];
           const corsa = rete.corse[indiceCorsa];
           if (corsa.orari[posizione] < pronto) continue;
+          // Se la stessa corsa è già stata presa a una fermata raggiunta prima,
+          // risalirci più avanti non può migliorare nessun arrivo.
+          const giaPresa = migliorCorsa.get(indiceCorsa);
+          if (giaPresa !== undefined && giaPresa <= pronto) continue;
+          migliorCorsa.set(indiceCorsa, pronto);
           for (let p = posizione + 1; p < corsa.fermate.length; p += 1) {
             const prossima = corsa.fermate[p];
             const arrivo = corsa.orari[p];
-            if (arrivo < orario[prossima]) {
-              orario[prossima] = arrivo;
-              prec[prossima] = { corsa: indiceCorsa, salita: posizione, discesa: p, da: fermata };
-              nuove.push(prossima);
+            if (arrivo < nuovo[prossima]) {
+              nuovo[prossima] = arrivo;
+              giri[prossima] = round + 1;
+              predecessoreGiro[prossima] = { corsa: indiceCorsa, salita: posizione, discesa: p, da: fermata };
+              cambiate.add(prossima);
             }
           }
         }
       }
-      const viste = new Set();
-      marcate = [];
-      nuove.forEach((fermata) => {
-        if (viste.has(fermata)) return;
-        viste.add(fermata);
-        marcate.push(fermata);
-      });
+      predecessori[round + 1] = predecessoreGiro;
+      orario = nuovo;
+      marcate = Array.from(cambiate);
     }
 
+    // Il più veloce è porta-a-porta: all'arrivo del bus va sommato il tratto a
+    // piedi fino alla destinazione, altrimenti vince una fermata lontana.
     let destinazione = null;
+    let miglioreTotale = INF;
+    let giroDestinazione = -1;
     destinazioni.forEach((dest) => {
       if (orario[dest.indice] === INF) return;
-      if (!destinazione || orario[dest.indice] < orario[destinazione.indice]) destinazione = dest;
+      const totale = orario[dest.indice] + (dest.cammino || 0);
+      if (totale < miglioreTotale) {
+        miglioreTotale = totale;
+        destinazione = dest;
+        giroDestinazione = giri[dest.indice];
+      }
     });
     if (!destinazione) return null;
 
-    // Ricostruzione delle tratte a ritroso.
-    const tratte = [];
+    // Ricostruzione a ritroso, giro per giro: se una fermata è migliorata in un
+    // giro successivo, il giro prima non ha una tratta nuova e si scende di uno
+    // senza cambiare fermata. I passaggi a piedi restano nello stesso giro.
+    const passi = [];
     let fermata = destinazione.indice;
     let guardia = 0;
-    let origine = null;
-    while (guardia < 12) {
-      const passo = prec[fermata];
-      if (!passo) { origine = fermata; break; }
+    let giro = giroDestinazione;
+    while (giro > 0 && guardia < 40) {
+      guardia += 1;
+      const passo = predecessori[giro] ? predecessori[giro][fermata] : null;
+      if (!passo) { giro -= 1; continue; }
+      if (passo.piedi) {
+        passi.push({ piedi: true, da: passo.da, a: fermata, secondi: passo.secondi });
+        fermata = passo.da;
+        continue;
+      }
       const corsa = rete.corse[passo.corsa];
-      tratte.push({
+      passi.push({
         corsa: corsa,
         salita: passo.salita,
         discesa: passo.discesa,
@@ -257,31 +326,65 @@
         arrivo: corsa.orari[passo.discesa]
       });
       fermata = corsa.fermate[passo.salita];
-      guardia += 1;
+      giro -= 1;
     }
-    if (origine === null) return null;
-    tratte.reverse();
-    if (!tratte.length) return null;
 
-    const tappe = tratte.map((tratta, indice) => {
-      const info = nomeLinea(tratta.corsa.linea);
-      const precedente = indice > 0 ? tratte[indice - 1] : null;
-      return {
+    // Tratto a piedi prima della prima corsa: dalla fermata di partenza alla
+    // palina da cui si sale.
+    let camminoExtra = 0;
+    for (let g = 0; g < 10; g += 1) {
+      const passo = predecessori[0] ? predecessori[0][fermata] : null;
+      if (!passo || !passo.piedi) break;
+      camminoExtra += passo.secondi;
+      fermata = passo.da;
+    }
+    const origine = fermata;
+    const camminoIniziale = (camminoOrigine.get(origine) || 0) + camminoExtra;
+    passi.reverse();
+    // Cammino finale: se la fermata di destinazione si raggiunge a piedi da una
+    // palina vicina, quel tratto si somma alla camminata verso la destinazione.
+    let camminoDopo = 0;
+    while (passi.length && passi[passi.length - 1].piedi) {
+      camminoDopo += passi.pop().secondi;
+    }
+    if (!passi.length) return null;
+    // L'arrivo è quello etichettato: la differenza dall'ultima corsa è il
+    // cammino che manca davvero, anche se in mezzo c'erano più paline.
+    const ultimaCorsa = passi[passi.length - 1];
+    camminoDopo = Math.max(camminoDopo, orario[destinazione.indice] - ultimaCorsa.arrivo);
+
+    const tappe = [];
+    let camminoPrima = null;
+    passi.forEach((passo) => {
+      if (passo.piedi) {
+        // Più passi a piedi di fila diventano un solo tratto: conta il tempo
+        // totale e la fermata da cui si è partiti.
+        if (camminoPrima) camminoPrima.secondi += passo.secondi;
+        else camminoPrima = { da: dati.fermate[passo.da], secondi: passo.secondi };
+        return;
+      }
+      const info = nomeLinea(passo.corsa.linea);
+      const precedente = tappe.length ? tappe[tappe.length - 1] : null;
+      tappe.push({
         linea: info.linea,
         tipo: info.tipo,
-        da: dati.fermate[tratta.da],
-        a: dati.fermate[tratta.a],
-        partenza: tratta.partenza,
-        arrivo: tratta.arrivo,
-        fermate: tratta.discesa - tratta.salita,
-        forma: tratta.corsa.forma,
+        da: dati.fermate[passo.da],
+        a: dati.fermate[passo.a],
+        partenza: passo.partenza,
+        arrivo: passo.arrivo,
+        fermate: passo.discesa - passo.salita,
+        forma: passo.corsa.forma,
         // Fermate della corsa tra salita e discesa: servono a tagliare il
         // tracciato nel verso giusto (anelli e linee con fermate ripetute).
-        sequenza: Array.prototype.slice.call(tratta.corsa.fermate, tratta.salita, tratta.discesa + 1),
-        stops: Array.prototype.slice.call(tratta.corsa.fermate, tratta.salita, tratta.discesa + 1).map((indice) => dati.fermate[indice]),
-        attesa: precedente ? tratta.partenza - precedente.arrivo : tratta.partenza - (oraPartenza + (camminoOrigine.get(origine) || 0))
-      };
+        sequenza: Array.prototype.slice.call(passo.corsa.fermate, passo.salita, passo.discesa + 1),
+        stops: Array.prototype.slice.call(passo.corsa.fermate, passo.salita, passo.discesa + 1).map((indice) => dati.fermate[indice]),
+        // Cammino fatto per raggiungere la palina di salita (cambio a piedi).
+        camminoPrima: camminoPrima,
+        attesa: precedente ? passo.partenza - precedente.arrivo : passo.partenza - (oraPartenza + camminoIniziale)
+      });
+      camminoPrima = null;
     });
+    if (!tappe.length) return null;
 
     return {
       chiave: chiave,
@@ -292,9 +395,9 @@
       arrivo: orario[destinazione.indice],
       durata: orario[destinazione.indice] - oraPartenza,
       viaggio: orario[destinazione.indice] - tappe[0].partenza,
-      attesaIniziale: tappe[0].partenza - orario[origine],
-      camminoIniziale: camminoOrigine.get(origine) || 0,
-      camminoFinale: destinazione.cammino || 0,
+      attesaIniziale: tappe[0].partenza - (oraPartenza + camminoIniziale),
+      camminoIniziale: camminoIniziale,
+      camminoFinale: (destinazione.cammino || 0) + camminoDopo,
       cambi: tappe.length - 1,
       tappe: tappe
     };
@@ -446,8 +549,28 @@
     return caricamentoTracciati;
   }
 
+  // Cambi a piedi: coppie [idA, idB, secondi] tra fermate vicine. Si passano
+  // una volta sola dopo il caricamento degli orari; restano fuori dalla rete.
+  function impostaCammini(coppie) {
+    cammini = new Map();
+    if (!indiceFermate || !Array.isArray(coppie)) return;
+    coppie.forEach((voce) => {
+      if (!voce) return;
+      const a = indiceFermate.get(voce[0]);
+      const b = indiceFermate.get(voce[1]);
+      const secondi = voce[2];
+      if (a === undefined || b === undefined || a === b || !(secondi >= 0)) return;
+      if (!cammini.has(a)) cammini.set(a, []);
+      if (!cammini.has(b)) cammini.set(b, []);
+      cammini.get(a).push([b, secondi]);
+      cammini.get(b).push([a, secondi]);
+    });
+    cammini.forEach((elenco) => elenco.sort((x, y) => x[1] - y[1]));
+  }
+
   const API = {
     carica: carica,
+    impostaCammini: impostaCammini,
     caricaTracciati: caricaTracciati,
     tratta: tratta,
     calcola: calcola,

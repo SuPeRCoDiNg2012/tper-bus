@@ -9,9 +9,11 @@
    * ------------------------------------------------------------------ */
   const URL_FERMATE = './data/fermate.json';
   const URL_LINEE = './data/linee-per-fermata.json';
+  const URL_COLORI = './data/linee-colori.json';
   const TIMEOUT_FETCH = 10000;
   const K_FERMATE = 'tperzc_fermate_v2';
   const K_LINEE = 'tperzc_linee_v2';
+  const K_COLORI = 'tperzc_colori_v1';
   const K_RECENTI = 'tperzc_recenti_v2';
   const K_TRATTA = 'tperzc_tratta_v2';
   const K_QUANDO = 'tperzc_quando_v1';
@@ -21,6 +23,9 @@
   const HELLOBUS = 'https://hellobuswsweb.tper.it/web-services/hellobus.asmx/QueryHellobus';
   const RELAY_PREDEFINITO = 'https://api.allorigins.win/raw?url=';
   const INTERVALLO_LIVE = 30000;
+  const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
+  const NOMINATIM_PAUSA = 1100;      // ms tra due richieste: è la policy d'uso di OSM
+  const INDIRIZZI_MIN = 3;           // caratteri minimi prima di cercare un indirizzo
 
   const ZONE_URBANE = new Set(['500', '501', '502', '503', '504', '505', '506', '507', '508', '509']);
   const TARIFFE_BUS = { 1: 2.30, 2: 2.90, 3: 3.70, 4: 4.50 };
@@ -43,6 +48,7 @@
    * ------------------------------------------------------------------ */
   let fermate = [];
   let lineePerFermata = {};
+  let coloriLinee = {};
   let aggiornato = null;
   const sel = { partenza: null, destinazione: null };
   let abbonamento = false;
@@ -58,12 +64,17 @@
   let timerLive = null;
   let trascinando = false;
   let sopprimiClick = false;
+  const indirizziCache = new Map();
+  let indirizziAbort = null;
+  let ultimaRichiestaIndirizzi = 0;
+  const suggerimenti = { token: 0, campo: null, query: '', gruppi: [], indirizzi: [], caricamento: false, errore: false };
 
   const live = { items: [], ts: 0, stato: 'idle', caricamento: false, errore: null, stopId: null };
 
   const $ = (id) => document.getElementById(id);
   const ICONA_BUS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="4" width="17" height="12.5" rx="3" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 12h17" stroke="currentColor" stroke-width="1.5"/><circle cx="7.6" cy="18.6" r="1.5" fill="currentColor"/><circle cx="16.4" cy="18.6" r="1.5" fill="currentColor"/></svg>';
   const ICONA_TRENO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="3" width="14" height="14" rx="4.5" stroke="currentColor" stroke-width="1.7"/><path d="M5 10h14" stroke="currentColor" stroke-width="1.5"/><circle cx="8.6" cy="19.4" r="1.4" fill="currentColor"/><circle cx="15.4" cy="19.4" r="1.4" fill="currentColor"/></svg>';
+  const ICONA_LUOGO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s6.5-6.8 6.5-11.4A6.5 6.5 0 0 0 5.5 9.6C5.5 14.2 12 21 12 21z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="9.6" r="2.4" stroke="currentColor" stroke-width="1.7"/></svg>';
   // L'icona pedana vive con il resto della grafica del percorso.
   const ICONA_PEDANA = VistaPercorso.ICONA_PEDANA;
   const ICONA_REFRESH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M20 4.5V10h-5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -116,14 +127,59 @@
   function lineaDi(fermata) {
     return (lineePerFermata[fermata.id] || []);
   }
+
+  // Colore ufficiale della linea dal GTFS TPER (route_color): lo stesso sulla
+  // scheda viaggio e sul tracciato in mappa.
+  function coloreLinea(nome) {
+    if (nome == null) return null;
+    const chiavi = [String(nome), String(nome).toUpperCase()];
+    for (let i = 0; i < chiavi.length; i += 1) {
+      const chiave = chiavi[i];
+      if (!Object.prototype.hasOwnProperty.call(coloriLinee, chiave)) continue;
+      const voce = coloriLinee[chiave];
+      if (Array.isArray(voce) && voce[0]) return voce;
+    }
+    return null;
+  }
+
+  // Sul basemap chiaro i colori ufficiali molto chiari si perdono: per la
+  // linea in mappa si scuriscono appena, il badge resta quello ufficiale.
+  function coloreTracciato(nome) {
+    const voce = coloreLinea(nome);
+    if (!voce) return null;
+    const hex = voce[0].replace('#', '');
+    const canali = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    if (canali.some((c) => !isFinite(c))) return voce[0];
+    const luminanza = (0.2126 * canali[0] + 0.7152 * canali[1] + 0.0722 * canali[2]) / 255;
+    if (luminanza <= 0.62) return voce[0];
+    return '#' + canali.map((c) => Math.round(c * 0.66).toString(16).padStart(2, '0')).join('');
+  }
+
+  // Le tappe del percorso portano il colore della propria linea già pronte per
+  // il disegno: la scheda e la mappa leggono lo stesso dato.
+  function coloraTappe(esito) {
+    if (!esito || !Array.isArray(esito.tappe)) return;
+    esito.tappe.forEach((tappa) => {
+      if (tappa.tipo === 1 || tappa.tipo === 2) return;   // i treni restano neutri
+      const voce = coloreLinea(tappa.linea);
+      if (!voce) return;
+      tappa.colore = voce[0];
+      tappa.coloreTesto = voce[1] || '#FFFFFF';
+    });
+  }
   function metaFermata(f) {
     const linee = lineaDi(f).slice(0, 3).join(' · ');
     return 'Palina ' + f.id + ' · ' + tipoEtichetta(f.tipo) + ' · Zona ' + f.zona + (linee ? ' · ' + linee : '');
   }
 
+  function eIndirizzo(luogo) {
+    return !!luogo && luogo.tipo === 'indirizzo';
+  }
+
   // Codice palina e indirizzo breve: servono a riconoscere la fermata sul posto.
   function riferimentoFermata(f) {
     if (!f) return '';
+    if (eIndirizzo(f)) return f.indirizzo || 'Indirizzo';
     return 'Palina ' + f.id + (f.indirizzo ? ' · ' + f.indirizzo : '');
   }
   function mostraToast(messaggio, durata) {
@@ -145,9 +201,11 @@
 
   async function caricaDati() {
     try {
-      const [rispostaFermate, risposteLinee] = await Promise.all([
+      const [rispostaFermate, risposteLinee, rispostaColori] = await Promise.all([
         fetchConTimeout(URL_FERMATE, TIMEOUT_FETCH),
-        fetchConTimeout(URL_LINEE, TIMEOUT_FETCH)
+        fetchConTimeout(URL_LINEE, TIMEOUT_FETCH),
+        // I colori sono un di più: se non arrivano l'app funziona lo stesso.
+        fetchConTimeout(URL_COLORI, TIMEOUT_FETCH).catch(() => null)
       ]);
       if (!rispostaFermate.ok || !risposteLinee.ok) throw new Error('Risposta non valida');
       const datiFermate = await rispostaFermate.json();
@@ -157,9 +215,22 @@
       aggiornato = datiFermate.aggiornato || null;
       scrivi(K_FERMATE, JSON.stringify(datiFermate));
       scrivi(K_LINEE, JSON.stringify(datiLinee));
+      if (rispostaColori && rispostaColori.ok) {
+        const datiColori = await rispostaColori.json().catch(() => null);
+        if (datiColori && datiColori.linee) {
+          coloriLinee = datiColori.linee;
+          scrivi(K_COLORI, JSON.stringify(datiColori));
+        }
+      }
+      if (!Object.keys(coloriLinee).length) {
+        const cacheColori = leggiJSON(K_COLORI);
+        if (cacheColori && cacheColori.linee) coloriLinee = cacheColori.linee;
+      }
     } catch (errore) {
       const cacheFermate = leggiJSON(K_FERMATE);
       const cacheLinee = leggiJSON(K_LINEE);
+      const cacheColori = leggiJSON(K_COLORI);
+      if (cacheColori && cacheColori.linee) coloriLinee = cacheColori.linee;
       if (cacheFermate && cacheFermate.fermate && cacheFermate.fermate.length) {
         fermate = cacheFermate.fermate;
         lineePerFermata = (cacheLinee && cacheLinee.linee) || {};
@@ -376,7 +447,9 @@
       source: 'percorso',
       filter: ['all', ['==', ['get', 'modo'], 'bus'], ['!=', ['get', 'ufficiale'], false]],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#C1121F', 'line-width': 5.5 }
+      // Ogni tratto porta il colore della sua linea; il rosso TPER resta il
+      // colore di riserva per le linee senza colore nel GTFS.
+      paint: { 'line-color': ['coalesce', ['get', 'colore'], '#C1121F'], 'line-width': 5.5 }
     });
     // Tratti senza geometria GTFS: linea diritta tratteggiata, così si vede
     // subito che non è il percorso reale del bus.
@@ -394,17 +467,17 @@
       source: 'percorso',
       filter: ['all', ['==', ['get', 'modo'], 'bus'], ['==', ['get', 'ufficiale'], false]],
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
-      paint: { 'line-color': '#C1121F', 'line-width': 3.5, 'line-dasharray': [2, 1.6] }
+      paint: { 'line-color': ['coalesce', ['get', 'colore'], '#C1121F'], 'line-width': 3.5, 'line-dasharray': [2, 1.6] }
     });
     mappa.addLayer({
       id: 'percorso-fermate-punti',
       type: 'circle',
       source: 'percorso-fermate',
       paint: {
-        'circle-radius': 3.2,
-        'circle-color': '#FFFFFF',
-        'circle-stroke-color': '#C1121F',
-        'circle-stroke-width': 2
+        'circle-radius': 3.4,
+        'circle-color': ['coalesce', ['get', 'colore'], '#C1121F'],
+        'circle-stroke-color': '#FFFFFF',
+        'circle-stroke-width': 1.6
       }
     });
     // Nodi del viaggio: partenza rossa, arrivo nero, cambio come anello bianco
@@ -441,10 +514,12 @@
     });
   }
 
-  function segmento(modo, coordinate, ufficiale) {
+  function segmento(modo, coordinate, ufficiale, colore) {
+    const proprieta = { modo: modo, ufficiale: ufficiale !== false };
+    if (colore) proprieta.colore = colore;
     return {
       type: 'Feature',
-      properties: { modo: modo, ufficiale: ufficiale !== false },
+      properties: proprieta,
       geometry: { type: 'LineString', coordinates: coordinate }
     };
   }
@@ -456,6 +531,44 @@
   function coordinateFermata(id) {
     const f = fermataPerId(id);
     return f && f.lat != null && f.lon != null ? [f.lon, f.lat] : null;
+  }
+
+  // Proietta una fermata sulla polilinea disegnata: il pallino sta sulla linea
+  // del bus, non a fianco. Si porta il punto nel piano locale (lon scalata sul
+  // coseno della latitudine), si cerca il segmento più vicino e si restituisce
+  // il punto di proiezione, così la fermata resta quella reale ma agganciata
+  // al tracciato.
+  const PROIEZIONE_MAX = 60;   // metri: oltre, la geometria è sbagliata, non si sposta il pallino
+
+  function proiettaSuLinea(punto, linea) {
+    if (!punto || !Array.isArray(linea) || linea.length < 2) return punto;
+    const coseno = Math.cos((punto[1] * Math.PI) / 180);
+    const px = punto[0] * coseno;
+    const py = punto[1];
+    let proiezione = null;
+    let minima = Infinity;
+    for (let i = 1; i < linea.length; i += 1) {
+      const a = linea[i - 1];
+      const b = linea[i];
+      if (!a || !b) continue;
+      const ax = a[0] * coseno;
+      const ay = a[1];
+      const dx = b[0] * coseno - ax;
+      const dy = b[1] - ay;
+      const lunghezza2 = dx * dx + dy * dy;
+      let t = lunghezza2 ? ((px - ax) * dx + (py - ay) * dy) / lunghezza2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const distanza = Math.hypot(ax + t * dx - px, ay + t * dy - py);
+      if (distanza < minima) {
+        minima = distanza;
+        proiezione = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+      }
+    }
+    // Se la linea passa troppo lontano, il tracciato di quella corsa non
+    // descrive davvero la fermata: meglio il punto reale che un pallino
+    // teletrasportato su un altro ramo.
+    if (!proiezione || minima * 111000 > PROIEZIONE_MAX) return punto;
+    return proiezione;
   }
 
   /* --- Aggancio alla rete stradale (OSRM) ------------------------------ *
@@ -610,8 +723,15 @@
         const agganciata = agganciate && agganciate[indice];
         const geometria = agganciata || (voce && voce.punti);
         const ufficiale = agganciata ? true : !!(voce && voce.ufficiale);
+        if (tappa.camminoPrima) {
+          const da = coordinateFermata(tappa.camminoPrima.da);
+          const a = coordinateFermata(tappa.da);
+          if (da && a) features.push(segmento('piedi', [da, a]));
+        }
+        let disegnata = null;
         if (geometria && geometria.length > 1) {
-          features.push(segmento('bus', estendiAgliEstremi(geometria, coordinateFermata(tappa.da), coordinateFermata(tappa.a)), ufficiale));
+          disegnata = estendiAgliEstremi(geometria, coordinateFermata(tappa.da), coordinateFermata(tappa.a));
+          features.push(segmento('bus', disegnata, ufficiale, coloreTracciato(tappa.linea)));
           if (!ufficiale) senzaTracciato += 1;
         } else {
           senzaTracciato += 1;
@@ -620,7 +740,14 @@
         mezzo.forEach((id, posizione) => {
           if (posizione === 0 || posizione === mezzo.length - 1) return;
           const punto = coordinateFermata(id);
-          if (punto) fermate.push({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: punto } });
+          if (punto) {
+            fermate.push({
+              type: 'Feature',
+              // Il pallino della fermata intermedia prende il colore della linea.
+              properties: { colore: coloreTracciato(tappa.linea) },
+              geometry: { type: 'Point', coordinates: proiettaSuLinea(punto, disegnata) }
+            });
+          }
         });
       });
       if (sel.destinazione && sel.destinazione.lat != null && esito.camminoFinale > 0) {
@@ -709,11 +836,7 @@
       '</button>';
   }
 
-  function gruppiSuggerimenti(campo, query) {
-    if (query && query.trim().length >= 2) {
-      const risultati = cercaFermate(query);
-      return risultati.length ? [{ titolo: 'Risultati', items: risultati }] : [];
-    }
+  function gruppiSuggerimenti(campo) {
     const gruppi = [];
     const usate = recenti();
     if (usate.length) gruppi.push({ titolo: 'Recenti', items: usate });
@@ -730,25 +853,147 @@
     return gruppi;
   }
 
+  function gruppiFermate(query) {
+    const risultati = cercaFermate(query);
+    return risultati.length ? [{ titolo: 'Fermate', items: risultati }] : [];
+  }
+
+  // Indirizzo trovato su Nominatim: usa la zona della fermata più vicina per il
+  // prezzo, mentre il percorso parte e arriva dalle coordinate esatte.
+  function indirizzoHTML(luogo, ruolo) {
+    return '<button class="voce" role="option" data-indirizzo="1" data-lat="' + luogo.lat + '" data-lon="' + luogo.lon +
+      '" data-nome="' + esc(luogo.nome) + '" data-dettaglio="' + esc(luogo.indirizzo || '') + '" data-ruolo="' + esc(ruolo) + '">' +
+      '<span class="voce-ico geo">' + ICONA_LUOGO + '</span>' +
+      '<span class="voce-testo"><span class="voce-nome">' + esc(luogo.nome) + '</span>' +
+      (luogo.indirizzo ? '<span class="voce-indirizzo">' + esc(luogo.indirizzo) + '</span>' : '') +
+      '<span class="voce-meta">Indirizzo · zona ' + esc(luogo.zona) + '</span></span>' +
+      '<svg class="voce-freccia" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '</button>';
+  }
+
+  function disegnaSuggerimenti() {
+    const lista = $('overlay-lista');
+    const campo = suggerimenti.campo || 'destinazione';
+    let html = suggerimenti.gruppi.map((gruppo) => {
+      return '<div class="gruppo-titolo">' + esc(gruppo.titolo) + '</div>' +
+        gruppo.items.map((f) => voceHTML(f, campo)).join('');
+    }).join('');
+    if (suggerimenti.indirizzi.length) {
+      html += '<div class="gruppo-titolo">Indirizzi</div>' +
+        suggerimenti.indirizzi.map((luogo) => indirizzoHTML(luogo, campo)).join('') +
+        '<p class="testo-intro" style="padding:6px 10px 10px;font-size:11px">Indirizzi © OpenStreetMap contributors (ODbL)</p>';
+    }
+    if (suggerimenti.caricamento) {
+      html += '<div class="gruppo-titolo">Indirizzi</div>' +
+        '<p class="testo-intro" style="padding:2px 10px 12px">Cerco su OpenStreetMap…</p>';
+    }
+    if (suggerimenti.errore) {
+      html += '<p class="testo-intro" style="padding:8px 10px 12px">Ricerca indirizzi non disponibile: le fermate qui sopra funzionano lo stesso.</p>';
+    }
+    if (!html) {
+      html = '<p class="testo-intro" style="padding:16px 8px 12px">Nessuna fermata o indirizzo trovato. Prova con un altro nome.</p>';
+    }
+    lista.innerHTML = html;
+  }
+
+  async function chiediIndirizzi(testo, token) {
+    // Nominatim consente una richiesta al secondo: si aspetta il turno e si
+    // annulla la richiesta precedente appena parte una ricerca nuova.
+    const attesa = Math.max(0, ultimaRichiestaIndirizzi + NOMINATIM_PAUSA - Date.now());
+    if (attesa) await new Promise((risolvi) => setTimeout(risolvi, attesa));
+    if (token !== suggerimenti.token) return null;
+    ultimaRichiestaIndirizzi = Date.now();
+    if (indirizziAbort) indirizziAbort.abort();
+    indirizziAbort = new AbortController();
+    const url = NOMINATIM + '?format=jsonv2&addressdetails=1&limit=6&dedupe=1&accept-language=it&countrycodes=it' +
+      '&viewbox=11.20,44.62,11.50,44.34&q=' + encodeURIComponent(testo);
+    const risposta = await fetch(url, { signal: indirizziAbort.signal, headers: { Accept: 'application/json' } });
+    if (!risposta.ok) throw new Error('Nominatim: ' + risposta.status);
+    const elenco = await risposta.json();
+    if (!Array.isArray(elenco)) return [];
+    const visti = new Set();
+    const trovati = [];
+    elenco.forEach((voce) => {
+      const lat = parseFloat(voce.lat);
+      const lon = parseFloat(voce.lon);
+      if (!isFinite(lat) || !isFinite(lon)) return;
+      const chiave = lat.toFixed(5) + ',' + lon.toFixed(5);
+      if (visti.has(chiave)) return;
+      visti.add(chiave);
+      const indirizzo = voce.address || {};
+      const via = indirizzo.road || indirizzo.pedestrian || indirizzo.footway || indirizzo.square || indirizzo.neighbourhood || '';
+      const civico = indirizzo.house_number ? ' ' + indirizzo.house_number : '';
+      const nome = voce.name || ((via + civico).trim() || String(voce.display_name || '').split(',')[0].trim());
+      const contesto = [via && (via + civico), indirizzo.suburb, indirizzo.city || indirizzo.town || indirizzo.village, indirizzo.postcode]
+        .filter(Boolean)
+        .filter((parte, indice, tutte) => tutte.indexOf(parte) === indice)
+        .join(' · ');
+      const vicina = fermateVicine(lat, lon, 1)[0];
+      trovati.push({
+        id: 'geo:' + chiave,
+        nome: nome || 'Indirizzo',
+        indirizzo: contesto,
+        lat: lat,
+        lon: lon,
+        zona: vicina ? vicina.zona : '500',
+        tipo: 'indirizzo'
+      });
+    });
+    return trovati;
+  }
+
+  function cercaIndirizzi(testo) {
+    const chiave = normalizza(testo);
+    const token = suggerimenti.token + 1;
+    suggerimenti.token = token;
+    suggerimenti.errore = false;
+    if (indirizziCache.has(chiave)) {
+      suggerimenti.indirizzi = indirizziCache.get(chiave);
+      suggerimenti.caricamento = false;
+      disegnaSuggerimenti();
+      return;
+    }
+    suggerimenti.indirizzi = [];
+    suggerimenti.caricamento = true;
+    disegnaSuggerimenti();
+    chiediIndirizzi(testo, token).then((esiti) => {
+      if (esiti === null || token !== suggerimenti.token) return;
+      indirizziCache.set(chiave, esiti);
+      suggerimenti.indirizzi = esiti;
+    }).catch(() => {
+      if (token !== suggerimenti.token) return;
+      suggerimenti.errore = true;
+    }).finally(() => {
+      if (token !== suggerimenti.token) return;
+      suggerimenti.caricamento = false;
+      disegnaSuggerimenti();
+    });
+  }
+
   function apriSuggerimenti(campo, query) {
     const input = $(campo === 'partenza' ? 'input-partenza' : 'input-destinazione');
     // I suggerimenti compaiono solo per il campo che l'utente sta usando davvero.
     if (document.activeElement !== input) return;
     campoAttivo = campo;
-    const gruppi = gruppiSuggerimenti(campo, query);
-    const lista = $('overlay-lista');
-    $('overlay-titolo').textContent = campo === 'partenza' ? 'Da dove parti' : 'Dove vai';
-    if (!gruppi.length) {
-      if (!query || query.trim().length < 2) { chiudiOverlay(); return; }
-      lista.innerHTML = '<p class="testo-intro" style="padding:16px 8px 12px">Nessuna fermata trovata. Prova con un altro nome.</p>';
+    const testo = (query || '').trim();
+    suggerimenti.campo = campo;
+    suggerimenti.query = testo;
+    suggerimenti.indirizzi = [];
+    suggerimenti.errore = false;
+    suggerimenti.caricamento = false;
+    if (testo.length >= 2) {
+      suggerimenti.gruppi = gruppiFermate(testo);
     } else {
-      lista.innerHTML = gruppi.map((gruppo) => {
-        return '<div class="gruppo-titolo">' + esc(gruppo.titolo) + '</div>' +
-          gruppo.items.map((f) => voceHTML(f, campo || 'destinazione')).join('');
-      }).join('');
+      suggerimenti.token += 1;
+      if (indirizziAbort) { indirizziAbort.abort(); indirizziAbort = null; }
+      suggerimenti.gruppi = gruppiSuggerimenti(campo);
+      if (!suggerimenti.gruppi.length) { chiudiOverlay(); return; }
     }
+    $('overlay-titolo').textContent = campo === 'partenza' ? 'Da dove parti' : 'Dove vai';
     $('overlay-ricerca').hidden = false;
     $('backdrop').hidden = false;
+    if (testo.length >= INDIRIZZI_MIN) cercaIndirizzi(testo);
+    else disegnaSuggerimenti();
   }
 
   function chiudiOverlay() {
@@ -774,7 +1019,7 @@
   function selezionaFermata(ruolo, f) {
     sel[ruolo] = f;
     impostaInput(ruolo);
-    aggiungiRecente(f);
+    if (!eIndirizzo(f)) aggiungiRecente(f);
     chiudiOverlay();
     aggiornaMarker();
     salvaTratta();
@@ -804,18 +1049,34 @@
     renderLive();
   }
 
+  // Le fermate si salvano per id, gli indirizzi per coordinate (l'id è finto).
+  function luogoSalvato(luogo) {
+    if (!luogo) return null;
+    return {
+      id: luogo.id, nome: luogo.nome, indirizzo: luogo.indirizzo || '',
+      lat: luogo.lat, lon: luogo.lon, zona: luogo.zona, tipo: luogo.tipo
+    };
+  }
+
+  function luogoRipristinato(salvato) {
+    if (!salvato) return null;
+    if (typeof salvato === 'string') return fermataPerId(salvato);
+    if (salvato.lat == null || salvato.lon == null) return fermataPerId(salvato.id);
+    return salvato;
+  }
+
   function salvaTratta() {
     scrivi(K_TRATTA, JSON.stringify({
-      partenza: sel.partenza ? sel.partenza.id : null,
-      destinazione: sel.destinazione ? sel.destinazione.id : null
+      partenza: luogoSalvato(sel.partenza),
+      destinazione: luogoSalvato(sel.destinazione)
     }));
   }
 
   function ripristinaTratta() {
     const salvata = leggiJSON(K_TRATTA);
     if (salvata) {
-      sel.partenza = salvata.partenza ? fermataPerId(salvata.partenza) : null;
-      sel.destinazione = salvata.destinazione ? fermataPerId(salvata.destinazione) : null;
+      sel.partenza = luogoRipristinato(salvata.partenza);
+      sel.destinazione = luogoRipristinato(salvata.destinazione);
     }
     if (!sel.partenza && !sel.destinazione) {
       const predefinita = fermataPerId('100') || fermate.find((f) => /piazza maggiore/i.test(f.nome)) || fermate[0];
@@ -902,7 +1163,9 @@
       sotto = 'Partenza da ' + nomeBreve(p.nome);
     } else if (p && d) {
       titolo = nomeBreve(p.nome) + ' → ' + nomeBreve(d.nome);
-      sotto = 'Zona ' + p.zona + ' → Zona ' + d.zona;
+      const zp = eIndirizzo(p) ? 'Indirizzo · zona ' + p.zona : 'Zona ' + p.zona;
+      const zd = eIndirizzo(d) ? 'Indirizzo · zona ' + d.zona : 'Zona ' + d.zona;
+      sotto = zp + ' → ' + zd;
     }
     $('sheet-titolo').textContent = titolo;
     $('sheet-sotto').textContent = sotto;
@@ -969,7 +1232,7 @@
     }
 
     let html = '<p class="testo-intro">' +
-      (sel.partenza ? 'Scegli dove andare: mostro le fermate più vicine e il prezzo del biglietto.' : 'Cerca una fermata o tocca la mappa per iniziare.') +
+      (sel.partenza ? 'Scegli dove andare: mostro le fermate più vicine e il prezzo del biglietto.' : 'Cerca una fermata o un indirizzo, oppure tocca la mappa per iniziare.') +
       '</p>';
     if (sel.partenza && sel.partenza.lat != null) {
       const vicine = senzaDoppioni(fermateVicine(sel.partenza.lat, sel.partenza.lon, 10, sel.partenza.id)
@@ -1030,16 +1293,26 @@
     const recente = data && Math.round((mezzanotte - data) / 86400000) <= GIORNI_RICORDATI;
     return {
       giorno: recente ? salvato.giorno : '',
-      orario: orarioValido(salvato.orario) ? salvato.orario : ''
+      orario: orarioValido(salvato.orario) ? salvato.orario : '',
+      modo: salvato.modo === 'arrivo' ? 'arrivo' : 'partenza',
+      adesso: typeof salvato.adesso === 'boolean'
+        ? salvato.adesso
+        : !orarioValido(salvato.orario)
     };
   }
 
   function salvaQuando() {
-    scrivi(K_QUANDO, JSON.stringify({ giorno: routing.giorno || '', orario: routing.orario || '' }));
+    scrivi(K_QUANDO, JSON.stringify({
+      giorno: routing.giorno || '',
+      orario: routing.orario || '',
+      modo: routing.modo,
+      adesso: routing.adesso
+    }));
   }
 
   const routing = {
     stato: 'idle', esito: null, errore: null, chiave: null, richiesta: 0, piedi: null,
+    opzioni: [], aperto: -1, scadenza: null,
     ...leggiQuando()
   };
 
@@ -1054,17 +1327,28 @@
 
   function oggiISO() { return isoDi(new Date()); }
 
-  // Prima di disegnare o calcolare, data e ora devono avere un valore.
+  // Prima di disegnare o calcolare, data e ora devono avere un valore. In
+  // modalità "adesso" l'ora segue il tempo reale a ogni ridisegno.
   function assicuraQuando() {
-    if (!routing.orario) routing.orario = oraAdesso();
     if (!routing.giorno) routing.giorno = oggiISO();
+    if (routing.adesso) {
+      const ora = oraAdesso();
+      if (ora !== routing.orario) {
+        routing.orario = ora;
+        routing.chiave = null;
+        const campo = $('input-ora');
+        if (campo) campo.value = ora;
+      }
+    }
+    if (!routing.orario) routing.orario = oraAdesso();
   }
 
   // Unico punto di modifica di giorno/ora: stato, campi visibili, cache del
   // risultato e ricalcolo. Prima era ripetuto in quattro gestori diversi.
-  function aggiornaQuando(giorno, orario) {
+  function aggiornaQuando(giorno, orario, adesso) {
     routing.giorno = giorno || oggiISO();
     routing.orario = orario || oraAdesso();
+    routing.adesso = adesso === true;
     routing.chiave = null;
     salvaQuando();
     const campoData = $('input-data');
@@ -1072,6 +1356,61 @@
     if (campoData) campoData.value = routing.giorno;
     if (campoOra) campoOra.value = routing.orario;
     calcolaPercorso();
+  }
+
+  // Cambio tra "parti alle" e "arriva entro": in arrivo l'orario diventa una
+  // scadenza e, se prima seguiva l'adesso, si parte da un'ora sensata.
+  function impostaModo(modo) {
+    if (modo === routing.modo) return;
+    routing.modo = modo;
+    routing.chiave = null;
+    if (modo === 'arrivo') {
+      // Se l'ora salvata era una partenza ormai passata non ha senso usarla
+      // come scadenza: si propone tra un'ora, arrotondata ai 5 minuti.
+      const base = dataDaGiornoEOra(routing.giorno, routing.orario);
+      if (routing.adesso || !routing.orario || base.getTime() <= Date.now() + 5 * 60000) {
+        const d = new Date(Date.now() + 60 * 60000);
+        d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5, 0, 0);
+        routing.giorno = isoDi(d);
+        routing.orario = due(d.getHours()) + ':' + due(d.getMinutes());
+        routing.adesso = false;
+      }
+    } else if (!routing.orario) {
+      routing.orario = oraAdesso();
+      routing.adesso = true;
+    }
+    salvaQuando();
+    disegnaPercorso();
+    calcolaPercorso();
+  }
+
+  function secondiDelGiorno(d) {
+    return d.getHours() * 3600 + d.getMinutes() * 60;
+  }
+
+  // Il motore calcola l'arrivo più presto a una data ora di partenza. Per avere
+  // più alternative si prova qualche partenza in più; in modalità arrivo si
+  // arretra dalla scadenza e si tengono solo i viaggi che arrivano in tempo.
+  function calcolaOpzioni(da, a, base) {
+    const arrivo = routing.modo === 'arrivo';
+    const tentativi = arrivo ? [5, 10, 20, 40, 60, 90, 120, 180] : [0, 12, 25, 40];
+    const limite = arrivo ? secondiDelGiorno(base) : null;
+    routing.scadenza = limite;
+    const visti = new Set();
+    const esiti = [];
+    let errore = null;
+    tentativi.forEach((offset) => {
+      const quando = new Date(base.getTime() + (arrivo ? -offset : offset) * 60000);
+      const esito = TPERRouting.calcola(da, a, quando, { maxCambi: 3 });
+      if (!esito) return;
+      if (esito.errore) { errore = errore || esito; return; }
+      if (arrivo && esito.arrivo > limite) return;
+      const firma = esito.tappe.map((t) => t.linea + '|' + t.da + '|' + t.a + '|' + t.partenza).join(';');
+      if (visti.has(firma)) return;
+      visti.add(firma);
+      esiti.push(esito);
+    });
+    return { esiti: esiti.slice(0, 4), errore: errore };
   }
 
   function dataDaGiornoEOra(giorno, ora) {
@@ -1130,21 +1469,94 @@
     return elenco;
   }
 
+  // Cambio a piedi tra fermate vicine: le paline opposte o le fermate della
+  // stessa piazza stanno a 50–150 m. Senza questo la pianificazione le tratta
+  // come luoghi scollegati e fa fare giri assurdi in autobus.
+  let camminiPronti = false;
+  const CAMMINO_CAMBIO = 150;   // metri
+
+  function preparaCammini() {
+    if (camminiPronti || typeof TPERRouting === 'undefined' || !TPERRouting.impostaCammini) return;
+    if (fermate.length < 100) return;   // elenco ridotto offline: si riproverà
+    camminiPronti = true;
+    const celle = new Map();
+    fermate.forEach((f) => {
+      if (f.lat == null || f.lon == null) return;
+      const chiave = Math.round(f.lat * 1000) + ':' + Math.round(f.lon * 1000);
+      if (!celle.has(chiave)) celle.set(chiave, []);
+      celle.get(chiave).push(f);
+    });
+    const coppie = [];
+    fermate.forEach((f) => {
+      if (f.lat == null || f.lon == null) return;
+      const cx = Math.round(f.lat * 1000);
+      const cy = Math.round(f.lon * 1000);
+      for (let dx = -2; dx <= 2; dx += 1) {
+        for (let dy = -2; dy <= 2; dy += 1) {
+          const gruppo = celle.get((cx + dx) + ':' + (cy + dy));
+          if (!gruppo) continue;
+          gruppo.forEach((v) => {
+            if (v.id <= f.id) return;   // ogni coppia una volta sola
+            const d = distanzaMetri(f, v);
+            if (d <= CAMMINO_CAMBIO) coppie.push([f.id, v.id, Math.round(d * 1.15)]);
+          });
+        }
+      }
+    });
+    TPERRouting.impostaCammini(coppie);
+  }
+
   function disegnaPercorso() {
     const blocco = $('blocco-percorso');
     if (!blocco) return;
     assicuraQuando();
-    blocco.innerHTML = VistaPercorso.controlli(routing.giorno, routing.orario) +
+    blocco.innerHTML = VistaPercorso.controlli(routing.giorno, routing.orario, routing.modo) +
       VistaPercorso.esito(routing, etichettaFermata);
     aggiornaScrim();
+    // I campi vengono ricreati a ogni render: un change di un campo già
+    // staccato dal DOM (capita quando l'orologio aggiorna l'ora) non deve
+    // spegnere la modalità "adesso".
     const inputOra = $('input-ora');
     if (inputOra) {
-      inputOra.addEventListener('change', () => aggiornaQuando(routing.giorno, inputOra.value));
+      inputOra.addEventListener('change', () => {
+        if (!inputOra.isConnected) return;
+        aggiornaQuando(routing.giorno, inputOra.value, false);
+      });
     }
     const inputData = $('input-data');
     if (inputData) {
       inputData.min = oggiISO();
-      inputData.addEventListener('change', () => aggiornaQuando(inputData.value, routing.orario));
+      inputData.addEventListener('change', () => {
+        if (!inputData.isConnected) return;
+        aggiornaQuando(inputData.value, routing.orario, false);
+      });
+    }
+    // Le opzioni sono <details>: si aprono al clic. Aperta una, la mappa mostra
+    // quel percorso; l'ultima scelta resta aperta anche dopo un ricalcolo.
+    const dettagli = blocco.querySelectorAll('details.opzione');
+    dettagli.forEach((dettaglio) => {
+      // Un <details> aperto viene chiuso anche quando il render sostituisce il
+      // nodo: solo un clic dell'utente deve azzerare l'opzione ricordata.
+      let chiusuraUtente = false;
+      const summary = dettaglio.querySelector('summary');
+      if (summary) summary.addEventListener('click', () => { if (dettaglio.open) chiusuraUtente = true; });
+      dettaglio.addEventListener('toggle', () => {
+        const indice = parseInt(dettaglio.dataset.opzione, 10);
+        if (!dettaglio.open) {
+          if (chiusuraUtente && routing.aperto === indice) routing.aperto = -1;
+          chiusuraUtente = false;
+          return;
+        }
+        dettagli.forEach((altra) => { if (altra !== dettaglio) altra.open = false; });
+        routing.aperto = indice;
+        if (routing.opzioni && routing.opzioni[indice]) {
+          routing.esito = routing.opzioni[indice];
+          disegnaTracciato();
+        }
+      });
+    });
+    if (routing.aperto >= 0 && dettagli[routing.aperto] && !dettagli[routing.aperto].open) {
+      dettagli[routing.aperto].open = true;
     }
     disegnaTracciato();
   }
@@ -1158,7 +1570,7 @@
       return;
     }
     assicuraQuando();
-    const chiave = sel.partenza.id + '|' + sel.destinazione.id + '|' + routing.giorno + '|' + routing.orario;
+    const chiave = sel.partenza.id + '|' + sel.destinazione.id + '|' + routing.giorno + '|' + routing.orario + '|' + routing.modo;
     const terminale = routing.stato === 'ok' || routing.stato === 'nessuno' ||
       routing.stato === 'messaggio' || routing.stato === 'piedi' || routing.stato === 'errore';
     if (routing.chiave === chiave && terminale) return;
@@ -1169,6 +1581,7 @@
     routing.richiesta += 1;
     const richiesta = routing.richiesta;
     routing.esito = null;
+    routing.opzioni = [];
     routing.piedi = null;
 
     if (distanza != null && distanza < 400) {
@@ -1183,30 +1596,36 @@
 
     TPERRouting.carica(URL_ORARI_GZ, URL_ORARI).then(() => {
       if (richiesta !== routing.richiesta) return null;
-      return TPERRouting.calcola(
+      preparaCammini();
+      return calcolaOpzioni(
         candidatiPercorso(sel.partenza),
         candidatiPercorso(sel.destinazione),
-        dataDaGiornoEOra(routing.giorno, routing.orario),
-        { maxCambi: 3 }
+        dataDaGiornoEOra(routing.giorno, routing.orario)
       );
-    }).then((esito) => {
-      if (richiesta !== routing.richiesta) return;
-      if (esito === null || esito === undefined) {
-        routing.stato = 'nessuno';
-      } else if (esito.errore) {
-        routing.stato = 'messaggio';
-        routing.esito = esito;
+    }).then((risultato) => {
+      if (richiesta !== routing.richiesta || !risultato) return;
+      if (!risultato.esiti.length) {
+        if (risultato.errore) {
+          routing.stato = 'messaggio';
+          routing.esito = risultato.errore;
+        } else {
+          routing.stato = 'nessuno';
+        }
       } else {
         routing.stato = 'ok';
-        routing.esito = esito;
+        routing.opzioni = risultato.esiti;
+        routing.aperto = routing.aperto >= 0 && routing.aperto < routing.opzioni.length ? routing.aperto : -1;
+        routing.esito = routing.opzioni[routing.aperto >= 0 ? routing.aperto : 0];
+        routing.opzioni.forEach((esito) => coloraTappe(esito));
         // Le geometrie arrivano dopo il calcolo: appena pronte il tracciato
         // viene ridisegnato con il percorso reale della linea.
         if (typeof TPERRouting !== 'undefined' && TPERRouting.caricaTracciati) {
           TPERRouting.caricaTracciati(URL_TRACC_GZ, URL_TRACC).then(() => {
-            if (richiesta !== routing.richiesta || routing.stato !== 'ok' || !routing.esito) return;
+            if (richiesta !== routing.richiesta || routing.stato !== 'ok' || !routing.opzioni.length) return;
             // Il percorso è già calcolato ma senza geometrie: si rifà una volta
             // sola, così le tratte portano la forma della linea.
-            const senzaForma = routing.esito.tappe.some((tappa) => !(tappa.forma >= 0));
+            const senzaForma = routing.opzioni.some((esito) =>
+              esito.tappe.some((tappa) => !(tappa.forma >= 0)));
             if (!senzaForma) { disegnaTracciato(); return; }
             routing.chiave = null;
             calcolaPercorso();
@@ -1220,6 +1639,19 @@
       routing.errore = (errore && errore.message) || 'rete non disponibile';
       disegnaPercorso();
     });
+  }
+
+  // "Adesso" non è un'etichetta: ogni 30 secondi l'ora segue il tempo reale e
+  // il percorso viene ricalcolato quando il minuto cambia.
+  let orologio = null;
+  function avviaOrologio() {
+    if (orologio) return;
+    orologio = setInterval(() => {
+      if (!routing.adesso) return;
+      if (routing.giorno !== oggiISO()) return;
+      if (routing.orario === oraAdesso()) return;
+      aggiornaQuando(oggiISO(), oraAdesso(), true);
+    }, 30000);
   }
 
   /* ------------------------------------------------------------------ *
@@ -1320,7 +1752,14 @@
   }
 
   function fermataLive() {
-    return sel[stopLiveRuolo] || sel.partenza || sel.destinazione || null;
+    const scelta = sel[stopLiveRuolo] || sel.partenza || sel.destinazione || null;
+    if (!scelta || !eIndirizzo(scelta)) return scelta;
+    // Per un indirizzo il tempo reale si chiede alla palina più vicina.
+    const vicina = fermateVicine(scelta.lat, scelta.lon, 1)[0];
+    if (!vicina) return null;
+    return Object.assign({}, vicina, {
+      indirizzo: scelta.indirizzo || scelta.nome
+    });
   }
 
   function lineeDaInterrogare(fermata) {
@@ -1430,10 +1869,17 @@
 
   function arriviHTML() {
     return '<ul class="lista-arrivi">' + live.items.map((arrivo) => {
-      const tempo = arrivo.minuti <= 0 ? 'In arrivo' : arrivo.minuti + '<span class="unita">min</span>';
+      // I minuti si ricalcolano dall'orario: quelli salvati in cache possono
+      // essere vecchi di un paio di minuti e mostrare un bus già passato.
+      const minuti = minutiA(arrivo.ora);
+      const tempo = minuti <= 0 ? 'In arrivo' : minuti + '<span class="unita">min</span>';
       const meta = (arrivo.bus ? 'Bus ' + esc(arrivo.bus) : 'Corsa programmata') + ' · ore ' + esc(arrivo.ora);
+      const voce = coloreLinea(arrivo.linea);
+      const colore = voce
+        ? ' style="background:' + esc(voce[0]) + ';color:' + esc(voce[1] || '#FFFFFF') + '"'
+        : '';
       return '<li class="arrivo">' +
-        '<span class="badge-linea">' + esc(arrivo.linea) + '</span>' +
+        '<span class="badge-linea"' + colore + '>' + esc(arrivo.linea) + '</span>' +
         '<div class="arrivo-testo"><div class="arrivo-tempo">' + tempo + '</div>' +
         '<div class="arrivo-meta">' + meta + '</div></div>' +
         '<span class="' + (arrivo.tipo === 'live' ? 'tag-live' : 'tag-orario') + '">' + (arrivo.tipo === 'live' ? 'LIVE' : 'ORARIO') + '</span>' +
@@ -1797,7 +2243,7 @@
         // Il viaggio mostrato non vale più: si riparte dalla ricerca.
         if (avevaSelezione) { salvaTratta(); renderViaggio(); renderLive(); }
         apriSuggerimenti(ruolo, input.value);
-      }, 160);
+      }, 300);
       input.addEventListener('input', cerca);
       input.addEventListener('change', () => {
         // Ripristino del valore da parte del browser: non è una ricerca.
@@ -1819,7 +2265,7 @@
       input.addEventListener('keydown', (evento) => {
         if (evento.key === 'Enter') {
           evento.preventDefault();
-          const primo = $('overlay-lista').querySelector('[data-voce]');
+          const primo = $('overlay-lista').querySelector('[data-voce], [data-indirizzo]');
           if (primo) primo.click();
         } else if (evento.key === 'Escape') {
           chiudiOverlay();
@@ -1899,6 +2345,24 @@
     $('overlay-chiudi').addEventListener('click', chiudiOverlay);
     $('backdrop').addEventListener('click', chiudiOverlay);
     $('overlay-lista').addEventListener('click', (evento) => {
+      const indirizzo = evento.target.closest('[data-indirizzo]');
+      if (indirizzo) {
+        const lat = parseFloat(indirizzo.getAttribute('data-lat'));
+        const lon = parseFloat(indirizzo.getAttribute('data-lon'));
+        if (!isFinite(lat) || !isFinite(lon)) return;
+        const vicina = fermateVicine(lat, lon, 1)[0];
+        const ruolo = indirizzo.getAttribute('data-ruolo') || campoAttivo || 'destinazione';
+        selezionaFermata(ruolo, {
+          id: 'geo:' + lat.toFixed(5) + ',' + lon.toFixed(5),
+          nome: indirizzo.getAttribute('data-nome') || 'Indirizzo',
+          indirizzo: indirizzo.getAttribute('data-dettaglio') || '',
+          lat: lat,
+          lon: lon,
+          zona: vicina ? vicina.zona : '500',
+          tipo: 'indirizzo'
+        });
+        return;
+      }
       const voce = evento.target.closest('[data-voce]');
       if (!voce) return;
       const fermata = fermataPerId(voce.getAttribute('data-voce'));
@@ -1924,7 +2388,14 @@
         const azione = pulsante.getAttribute('data-azione');
         if (azione === 'live') { attivaTab('live'); caricaLive(true); impostaSheet('piena'); }
         if (azione === 'inverti') { $('btn-scambia').click(); }
-        if (azione === 'ora-adesso') aggiornaQuando();
+        if (azione === 'ora-adesso') aggiornaQuando(oggiISO(), oraAdesso(), true);
+        if (azione === 'tra-un-ora') {
+          const d = new Date(Date.now() + 60 * 60000);
+          d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5, 0, 0);
+          aggiornaQuando(isoDi(d), due(d.getHours()) + ':' + due(d.getMinutes()), false);
+        }
+        if (azione === 'modo-partenza') impostaModo('partenza');
+        if (azione === 'modo-arrivo') impostaModo('arrivo');
         if (azione === 'riprova-percorso') {
           routing.chiave = null;
           calcolaPercorso();
@@ -1975,6 +2446,9 @@
 
     window.addEventListener('resize', debounce(() => {
       if (trascinando) return;
+      // Il canvas della mappa non segue da solo il contenitore: senza resize
+      // resta della misura precedente e pin e percorso risultano spostati.
+      if (mappa) mappa.resize();
       adattaAltezzaSheet();
       applicaTrasformazione(traslazionePer(statoSheet), false);
     }, 120));
@@ -1992,6 +2466,7 @@
   async function avvia() {
     initMappa();
     collegaEventi();
+    avviaOrologio();
     gestisciInstallazione();
     registraServiceWorker();
     applicaTrasformazione(traslazionePer('meta'), false);

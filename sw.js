@@ -3,8 +3,8 @@
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'tper-zone-calc-static-v15';
-const CACHE_DATI = 'tper-zone-calc-data-v15';
+const CACHE_STATICA = 'tper-zone-calc-static-v26';
+const CACHE_DATI = 'tper-zone-calc-data-v26';
 
 const ASSET_STATICI = [
   './',
@@ -20,6 +20,7 @@ const ASSET_STATICI = [
 const ASSET_DATI = [
   './data/fermate.json',
   './data/linee-per-fermata.json',
+  './data/linee-colori.json',
   './data/orari.json',
   './data/orari.json.gz',
   './data/tracciati.json',

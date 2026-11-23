@@ -15,6 +15,7 @@ Web app mobile-first (PWA) per calcolare zone tariffarie, costo del biglietto e 
 | Orari in tempo reale | TPER HelloBus (web service XML pubblico) | 0 € — nessuna API key | Il servizio non invia header CORS: l'app passa da un relay pubblico (proxy.corsfix.com, con fallback), sostituibile dal tab Info | https://hellobuswsweb.tper.it/web-services/hellobus.asmx |
 | Calcolo del percorso | Motore RAPTOR in `routing.js` sugli orari programmati del GTFS TPER | 0 € — nessuna API esterna, nessuna key | Orari di tabella (non realtime): possono variare per traffico e lavori | https://developers.google.com/transit/gtfs |
 | Mappa | MapLibre GL + OpenFreeMap (stile Liberty) | 0 € — nessuna API key, nessun limite | Richiede connessione per stile e tile vettoriali; ricerca fermate, zone e prezzi restano offline | https://openfreemap.org |
+| Ricerca indirizzi | Nominatim (OpenStreetMap) | 0 € — nessuna API key | Solo online e con limite di 1 richiesta al secondo; il testo cercato viene inviato a OpenStreetMap. Senza connessione restano le fermate | https://nominatim.org |
 | PWA (installabilità + offline) | `manifest.json` + Service Worker nativo del browser | 0 € — standard web nativo | Nessuno | https://developer.mozilla.org/docs/Web/Progressive_web_apps |
 | Icone app | SVG generate a mano/localmente, incluse nel progetto | 0 € | SVG invece di PNG: leggerissime, nessun tool esterno necessario | — |
 | Tracciato stradale | OSRM demo pubblico (map matching) per agganciare le shapes TPER alle strade | 0 € — nessuna API key | Servizio pubblico senza garanzie: se non risponde si usa il tracciato ufficiale. La richiesta contiene solo le coordinate del percorso. Geometrie agganciate salvate in locale | https://project-osrm.org |
@@ -40,12 +41,14 @@ tper-zone-calc/
 ├── data/
 │   ├── fermate.json                # 9.603 fermate bus reali + stazioni ferroviarie curate a mano (9.464 con indirizzo breve)
 │   ├── linee-per-fermata.json      # Linee che servono ciascuna fermata (dal dataset ufficiale)
+│   ├── linee-colori.json           # Colore ufficiale di ogni linea (GTFS route_color) per scheda e mappa
 │   ├── orari.json                  # Orari di tutte le corse (GTFS TPER compresso, ~5,8 MB)
 │   ├── orari.json.gz               # Stessa cosa in gzip (~279 KB): è questo che l'app scarica
 │   ├── tracciati.json              # Geometrie reali delle linee (1.617 forme, ~0,8 MB)
 │   └── tracciati.json.gz           # Stessa cosa in gzip (~166 KB): scaricata solo quando serve il percorso
 ├── scripts/
 │   ├── converti-fermate-autobus.py # Converte il dataset ufficiale TPER (bus) nei due file dati sopra
+│   ├── estrai-colori-linee.py      # Estrae i colori ufficiali delle linee da routes.txt del GTFS
 │   ├── preprocess-orari.js         # Dal GTFS completo genera data/orari.json per il calcolo percorsi
 │   └── preprocess-gtfs.js          # (opzionale) elabora il GTFS completo, utile solo per dati extra
 └── README.md
@@ -99,6 +102,10 @@ In alternativa, per un elenco più completo delle linee ferroviarie, resta dispo
 
 Il blocco **Percorso** nel tab Viaggio calcola quali bus prendere, a che ora e con quanti cambi, come un pianificatore di viaggio. Non usa nessun servizio esterno: `routing.js` legge `data/orari.json.gz` (tutti i passaggi di tutte le corse TPER) e applica un algoritmo RAPTOR lato browser.
 
+Il criterio è l'arrivo più presto a destinazione, non il minor numero di corse: il RAPTOR usa un doppio buffer (le corse prese in un giro non si possono riusare nello stesso giro) e predecessori per giro, così la ricostruzione non entra in cicli. Sono ammessi fino a 3 cambi e i cambi a piedi tra paline vicine (≤150 m, per un massimo di 5 minuti di cammino) vengono trattati come un cambio normale, non come una corsa. La destinazione si sceglie porta a porta, cammino finale compreso, quindi una fermata a due passi può battere quella scritta nel campo.
+
+La scheda mostra fino a quattro **opzioni** una sotto l'altra, chiuse: ognuna riporta orari, durata, cambi, minuti a piedi e le linee con il loro colore; cliccandoci sopra si apre l'itinerario completo e la mappa passa a disegnare quel percorso. Con "Parti alle" le alternative sono le partenze successive, con "Arriva entro" sono i viaggi che arrivano entro la scadenza (il primo è quello che parte più tardi, con il margine in minuti). In modalità "Parti alle / Adesso" l'ora segue il tempo reale: ogni 30 secondi, al cambio di minuto, il percorso viene ricalcolato da solo.
+
 Per rigenerare gli orari dal feed GTFS ufficiale:
 
 ```bash
@@ -112,13 +119,20 @@ node scripts/preprocess-orari.js gtfs-tper data/orari.json
 # 3. comprimi gli orari: è il file che l'app scarica davvero
 #    (tracciati.json.gz viene già scritto in gzip dallo script)
 gzip -9 -c data/orari.json > data/orari.json.gz
+
+# 4. colori delle linee: 232 linee, dal campo route_color di routes.txt
+python3 scripts/estrai-colori-linee.py gtfs-tper/routes.txt data/linee-colori.json
 ```
 
 Nel tab Viaggio la mappa mostra la linea del bus: la geometria ufficiale viene agganciata alla rete stradale con OSRM (map matching a pezzi, cache in `localStorage`, fallback automatico sul tracciato ufficiale se il servizio non risponde o il risultato non è coerente). Senza rete si vedono comunque fermate, orari e prezzo.
 
-Lo stesso script legge anche `shapes.txt` e produce `data/tracciati.json`: la geometria reale di ogni linea (semplificata a 8 m di tolleranza e codificata come polilinea), allineata corsa per corsa a `orari.json`. È così che il tab Viaggio disegna sulla mappa il percorso del bus invece di una linea dritta tra le due fermate; i tratti a piedi restano tratteggiati. Sulla linea partenza, cambi e arrivo hanno nodi distinti (rosso, anello bianco con corona, nero). Se una tratta non ha la geometria GTFS viene disegnata come linea diritta tratteggiata e la scheda del percorso lo dichiara.
+Lo stesso script legge anche `shapes.txt` e produce `data/tracciati.json`: la geometria reale di ogni linea (semplificata a 8 m di tolleranza e codificata come polilinea), allineata corsa per corsa a `orari.json`. È così che il tab Viaggio disegna sulla mappa il percorso del bus invece di una linea dritta tra le due fermate; i tratti a piedi restano tratteggiati. Sulla linea partenza, cambi e arrivo hanno nodi distinti (rosso, anello bianco con corona, nero), mentre i pallini delle fermate intermedie sono proiettati sul tracciato disegnato e prendono il colore della linea su cui si trovano: restano la fermata reale, ma appoggiati alla linea invece di fluttuarle accanto (oltre 60 m di scarto la geometria è considerata inaffidabile e il pallino resta sulla fermata). Se una tratta non ha la geometria GTFS viene disegnata come linea diritta tratteggiata e la scheda del percorso lo dichiara.
 
-Il calcolo usa anche le fermate a pochi passi da quella scelta (pali opposti, fermate della stessa via) e mostra i tratti a piedi stimati. Gli orari sono quelli programmati nel GTFS: non tengono conto dei ritardi reali (per quelli c'è il tab "In tempo reale").
+Ogni linea ha il suo colore, preso dal campo `route_color` del GTFS TPER (`data/linee-colori.json`): lo stesso compare nel badge della scheda viaggio, nei badge degli arrivi del tab "In tempo reale" e sul tracciato della mappa, così un cambio di linea si vede a colpo d'occhio. I colori ufficiali molto chiari vengono scuriti appena solo sulla mappa, per restare leggibili sul basemap chiaro; le linee senza colore nel GTFS restano rosso TPER. I treni mantengono il badge neutro.
+
+Oltre alle fermate si può cercare qualsiasi indirizzo: i suggerimenti arrivano da Nominatim (OpenStreetMap), con debounce e una richiesta al secondo come da policy d'uso. L'indirizzo viene usato con le sue coordinate esatte: il percorso parte e arriva dalla fermata più comoda entro 500 m, mentre la zona per il prezzo è quella della fermata più vicina (quindi fuori dall'area urbana la stima può essere approssimativa).
+
+Il calcolo usa anche le fermate a pochi passi da quella scelta (pali opposti, fermate della stessa via) e mostra i tratti a piedi stimati, sia nei cambi sia all'arrivo; sulla mappa sono tratteggiati. Gli orari sono quelli programmati nel GTFS: non tengono conto dei ritardi reali (per quelli c'è il tab "In tempo reale").
 
 ### Metodo alternativo (GTFS, opzionale)
 
