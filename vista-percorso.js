@@ -1,4 +1,4 @@
-/* TPER Zone Calc — scheda del percorso
+/* Muovi Bologna — scheda del percorso
  * Solo HTML: nessuno stato e nessun accesso ai dati dell'app. app.js passa uno
  * snapshot ({ stato, esito, opzioni, modo, ... }) e la funzione che risolve i
  * nomi delle fermate, così il rendering resta isolato e verificabile a parte.

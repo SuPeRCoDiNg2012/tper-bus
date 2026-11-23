@@ -1,18 +1,24 @@
 {
-  "name": "TPER Zone Calc",
-  "short_name": "TPER Zone",
+  "id": "./",
+  "name": "Muovi Bologna",
+  "short_name": "Muovi BO",
   "description": "Percorso, orari, zone e costo del biglietto dei bus TPER di Bologna e provincia",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
   "background_color": "#F6F4EF",
   "theme_color": "#F6F4EF",
   "lang": "it",
+  "dir": "ltr",
+  "categories": ["travel", "navigation", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
-    { "src": "icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "icons/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "icons/icon-maskable-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "maskable" },
-    { "src": "icons/icon-maskable-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-512.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }

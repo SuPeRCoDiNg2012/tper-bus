@@ -134,7 +134,7 @@ Le zone da 501 a 509 sono "zone neutre" dell'Area Urbana: nel file `index.html` 
    ```bash
    git init
    git add .
-   git commit -m "Prima pubblicazione TPER Zone Calc"
+   git commit -m "Prima pubblicazione Muovi Bologna"
    git branch -M main
    git remote add origin https://github.com/TUO-UTENTE/tper-zone-calc.git
    git push -u origin main

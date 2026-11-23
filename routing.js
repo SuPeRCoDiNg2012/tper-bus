@@ -1,4 +1,4 @@
-/* TPER Zone Calc — calcolo percorsi
+/* Muovi Bologna — calcolo percorsi
  * Usa data/orari.json(.gz), generato da scripts/preprocess-orari.js a partire
  * dal GTFS ufficiale TPER. Algoritmo: RAPTOR a round (una corsa per round),
  * con tempo minimo di cambio alla stessa fermata.

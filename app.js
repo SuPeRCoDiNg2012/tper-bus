@@ -1,4 +1,4 @@
-/* TPER Zone Calc — logica dell'app
+/* Muovi Bologna — logica dell'app
    Dati fermate: open data TPER/Regione Emilia-Romagna
    Orari in tempo reale: web service pubblico HelloBus di TPER */
 (function () {
@@ -1177,7 +1177,7 @@
     }
     $('sheet-titolo').textContent = titolo;
     $('sheet-sotto').textContent = sotto;
-    document.title = p && d ? titolo + ' · TPER Zone Calc' : 'TPER Zone Calc';
+    document.title = p && d ? titolo + ' · Muovi Bologna' : 'Muovi Bologna';
   }
 
   function htmlBiglietto(r) {
@@ -2281,7 +2281,7 @@
       '<button class="mini" data-azione="azzera-proxy">Usa il relay predefinito</button></div>' +
       '<div class="scheda"><h2>Installa l\'app</h2>' +
       '<p>Aggiungila alla schermata home: si apre come un\'app, funziona anche senza rete per zone e prezzi.</p>' +
-      '<button class="mini" data-azione="installa">Installa TPER Zone Calc</button></div>' +
+      '<button class="mini" data-azione="installa">Installa Muovi Bologna</button></div>' +
       '<p class="testo-intro" style="font-size:12px">App non ufficiale, non affiliata a TPER. Dati forniti da TPER e dalla Regione Emilia-Romagna.</p>';
   }
 

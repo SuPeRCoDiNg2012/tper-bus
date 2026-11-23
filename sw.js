@@ -1,10 +1,10 @@
-// sw.js — Service Worker di TPER Zone Calc
+// sw.js — Service Worker di Muovi Bologna
 // Cache-first per gli asset statici dell'app, stale-while-revalidate per i JSON dati.
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'tper-zone-calc-static-v30';
-const CACHE_DATI = 'tper-zone-calc-data-v30';
+const CACHE_STATICA = 'muovi-bologna-static-v31';
+const CACHE_DATI = 'muovi-bologna-data-v31';
 
 const ASSET_STATICI = [
   './',
@@ -14,7 +14,12 @@ const ASSET_STATICI = [
   './vista-percorso.js',
   './manifest.json',
   './icons/icon-192.svg',
-  './icons/icon-512.svg'
+  './icons/icon-512.svg',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-192.png',
+  './icons/icon-maskable-512.png',
+  './icons/apple-touch-icon.png'
 ];
 
 const ASSET_DATI = [

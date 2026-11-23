@@ -1,4 +1,4 @@
-# TPER Zone Calc
+# Muovi Bologna
 
 Web app mobile-first (PWA) per calcolare zone tariffarie, costo del biglietto e linee bus/treno per i trasporti pubblici del bacino di Bologna (TPER + Trenitalia Tper / Mi Muovo).
 
@@ -16,8 +16,8 @@ Web app mobile-first (PWA) per calcolare zone tariffarie, costo del biglietto e 
 | Calcolo del percorso | Motore RAPTOR in `routing.js` sugli orari programmati del GTFS TPER | 0 € — nessuna API esterna, nessuna key | Orari di tabella (non realtime): possono variare per traffico e lavori | https://developers.google.com/transit/gtfs |
 | Mappa | MapLibre GL + OpenFreeMap (stile Liberty) | 0 € — nessuna API key, nessun limite | Richiede connessione per stile e tile vettoriali; ricerca fermate, zone e prezzi restano offline | https://openfreemap.org |
 | Ricerca indirizzi | Nominatim (OpenStreetMap) | 0 € — nessuna API key | Solo online e con limite di 1 richiesta al secondo; il testo cercato viene inviato a OpenStreetMap. Senza connessione restano le fermate | https://nominatim.org |
-| PWA (installabilità + offline) | `manifest.json` + Service Worker nativo del browser | 0 € — standard web nativo | Nessuno | https://developer.mozilla.org/docs/Web/Progressive_web_apps |
-| Icone app | SVG generate a mano/localmente, incluse nel progetto | 0 € | SVG invece di PNG: leggerissime, nessun tool esterno necessario | — |
+| PWA (installabilità + offline) | `manifest.json` completo + icone PNG/maskable + Service Worker nativo del browser | 0 € — standard web nativo | Nessuno | https://developer.mozilla.org/docs/Web/Progressive_web_apps |
+| Icone app | PNG 192/512, maskable 192/512 e apple-touch 180, con sorgenti SVG incluse | 0 € | PNG generati localmente, nessun servizio esterno | — |
 | Tracciato stradale | OSRM demo pubblico (map matching) per agganciare le shapes TPER alle strade | 0 € — nessuna API key | Servizio pubblico senza garanzie: se non risponde si usa il tracciato ufficiale. La richiesta contiene solo le coordinate del percorso. Geometrie agganciate salvate in locale | https://project-osrm.org |
 | Preprocessing GTFS | Script Node.js incluso (`scripts/preprocess-gtfs.js`), solo moduli nativi | 0 € — Node.js è open source | Richiede Node.js installato in locale, solo per rigenerare i dati, non per l'uso dell'app | https://nodejs.org |
 
@@ -34,10 +34,11 @@ tper-zone-calc/
 ├── manifest.json                  # Manifest PWA
 ├── sw.js                          # Service worker (cache offline)
 ├── icons/
-│   ├── icon-192.svg
-│   ├── icon-512.svg
-│   ├── icon-maskable-192.svg
-│   └── icon-maskable-512.svg
+│   ├── icon-192.png / icon-512.png            # Icone installabili (any)
+│   ├── icon-maskable-192.png / -512.png       # Icone maskable Android
+│   ├── apple-touch-icon.png                   # Icona iOS 180×180
+│   ├── icon-192.svg / icon-512.svg            # Sorgenti vettoriali
+│   └── icon-maskable-192.svg / -512.svg
 ├── data/
 │   ├── fermate.json                # 9.603 fermate bus reali + stazioni ferroviarie curate a mano (9.464 con indirizzo breve)
 │   ├── linee-per-fermata.json      # Linee che servono ciascuna fermata (dal dataset ufficiale)

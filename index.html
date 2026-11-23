@@ -3,16 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>TPER Zone Calc</title>
-<meta name="description" content="Zone tariffarie, costo del biglietto, percorso e orari in tempo reale dei bus TPER di Bologna e provincia">
+<title>Muovi Bologna</title>
+<meta name="description" content="Muovi Bologna: zone tariffarie, costo del biglietto, percorso e orari in tempo reale dei bus TPER di Bologna e provincia">
 <meta name="theme-color" content="#F6F4EF">
+<meta name="application-name" content="Muovi Bologna">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Muovi Bologna">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="./icons/icon-192.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
+<link rel="preconnect" href="https://unpkg.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <style>
@@ -371,14 +376,14 @@
 <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
 
 <div class="banner-installa" id="banner-installa" hidden>
-  <p>Installa TPER Zone Calc sulla schermata home per un accesso rapido, anche offline.</p>
+  <p>Installa Muovi Bologna sulla schermata home per un accesso rapido, anche offline.</p>
   <button id="btn-installa">Installa</button>
   <button class="chiudi" id="btn-chiudi-banner" aria-label="Chiudi">✕</button>
 </div>
 
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="./routing.js"></script>
-<script src="./vista-percorso.js"></script>
-<script src="./app.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" defer></script>
+<script src="./routing.js" defer></script>
+<script src="./vista-percorso.js" defer></script>
+<script src="./app.js" defer></script>
 </body>
 </html>
