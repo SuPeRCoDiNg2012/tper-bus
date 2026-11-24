@@ -5,3 +5,4 @@ __pycache__/
 # Download temporanei degli script (rete ferroviaria OSM, GTFS)
 .tmp-binari/
 .tmp-treni/
+.tmp-pdf/

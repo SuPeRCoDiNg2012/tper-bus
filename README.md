@@ -16,7 +16,7 @@ Web app mobile-first (PWA) per calcolare zone tariffarie, costo del biglietto e 
 | Calcolo del percorso | Motore RAPTOR in `routing.js` sugli orari programmati GTFS TPER (bus) e Trenitalia (treni) | 0 € — nessuna API esterna, nessuna key | Orari di tabella (non realtime): possono variare per traffico e lavori | https://developers.google.com/transit/gtfs |
 | Percorsi a piedi | OSRM pedonale pubblico FOSSGIS (`routing.openstreetmap.de`) | 0 € — nessuna API key | Solo online: se il servizio non risponde o manca la rete si usa il segmento diritto. La richiesta contiene solo le coordinate del tratto | https://routing.openstreetmap.de |
 | Coordinate stazioni | OpenStreetMap / FER, con integrazione manuale | 0 € — ODbL | Solo per le stazioni ferroviarie; nessun dato personale | https://www.openstreetmap.org |
-| Orari dei treni | GTFS nazionale Trenitalia via NAP (CC BY 4.0), conversione `deryclem/trenitalia-gtfs` | 0 € — licenza aperta | Copre Bologna C.le, Imola e l'intero ramo Bologna–Pianoro (San Vitale, Mazzini, San Ruffillo, Rastignano, Musiano). Per Vignola e Porretta le fermate sono presenti, ma non esiste un GTFS aperto con gli orari intermedi | https://github.com/deryclem/trenitalia-gtfs |
+| Orari dei treni | GTFS nazionale Trenitalia via NAP (CC BY 4.0) + PDF ufficiale TPER per la S2A | 0 € — licenza aperta | Il GTFS copre Bologna C.le, Imola e il ramo Bologna–Pianoro. La S2A Bologna–Vignola (Casalecchio inclusa) è aggiunta dai PDF TPER con validazione; la S1 Porretta resta fuori perché il PDF ufficiale non è interpretabile con affidabilità (fallback esplicito) | https://github.com/deryclem/trenitalia-gtfs · https://www.tper.it/content/linea-ferroviaria-bologna-vignola |
 | Geometria dei binari | OpenStreetMap (`railway=rail`) via Overpass, usata solo per rigenerare `data/tracciati.json` | 0 € — ODbL | Le shapes del GTFS nazionale hanno solo 5–8 punti e tagliavano fuori dai binari; la geometria viene ricostruita una volta e salvata nel dataset, non interrogata a runtime | https://www.openstreetmap.org |
 | Mappa | MapLibre GL + OpenFreeMap (stile Liberty) | 0 € — nessuna API key, nessun limite | Richiede connessione per stile e tile vettoriali; ricerca fermate, zone e prezzi restano offline | https://openfreemap.org |
 | Ricerca luoghi e indirizzi | Nominatim (OpenStreetMap) | 0 € — nessuna API key | Solo online e con limite di 1 richiesta al secondo; il testo cercato viene inviato a OpenStreetMap. Cerca sia per nome di luogo sia per indirizzo. Senza connessione restano le fermate | https://nominatim.org |
@@ -52,15 +52,16 @@ tper-zone-calc/
 │   ├── fermate.json                # 9.634 fermate: bus reali + 42 stazioni ferroviarie (tutte le fermate delle linee Vignola, Porretta e Pianoro)
 │   ├── linee-per-fermata.json      # Linee che servono ciascuna fermata (dal dataset ufficiale)
 │   ├── linee-colori.json           # Colore ufficiale di ogni linea (GTFS route_color) per scheda e mappa
-│   ├── orari.json                  # Orari di tutte le corse bus + 110 corse treno (~5,9 MB)
-│   ├── orari.json.gz               # Stessa cosa in gzip (~271 KB): è questo che l'app scarica
-│   ├── tracciati.json              # Geometrie reali di bus e treni (1.637 forme, ~1,8 MB)
-│   └── tracciati.json.gz           # Stessa cosa in gzip (~400 KB): scaricata solo quando serve il percorso
+│   ├── orari.json                  # Orari di tutte le corse bus + 168 corse treno (~5,9 MB)
+│   ├── orari.json.gz               # Stessa cosa in gzip (~272 KB): è questo che l'app scarica
+│   ├── tracciati.json              # Geometrie reali di bus e treni (1.641 forme, ~1,8 MB)
+│   └── tracciati.json.gz           # Stessa cosa in gzip (~411 KB): scaricata solo quando serve il percorso
 ├── scripts/
 │   ├── converti-fermate-autobus.py # Converte il dataset ufficiale TPER (bus) nei due file dati sopra
 │   ├── estrai-colori-linee.py      # Estrae i colori ufficiali delle linee da routes.txt del GTFS
 │   ├── preprocess-orari.js         # Dal GTFS TPER genera data/orari.json e data/tracciati.json per i bus
 │   ├── aggiungi-treni.js           # Unisce le corse del GTFS nazionale Trenitalia al dataset bus
+│   ├── aggiungi-treni-locali.js    # Aggiunge le corse S2A Vignola dai PDF TPER, con validazione
 │   ├── ricostruisci-tracciati.js   # Riproietta le fermate sulle forme e ricostruisce i binari da OSM
 │   └── preprocess-gtfs.js          # (opzionale) elabora il GTFS completo, utile solo per dati extra
 ├── tests/
@@ -70,7 +71,7 @@ tper-zone-calc/
 │   ├── piedi.test.js               # Coordinate, chiave e risposta OSRM pedonale
 │   ├── icone.test.js               # Set Lucide unico, dimensioni e semantica
 │   ├── vista.test.js               # Scheda percorso, treni, escaping e stati vuoti
-│   └── integrale.test.js           # Percorsi reali Bologna–Imola e ramo Pianoro con geometria
+│   └── integrale.test.js           # Percorsi reali Bologna–Imola, Vignola S2A e ramo Pianoro con geometria
 └── README.md
 ```
 
@@ -120,7 +121,7 @@ In alternativa, per un elenco più completo delle linee ferroviarie, resta dispo
 
 Le 42 stazioni coprono l'intero elenco delle fermate delle linee **Bologna–Vignola** (18), **Bologna–Porretta** (17) e **Bologna–Pianoro** (7), comprese le fermate minori come Riale, Pilastrino, Zola, Crespellano, Vergato e Rastignano.
 
-Gli **orari dei treni** vengono invece dal GTFS nazionale Trenitalia via NAP (CC BY 4.0), non dal feed TPER: il feed nazionale copre Bologna C.le, Imola e l'intero ramo Bologna–Pianoro; per Vignola e Porretta non esiste un GTFS/NeTEx aperto con le fermate intermedie. Le stazioni di quelle due linee sono quindi presenti nella ricerca, ma senza orari: il pianificatore lo segnala invece di inventare corse. Dopo aver rigenerato il dataset bus, unisci le corse ferroviarie con:
+Gli **orari dei treni** vengono dal GTFS nazionale Trenitalia via NAP (CC BY 4.0) e, per la linea locale **S2A Bologna–Vignola**, dai PDF ufficiali TPER. La S2A comprende Bologna C.le, Borgo Panigale, Casteldebole, Casalecchio Garibaldi, Ceretolo, Palasport, le fermate della Val Samoggia e Vignola. Le corse sono validate su sequenza fermate, orari monotoni e periodicità prima di entrare nel dataset; le corse con nota 3 (periodicità estiva con sabati soppressi) restano fuori. La linea **S1 Porretta** non viene importata: il PDF S1/Trenitalia Tper ha colonne con note grafiche e periodicità non verificabili con affidabilità, quindi il pianificatore non inventa orari intermedi e lo dichiara nel tab Info. Dopo aver rigenerato il dataset bus, unisci le corse ferroviarie con:
 
 ```bash
 node scripts/aggiungi-treni.js gtfs-trenitalia data/orari.json data/tracciati.json
@@ -134,7 +135,32 @@ Dopo l'unione ferroviaria esegui la riparazione delle geometrie:
 node scripts/ricostruisci-tracciati.js --scrivi
 ```
 
-Lo script ricalcola la proiezione di ogni fermata sulla propria forma (monotona e sul segmento, non sul solo vertice), inserisce il punto di proiezione nella polilinea e sostituisce le forme ferroviarie troppo rade con il percorso reale sulla rete `railway=rail` di OpenStreetMap. La prima volta scarica i binari da Overpass e li mette in `.tmp-binari/` (ignorato da Git); senza `--scrivi` esegue solo le verifiche. Non è necessario a runtime: il risultato resta in `data/tracciati.json`.
+Lo script ricalcola la proiezione di ogni fermata sulla propria forma (monotona e sul segmento, non sul solo vertice), inserisce il punto di proiezione nella polilinea e sostituisce le forme ferroviarie troppo rade con il percorso reale sulla rete `railway=rail` di OpenStreetMap. La prima volta scarica i binari da Overpass e li mette in `.tmp-binari/` (ignorato da Git); senza `--scrivi` esegue solo le verifiche. Non è necessario a runtime: il risultato resta in `data/tracciati.json`. Il bbox predefinito comprende ora anche la tratta Casalecchio–Vignola; se hai una cache `.tmp-binari/binari.json` scaricata prima di questa modifica, cancellala o passa un file OSM aggiornato con `--osm`.
+
+### Orari treni locali TPER (S2A)
+
+La linea **S2A Bologna–Vignola** viene letta dal PDF ufficiale TPER:
+
+```text
+https://s3.eu-south-1.amazonaws.com/static.tper.it/orari/20251213treni/tper_trbovi.pdf
+```
+
+Il PDF è valido dal 14 dicembre 2025 al 12 dicembre 2026: quando TPER pubblica il nuovo orario, sostituisci il file e rilancia lo script. Serve `pdftotext` (Xpdf o Poppler) per l'estrazione; in alternativa estrai il testo con `pdftotext -table -enc UTF-8` e passa `--testo`.
+
+```bash
+# prova: non scrive nulla, stampa corse e validazioni
+node scripts/aggiungi-treni-locali.js --pdf .tmp-pdf/vignola.pdf
+
+# applica al dataset (una sola volta: lo script rifiuta di duplicare S2A)
+node scripts/aggiungi-treni-locali.js --pdf .tmp-pdf/vignola.pdf --scrivi
+
+# ricostruisce le geometrie ferroviarie, Vignola compresa
+node scripts/ricostruisci-tracciati.js --scrivi
+```
+
+Lo script controlla che ogni corsa abbia una sequenza di fermate coerente, orari strettamente crescenti e nessun salto superiore a 30 minuti tra due fermate; se una colonna non è interpretabile si ferma senza scrivere. Le note di periodicità 0/4 sono importate, le note 1/2 sono divise nelle due fasce stagionali, le note 5/6 (bus sostitutivi) sono escluse e le note 3 sono saltate con un messaggio esplicito. Le corse parziali (per esempio Bologna–Bazzano) restano nel dataset con il loro capolinea reale. Le corse festive vengono applicate anche alle festività nazionali del periodo di validità tramite `eccezioni`, così l’8 dicembre o il 25 aprile non usano l’orario feriale.
+
+**Fallback Porretta:** la S1 non viene importata. Il PDF ufficiale è [S1 Porretta–Bologna–Pianoro](https://www.sfmbo.it/sfm/La_rete/S1_Porretta_Bologna_Pianoro), ma la sua impaginazione nazionale e le note di periodicità non sono state ritenute verificabili con sufficiente affidabilità. In questo caso il pianificatore usa solo le corse presenti nel GTFS nazionale (che coprono Porretta come stazione, senza le fermate intermedie) e il tab Info dichiara il limite: nessuna corsa viene inventata.
 
 ### Calcolo del percorso (bus e treni)
 

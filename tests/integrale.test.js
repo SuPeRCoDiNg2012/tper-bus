@@ -30,6 +30,44 @@ test('rete reale: Bologna C.le → Imola in treno con geometria', async () => {
   assert.ok(punti.every((p) => Array.isArray(p) && p.length === 2 && p[0] > 9 && p[0] < 13));
 });
 
+test('rete reale: Bologna C.le → Vignola in treno S2A', async () => {
+  const routing = await caricaRouting(orari, tracciati);
+  const feriale = routing.calcola('TRN001', 'TRN009', new Date(2026, 10, 23, 8, 0, 0), { maxCambi: 0 });
+
+  assert.ok(feriale, 'nessun percorso S2A feriale');
+  assert.equal(feriale.cambi, 0);
+  assert.equal(feriale.tappe.length, 1);
+  assert.equal(feriale.tappe[0].linea, 'S2A');
+  assert.equal(feriale.tappe[0].da, 'TRN001');
+  assert.equal(feriale.tappe[0].a, 'TRN009');
+  assert.equal(feriale.tappe[0].partenza, 8 * 3600 + 32 * 60);
+  assert.equal(feriale.tappe[0].arrivo, 9 * 3600 + 28 * 60);
+  assert.equal(feriale.tappe[0].stops.length, 18, 'fermate intermedie S2A mancanti');
+
+  const festivo = routing.calcola('TRN001', 'TRN009', new Date(2026, 10, 22, 9, 0, 0), { maxCambi: 0 });
+  assert.ok(festivo, 'nessun percorso S2A festivo');
+  assert.equal(festivo.tappe[0].linea, 'S2A');
+  assert.equal(festivo.tappe[0].partenza, 9 * 3600 + 32 * 60);
+
+  const punti = routing.tratta(
+    feriale.tappe[0].forma,
+    feriale.tappe[0].da,
+    feriale.tappe[0].a,
+    feriale.tappe[0].sequenza
+  );
+  assert.ok(Array.isArray(punti) && punti.length > 2, 'geometria S2A assente');
+  assert.ok(punti.every((p) => Array.isArray(p) && p.length === 2 && p[0] > 9 && p[0] < 13));
+});
+
+test('rete reale: Bologna C.le → Vignola usa il servizio festivo l’8 dicembre', async () => {
+  const routing = await caricaRouting(orari, tracciati);
+  const esito = routing.calcola('TRN001', 'TRN009', new Date(2026, 11, 8, 8, 0, 0), { maxCambi: 0 });
+
+  assert.ok(esito, 'nessun percorso S2A nell’8 dicembre');
+  assert.equal(esito.tappe[0].linea, 'S2A');
+  assert.equal(esito.tappe[0].partenza, 9 * 3600 + 32 * 60, 'l’8 dicembre non usa l’orario festivo');
+});
+
 test('rete reale: Bologna C.le → Musiano usa tutte le fermate del ramo Pianoro', async () => {
   const routing = await caricaRouting(orari, tracciati);
   const esito = routing.calcola('TRN001', 'TRN042', new Date(2026, 10, 23, 8, 0, 0), { maxCambi: 3 });
