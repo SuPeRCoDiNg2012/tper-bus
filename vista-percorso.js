@@ -58,35 +58,24 @@
     return '<div class="piedi">' + ICONA_PEDANA + '<span>' + testo + '</span></div>';
   }
 
-  function piediBadge(secondi) {
-    const minutiPiedi = Math.max(1, Math.round(secondi / 60));
-    return '<span class="opzione-piedi" title="A piedi ' + minutiPiedi + ' min" aria-label="A piedi ' +
-      minutiPiedi + ' min">' + ICONA_PEDANA + '</span>';
-  }
-
   /** Unico ingresso alla navigazione guidata con la posizione reale. */
   function navigaHTML() {
     return '<button type="button" class="btn btn-primario btn-naviga" data-azione="avvia-navigazione">' +
       Icone.svg('navigation', 16) + 'Avvia navigazione</button>';
   }
 
-  // Sequenza compatta dei modi: piedi → linea → piedi → linea → piedi.
-  // Le linee non vengono più accorpate per nome, così un cambio bus/treno
-  // resta visibile nell'ordine in cui avviene.
+  // Sequenza compatta delle linee, nell'ordine in cui si prendono.
+  // I minuti a piedi restano solo nel riepilogo: niente badge ripetuti e la
+  // riga chiusa sta su una linea sola.
   function modiHTML(e) {
     const pezzi = [];
-    if (e.camminoIniziale > 0) pezzi.push(piediBadge(e.camminoIniziale));
     e.tappe.forEach((tappa) => {
-      if (tappa.camminoPrima && tappa.camminoPrima.secondi > 0) {
-        pezzi.push(piediBadge(tappa.camminoPrima.secondi));
-      }
       const treno = tappa.tipo === 1 || tappa.tipo === 2;
       const stile = !treno && tappa.colore
         ? ' style="background:' + esc(tappa.colore) + ';color:' + esc(tappa.coloreTesto || '#FFFFFF') + '"'
         : '';
       pezzi.push('<span class="opzione-linea' + (treno ? ' treno' : '') + '"' + stile + '>' + esc(tappa.linea) + '</span>');
     });
-    if (e.camminoFinale > 0) pezzi.push(piediBadge(e.camminoFinale));
     return pezzi.slice(0, 9).join('');
   }
 

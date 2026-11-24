@@ -84,18 +84,19 @@ test('nomi e linee vengono sempre escapati', () => {
   assert.match(html, /&amp;arrivo/);
 });
 
-test('l’opzione compatta mostra in ordine i modi e i tratti a piedi', () => {
+test('l’opzione compatta elenca le linee e i minuti a piedi una sola volta', () => {
   const e = viaggio({
     camminoIniziale: 5 * 60,
     camminoFinale: 4 * 60,
     tappe: [corsa({ linea: '20', tipo: 3, fermate: 4 })]
   });
   const html = render(e);
-  assert.match(html, /opzione-piedi/);
-  assert.match(html, /opzione-linea/);
-  assert.match(html, /A piedi 5 min/);
-  assert.ok(html.indexOf('opzione-piedi') < html.indexOf('opzione-linea'));
-  assert.ok(html.indexOf('opzione-linea') < html.lastIndexOf('opzione-piedi'));
+  const testa = html.slice(0, html.indexOf('opzione-corpo'));
+  assert.match(testa, /opzione-linea[^>]*>20</);
+  // I minuti a piedi stanno solo nel riepilogo, senza badge ripetuti.
+  assert.match(testa, /9 min a piedi/);
+  assert.doesNotMatch(testa, /opzione-piedi/);
+  assert.equal(testa.match(/9 min a piedi/g).length, 1);
 });
 
 test('bus + treno restano distinti nella sequenza dei modi', () => {
