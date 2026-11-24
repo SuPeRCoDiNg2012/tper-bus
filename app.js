@@ -1539,7 +1539,7 @@
     // opzioni e per vederla bisognava scorrere il pannello fino in fondo.
     let html = (soloPiedi ? '' :
       '<div class="blocco-biglietto" data-firma="' + esc(firmaBiglietto(r)) + '">' +
-      htmlBiglietto(r) + htmlInterruttore() + '</div>') +
+      htmlBiglietto(r) + '</div>') +
       '<div id="blocco-percorso" class="blocco-percorso"></div>';
     if (r.avviso) {
       html += '<div class="avviso">' + ICONA_INFO + '<span>' + esc(r.avviso) + '</span></div>';
@@ -1557,26 +1557,9 @@
       elenco.map((f) => voceHTML(f, ruolo)).join('');
   }
 
-  function htmlInterruttore() {
-    return '<div class="riga-interruttore"><div><span class="etichetta">Ho l\'abbonamento urbano</span>' +
-      '<span class="sotto">Zona 500 e zone neutre</span></div>' +
-      '<label class="interruttore"><input type="checkbox" id="check-abbonamento"' + (abbonamento ? ' checked' : '') + ' aria-label="Ho l\'abbonamento urbano"><span class="binario"></span></label></div>';
-  }
-
-  // Unico punto in cui il tab Viaggio viene montato: evita di ripetere il
-  // binding dell'interruttore abbonamento in ogni percorso di rendering.
-  function collegaInterruttore() {
-    const check = $('check-abbonamento');
-    if (!check) return;
-    check.addEventListener('change', () => {
-      abbonamento = check.checked;
-      renderViaggio();
-    });
-  }
-
+  // Unico punto in cui il tab Viaggio viene montato.
   function montaPannelloViaggio(html) {
     $('pane-viaggio').innerHTML = html;
-    collegaInterruttore();
   }
 
   // Il prezzo viene rifatto quando il percorso è pronto: solo allora si sa se
@@ -1589,8 +1572,7 @@
     const firma = firmaBiglietto(r);
     if (card.dataset.firma === firma) return;
     card.dataset.firma = firma;
-    card.innerHTML = htmlBiglietto(r) + htmlInterruttore();
-    collegaInterruttore();
+    card.innerHTML = htmlBiglietto(r);
     aggiornaTestata();
   }
 
@@ -1616,7 +1598,7 @@
     } else {
       html += htmlListaFermate('Fermate vicine a te', posizioneUtente ? senzaDoppioni(fermateVicine(posizioneUtente.lat, posizioneUtente.lon, 8)).slice(0, 6) : fermatePrincipali(), 'destinazione');
     }
-    montaPannelloViaggio(html + htmlInterruttore());
+    montaPannelloViaggio(html);
   }
 
   function aggiornaChipAbbonamento() {
@@ -2709,6 +2691,10 @@
     $('pane-viaggio').hidden = nome !== 'viaggio';
     $('pane-live').hidden = nome !== 'live';
     $('pane-info').hidden = nome !== 'info';
+    // Ogni scheda parte dall'inizio: prima ereditava lo scorrimento della
+    // precedente e si apriva con titolo e nomi tagliati sotto le tab.
+    const corpo = $('sheet-corpo');
+    if (corpo) corpo.scrollTop = 0;
     if (nome === 'viaggio') renderViaggio();
     if (nome === 'live') {
       renderLive();
@@ -2782,6 +2768,14 @@
     traslazionePannello = Math.max(0, Math.round(pixel));
     sheet.style.transition = animato ? 'transform .34s cubic-bezier(.22,.9,.28,1)' : 'none';
     sheet.style.transform = 'translate(-50%,' + traslazionePannello + 'px)';
+    // Il pannello tradotto verso il basso lascia il fondo del corpo sotto il
+    // bordo dello schermo: scorrendo fino in fondo gli ultimi elementi
+    // (pulsanti e link) restavano invisibili. Il padding pari allo scostamento
+    // li riporta a portata di scorrimento.
+    const corpo = $('sheet-corpo');
+    if (corpo && !silenzioso) {
+      corpo.style.paddingBottom = 'calc(24px + env(safe-area-inset-bottom, 0px) + ' + traslazionePannello + 'px)';
+    }
     // Durante il dito si aggiorna al massimo una volta per frame: le letture di
     // layout a ogni pointermove erano la causa degli scatti.
     if (silenzioso) {
@@ -3107,7 +3101,7 @@
       attivaTab('viaggio');
       if (vicine.length) {
         montaPannelloViaggio('<p class="testo-intro">Fermate più vicine alla tua posizione: tocca quella di partenza.</p>' +
-          htmlListaFermate('Vicino a te', vicine, 'partenza') + htmlInterruttore());
+          htmlListaFermate('Vicino a te', vicine, 'partenza'));
         aggiornaTestata();
         mostraToast('Trovate ' + vicine.length + ' fermate vicine');
       }

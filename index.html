@@ -123,7 +123,8 @@
   .sheet{position:fixed;left:50%;bottom:0;width:100%;max-width:560px;height:min(86dvh,760px);background:var(--sup);border-radius:22px 22px 0 0;border-top:1px solid var(--bordo);box-shadow:0 -2px 24px rgba(23,23,23,.08);z-index:1100;display:flex;flex-direction:column;will-change:transform;transform:translate(-50%,200px);}
   .grab{padding:10px 0 4px;display:flex;justify-content:center;cursor:grab;flex:0 0 auto;touch-action:none;}
   .grab span{width:36px;height:4px;border-radius:2px;background:var(--bordo-2);}
-  .sheet-testa{padding:4px 18px 0;flex:0 0 auto;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;}
+  /* Stesso rientro del corpo (16 px): titolo, tab e schede restano in colonna. */
+  .sheet-testa{padding:4px 16px 0;flex:0 0 auto;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;}
   .sheet.trascinando{cursor:grabbing;}
   .sheet.trascinando .grab{cursor:grabbing;}
   .sheet-testa h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.35px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
@@ -131,29 +132,21 @@
   .tab{display:flex;gap:4px;margin:12px 16px 0;padding:4px;background:var(--sabbia);border-radius:12px;flex:0 0 auto;}
   .tab button{position:relative;flex:1;border:0;background:transparent;padding:8px 6px;font-size:13px;font-weight:500;color:var(--testo-2);cursor:pointer;border-radius:9px;transition:background .15s,color .15s,box-shadow .15s;letter-spacing:-.1px;}
   .tab button.attivo{background:var(--sup);color:var(--testo);font-weight:600;box-shadow:0 1px 2px rgba(23,23,23,.08);}
-  .sheet-corpo{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(24px + env(safe-area-inset-bottom,0px));overscroll-behavior:contain;touch-action:pan-y;}
+  /* Niente barra di scorrimento dentro il pannello: i 6 px della barra
+     stringevano le schede e le disallineavano dalla riga delle tab. */
+  .sheet-corpo{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(24px + env(safe-area-inset-bottom,0px));overscroll-behavior:contain;touch-action:pan-y;scrollbar-width:none;}
+  .sheet-corpo::-webkit-scrollbar{display:none;}
   .pannello{display:flex;flex-direction:column;gap:16px;}
 
   /* Etichette di sezione: testo normale, non maiuscoletto spaziato. */
   .sezione-titolo{margin:0;font-size:13px;font-weight:600;letter-spacing:-.1px;color:var(--testo);}
   .testo-intro{font-size:13px;line-height:1.5;color:var(--testo-2);margin:0;}
 
-  .riga-interruttore{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:14px;border-top:1px solid var(--bordo);}
-  .riga-interruttore .etichetta{font-size:13px;font-weight:500;color:var(--testo);}
-  .riga-interruttore .sotto{display:block;font-size:11.5px;color:var(--testo-2);margin-top:2px;font-weight:400;}
-  .interruttore{position:relative;width:40px;height:24px;flex:0 0 auto;}
-  .interruttore input{position:absolute;inset:0;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;}
-  .interruttore .binario{position:absolute;inset:0;border-radius:999px;background:var(--bordo-2);transition:background .18s;}
-  .interruttore .binario::after{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.22);transition:transform .18s;}
-  .interruttore input:checked + .binario{background:var(--rosso);}
-  .interruttore input:checked + .binario::after{transform:translateX(16px);}
-
   /* ---------- Biglietto ---------- */
-  /* Prezzo e abbonamento in una sola scheda in cima al viaggio: prima erano
-     due riquadri separati sotto tutte le opzioni. */
+  /* Prezzo in cima al viaggio: prima stava sotto tutte le opzioni.
+     L'abbonamento si attiva dal chip in alto, unico comando. */
   .blocco-biglietto{background:var(--sup);border:1px solid var(--bordo);border-radius:var(--r);overflow:hidden;}
   .blocco-biglietto .biglietto{border:0;border-radius:0;}
-  .blocco-biglietto .riga-interruttore{border-top:1px solid var(--bordo);padding:8px 16px 10px;}
   .biglietto{display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--sup);border:1px solid var(--bordo);border-radius:var(--r);padding:14px 16px;}
   .biglietto-testo{display:flex;flex-direction:column;gap:6px;min-width:0;}
   .biglietto-nota{font-size:11.5px;color:var(--testo-2);}
