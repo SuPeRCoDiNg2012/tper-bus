@@ -2941,6 +2941,15 @@
       return;
     }
     mostraToast('Cerco la tua posizione…');
+    // Con il permesso già negato il browser può non richiamare mai il callback
+    // d'errore: il messaggio restava su "Cerco la tua posizione…" per sempre.
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then((stato) => {
+        if (stato.state === 'denied') {
+          mostraToast('Posizione bloccata: consenti l\'accesso dal browser');
+        }
+      }).catch(() => { /* Permissions API assente: vale il timeout */ });
+    }
     navigator.geolocation.getCurrentPosition((posizione) => {
       posizioneUtente = { lat: posizione.coords.latitude, lon: posizione.coords.longitude };
       const vicine = senzaDoppioni(fermateVicine(posizioneUtente.lat, posizioneUtente.lon, 8)).slice(0, 6);
