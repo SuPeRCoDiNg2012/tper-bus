@@ -7,6 +7,7 @@
   // Le logiche pure vivono in moduli separati, così sono testabili a parte.
   const Tariffe = window.Tariffe;
   const Piedi = window.Piedi;
+  const Tracciato = window.Tracciato;
 
   /* ------------------------------------------------------------------ *
    * Configurazione
@@ -963,12 +964,11 @@
       if (!agganciate && firma && snapInCorso !== firma) {
         snapInCorso = firma;
         const generazione = ++snapGenerazione;
-        const richieste = ufficiali.map((voce, indice) => {
-          const tappa = tappe[indice];
-          if (!voce || !voce.ufficiale || voce.punti.length < 3 || !(tappa.forma >= 0)) return Promise.resolve(null);
-          if (tappa.tipo === 1 || tappa.tipo === 2) return Promise.resolve(null);
-          return agganciaTratta(tappa, voce.punti);
-        });
+        // Quali tratte passare a OSRM lo decide tracciato.js: i binari non
+        // sono strade e non devono mai finire nel map matching.
+        const richieste = Tracciato.richiesteSnap(tappe, ufficiali).map((punti, indice) =>
+          punti ? agganciaTratta(tappe[indice], punti) : Promise.resolve(null)
+        );
         Promise.all(richieste).then((risultati) => {
           if (generazione !== snapGenerazione || firma !== snapPercorso || routing.stato !== 'ok') return;
           snapAgganciate = risultati;

@@ -39,6 +39,7 @@ tper-zone-calc/
 ├── vista-percorso.js             # Rendering HTML della scheda percorso (tempi, cambi, tratti a piedi)
 ├── tariffe.js                    # Logica pura di zone e prezzi (testabile senza DOM)
 ├── piedi.js                      # URL, cache e parsing OSRM pedonale (coordinate [lon, lat])
+├── tracciato.js                  # Regole del tracciato: quali tratte passare al map matching stradale
 ├── icone.js                      # Set unico di icone Lucide, SVG inline (ISC)
 ├── manifest.json                  # Manifest PWA
 ├── sw.js                          # Service worker (cache offline)
@@ -69,6 +70,7 @@ tper-zone-calc/
 │   ├── routing.test.js             # Percorsi, cambi, cammini, calendari e mezzanotte
 │   ├── tariffe.test.js             # Zone e prezzi bus/treno
 │   ├── piedi.test.js               # Coordinate, chiave e risposta OSRM pedonale
+│   ├── tracciato.test.js           # Nessun tratto ferroviario al map matching stradale
 │   ├── icone.test.js               # Set Lucide unico, dimensioni e semantica
 │   ├── vista.test.js               # Scheda percorso, treni, escaping e stati vuoti
 │   └── integrale.test.js           # Percorsi reali Bologna–Imola, Vignola S2A e ramo Pianoro con geometria
@@ -190,7 +192,7 @@ gzip -9 -c data/orari.json > data/orari.json.gz
 python3 scripts/estrai-colori-linee.py gtfs-tper/routes.txt data/linee-colori.json
 ```
 
-Nel tab Viaggio la mappa mostra la linea del bus: la geometria ufficiale viene agganciata alla rete stradale con OSRM (map matching a pezzi, cache in `localStorage`, fallback automatico sul tracciato ufficiale se il servizio non risponde o il risultato non è coerente). Senza rete si vedono comunque fermate, orari e prezzo.
+Nel tab Viaggio la mappa mostra la linea del bus: la geometria ufficiale viene agganciata alla rete stradale con OSRM (map matching a pezzi, cache in `localStorage`, fallback automatico sul tracciato ufficiale se il servizio non risponde o il risultato non è coerente). Le corse ferroviarie non passano mai dal map matching stradale (`tracciato.js`): il binario non è una strada. Senza rete si vedono comunque fermate, orari e prezzo.
 
 Lo stesso script legge anche `shapes.txt` e produce `data/tracciati.json`: la geometria reale di ogni linea (semplificata a 8 m di tolleranza e codificata come polilinea), allineata corsa per corsa a `orari.json`. È così che il tab Viaggio disegna sulla mappa il percorso del bus invece di una linea dritta tra le due fermate; i tratti a piedi restano tratteggiati. Per le corse ferroviarie le shapes del GTFS nazionale sono troppo rade (5–8 punti, con salti anche di 17 km): `scripts/ricostruisci-tracciati.js` le sostituisce con il percorso sulla rete ferroviaria OpenStreetMap, stazione per stazione, e riproietta le fermate sui binari. La geometria resta nel dataset, quindi l'app non contatta Overpass.
 
@@ -244,7 +246,7 @@ Una volta pubblicata su GitHub Pages/Netlify/Vercel/Cloudflare Pages (vedi sopra
 
 ## Test automatici
 
-La logica critica è coperta da test Node.js senza dipendenze esterne (47 test): dati e invarianti dei JSON, RAPTOR (diretto, cambi, cammini, calendari, dopo mezzanotte), tariffe, coordinate e risposta OSRM pedonale, icone Lucide, scheda percorso e un percorso reale Bologna C.le–Imola in treno con la sua geometria.
+La logica critica è coperta da test Node.js senza dipendenze esterne (51 test): dati e invarianti dei JSON, RAPTOR (diretto, cambi, cammini, calendari, dopo mezzanotte), tariffe, coordinate e risposta OSRM pedonale, icone Lucide, scheda percorso e un percorso reale Bologna C.le–Imola in treno con la sua geometria.
 
 ```bash
 node --test tests
