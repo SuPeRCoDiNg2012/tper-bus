@@ -62,6 +62,43 @@ test('cambio a piedi tra paline vicine non consuma un cambio', async () => {
   assert.equal(esito.arrivo, 30600);
 });
 
+test('il cambio con il treno vuole più margine di uno tra bus', async () => {
+  // Bus in arrivo a B alle 08:10 e coincidenza alle 08:12. Tra due bus due
+  // minuti bastano; se la coincidenza è un treno servono banchina e scale,
+  // quindi quel cambio non va proposto.
+  const busBus = await caricaRouting(dati([
+    [0, 0, 0, 28800, 1, 600],       // L1 A 08:00 → B 08:10
+    [1, 0, 1, 29520, 1, 600]        // L2 B 08:12 → C 08:22
+  ]));
+  const esito = busBus.calcola('A', 'C', GIORNO, { maxCambi: 3 });
+  assert.ok(esito);
+  assert.deepEqual(esito.tappe.map((t) => t.linea), ['L1', 'L2']);
+
+  const busTreno = await caricaRouting(dati([
+    [0, 0, 0, 28800, 1, 600],       // L1 A 08:00 → B 08:10
+    [2, 0, 1, 29520, 1, 600]        // T1 B 08:12 → C 08:22
+  ]));
+  assert.equal(busTreno.calcola('A', 'C', GIORNO, { maxCambi: 3 }), null);
+});
+
+test('vietando la linea diretta emerge un percorso alternativo', async () => {
+  const routing = await caricaRouting(dati([
+    [0, 0, 0, 28800, 1, 480, 1, 420],   // L1 A 08:00 → B 08:08 → C 08:15, diretto
+    [1, 0, 0, 28800, 1, 300],       // L2 A 08:00 → B 08:05
+    [2, 0, 1, 29400, 1, 600]        // T1 B 08:10 → C 08:20
+  ]));
+
+  const diretto = routing.calcola('A', 'C', GIORNO, { maxCambi: 3 });
+  assert.deepEqual(diretto.tappe.map((t) => t.linea), ['L1']);
+  assert.equal(diretto.arrivo, 29700);
+
+  const alternativa = routing.calcola('A', 'C', GIORNO, { maxCambi: 3, vietate: ['L1'] });
+  assert.ok(alternativa);
+  assert.deepEqual(alternativa.tappe.map((t) => t.linea), ['L2', 'T1']);
+  assert.equal(alternativa.cambi, 1);
+  assert.equal(alternativa.arrivo, 30000);
+});
+
 test('cammino iniziale e finale vengono sommati al porta-a-porta', async () => {
   const routing = await caricaRouting(dati([
     [0, 0, 0, 28800, 1, 600],

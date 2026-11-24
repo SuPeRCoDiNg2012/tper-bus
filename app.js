@@ -1832,53 +1832,58 @@
     return d.getHours() * 3600 + d.getMinutes() * 60;
   }
 
-  // Sequenza dei modi di trasporto: P = a piedi, B = bus, T = treno.
-  // Serve a tenere nelle alternative almeno una combinazione diversa, non solo
-  // quattro varianti della stessa linea bus.
-  function firmaModi(e) {
-    const pezzi = [];
-    if (e.camminoIniziale > 0) pezzi.push('P');
-    e.tappe.forEach((tappa) => {
-      if (tappa.camminoPrima && tappa.camminoPrima.secondi > 0) pezzi.push('P');
-      pezzi.push(tappa.tipo === 1 || tappa.tipo === 2 ? 'T' : 'B');
-    });
-    if (e.camminoFinale > 0) pezzi.push('P');
-    return pezzi.join('');
+  // Firma del percorso: solo la sequenza delle linee. Due varianti che
+  // differiscono soltanto per dove si cammina non sono alternative.
+  function firmaPercorso(e) {
+    return e.tappe.map((tappa) => tappa.linea).join('>');
   }
 
-  function selezionaEsiti(esiti) {
-    // Prima una soluzione per ogni combinazione di modi, in ordine di
-    // partenza; poi si riempie fino a quattro con le altre alternative.
-    const ordine = esiti.slice().sort((a, b) => a.partenza - b.partenza || a.arrivo - b.arrivo);
-    const scelti = [];
-    const firme = new Set();
-    ordine.forEach((esito) => {
-      const firma = firmaModi(esito);
-      if (firme.has(firma)) return;
-      firme.add(firma);
-      scelti.push(esito);
+  /**
+   * Alternative da mostrare: una per percorso, ordinate per arrivo reale a
+   * destinazione. In modalità "arriva entro" vince chi arriva più tardi ma in
+   * tempo, perché con una scadenza è quello che serve.
+   */
+  function selezionaEsiti(esiti, arrivo) {
+    const perPercorso = new Map();
+    esiti.forEach((esito) => {
+      const chiave = firmaPercorso(esito);
+      const prima = perPercorso.get(chiave);
+      if (!prima) { perPercorso.set(chiave, esito); return; }
+      let migliore;
+      if (esito.arrivoDestinazione !== prima.arrivoDestinazione) {
+        migliore = arrivo
+          ? esito.arrivoDestinazione > prima.arrivoDestinazione
+          : esito.arrivoDestinazione < prima.arrivoDestinazione;
+      } else {
+        // Stesso arrivo: meglio uscire più tardi, si aspetta meno alla fermata.
+        migliore = esito.partenza > prima.partenza;
+      }
+      if (migliore) perPercorso.set(chiave, esito);
     });
-    ordine.forEach((esito) => {
-      if (scelti.length >= 4) return;
-      if (!scelti.includes(esito)) scelti.push(esito);
-    });
-    return scelti.slice(0, 4).sort((a, b) => a.partenza - b.partenza || a.arrivo - b.arrivo);
+    const scelti = Array.from(perPercorso.values());
+    scelti.sort((x, y) => (arrivo
+      ? y.arrivoDestinazione - x.arrivoDestinazione
+      : x.arrivoDestinazione - y.arrivoDestinazione));
+    return scelti.slice(0, 4);
   }
 
-  // Il motore calcola l'arrivo più presto a una data ora di partenza. Per avere
-  // più alternative si prova qualche partenza in più; in modalità arrivo si
-  // arretra dalla scadenza e si tengono solo i viaggi che arrivano in tempo.
+  // Il motore restituisce il viaggio che arriva prima a una data ora. Per avere
+  // alternative come su Google Maps non basta spostare la partenza di qualche
+  // minuto (uscivano quattro varianti della stessa linea): si ricalcola
+  // vietando a turno la linea principale, così compare un'altra strada.
   function calcolaOpzioni(da, a, base) {
     const arrivo = routing.modo === 'arrivo';
-    const tentativi = arrivo ? [5, 10, 20, 40, 60, 90, 120, 180] : [0, 12, 25, 40];
     // La scadenza si confronta come istante assoluto: dopo mezzanotte i
     // secondi del giorno ripartono da zero, mentre le corse serali hanno
     // orari oltre 86400 (es. 00:39 = 88740).
     const limite = arrivo ? base.getTime() : null;
     routing.scadenza = arrivo ? secondiDelGiorno(base) : null;
-    const visti = new Set();
     const esiti = [];
     let errore = null;
+
+    function calcola(quando, vietate) {
+      return TPERRouting.calcola(da, a, quando, { maxCambi: 3, vietate: vietate || [] });
+    }
 
     function aggiungi(esito, quando) {
       if (!esito) return;
@@ -1890,25 +1895,40 @@
         (esito.camminoFinale || 0) * 1000;
       if (arrivo && arrivoDestinazione > limite) return;
       esito.margine = arrivo ? Math.round((limite - arrivoDestinazione) / 1000) : null;
-      const firma = esito.tappe.map((t) => t.linea + '|' + t.da + '|' + t.a + '|' + t.partenza).join(';');
-      if (visti.has(firma)) return;
-      visti.add(firma);
+      esito.arrivoDestinazione = arrivoDestinazione;
+      esito.quandoRichiesta = quando;
       esiti.push(esito);
     }
 
-    tentativi.forEach((offset) => {
-      const quando = new Date(base.getTime() + (arrivo ? -offset : offset) * 60000);
-      aggiungi(TPERRouting.calcola(da, a, quando, { maxCambi: 3 }), quando);
+    // In modalità arrivo si arretra dalla scadenza; altrimenti si parte
+    // dall'ora scelta e si guarda anche un paio di corse dopo.
+    const scarti = arrivo ? [0, 10, 20, 40, 60, 90, 120, 180] : [0, 15, 35];
+    scarti.forEach((scarto) => {
+      const quando = new Date(base.getTime() + (arrivo ? -scarto : scarto) * 60000);
+      aggiungi(calcola(quando, []), quando);
     });
 
-    // Le combinazioni treno + bus non sono per forza le più veloci: se il
-    // pianificatore restituisse solo la soluzione migliore, una linea bus
-    // diretta nasconderebbe per sempre il treno. Si provano anche le coppie
-    // singole di fermate vicine, ma solo quando c'è una stazione nell'elenco.
+    let migliore = null;
+    esiti.forEach((esito) => {
+      if (!migliore || esito.arrivoDestinazione < migliore.arrivoDestinazione) migliore = esito;
+    });
+    if (migliore) {
+      // Si vietano al massimo due linee: sufficiente per un'alternativa vera
+      // senza moltiplicare le chiamate al motore.
+      const linee = [];
+      migliore.tappe.forEach((tappa) => {
+        if (linee.length < 2 && linee.indexOf(tappa.linea) === -1) linee.push(tappa.linea);
+      });
+      linee.forEach((linea) => {
+        aggiungi(calcola(migliore.quandoRichiesta, [linea]), migliore.quandoRichiesta);
+      });
+    }
+
+    // Le combinazioni treno + bus non sono per forza le più veloci: si provano
+    // anche le coppie singole di fermate vicine, ma solo se c'è una stazione.
     const conTreno = da.concat(a).some((fermata) => fermata.tipo === 'treno' || fermata.tipo === 'entrambi');
     if (conTreno) {
-      const offset = arrivo ? tentativi[0] : 0;
-      const quando = new Date(base.getTime() + (arrivo ? -offset : offset) * 60000);
+      const quando = migliore ? migliore.quandoRichiesta : base;
       da.forEach((origine) => {
         a.forEach((destinazione) => {
           if (origine.id === destinazione.id) return;
@@ -1917,7 +1937,7 @@
       });
     }
 
-    return { esiti: selezionaEsiti(esiti), errore: errore };
+    return { esiti: selezionaEsiti(esiti, arrivo), errore: errore };
   }
 
   function dataDaGiornoEOra(giorno, ora) {

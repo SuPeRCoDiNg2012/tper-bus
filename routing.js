@@ -7,7 +7,12 @@
 (function (globale) {
   'use strict';
 
-  const CAMBIO_MINIMO = 150;      // secondi minimi per un cambio
+  // Il cambio non costa lo stesso tempo per tutti i mezzi: due bus alla stessa
+  // palina si prendono in due minuti, mentre un treno chiede banchina, scale e
+  // a volte il sottopasso. Con un valore unico di 150 s il pianificatore
+  // proponeva cambi treno+bus che nella realtà si perdono.
+  const CAMBIO_BUS = 120;
+  const CAMBIO_TRENO = 240;
   const CAMMINO_CAMBIO_MASSIMO = 300;   // secondi di cammino per un cambio a piedi
   const INF = 0x7fffffff;
 
@@ -133,10 +138,15 @@
         orari[posizione] = tempo;
         conteggio[fermata] += 1;
       }
+      const linea = dati.linee[voce[0]] || ['—', 3];
       corse.push({
         fermate: fermate,
         orari: orari,
         linea: voce[0],
+        // Nome e tipo servono nel ciclo caldo: verificare le linee vietate e
+        // scegliere il tempo di cambio senza altre ricerche negli array.
+        nome: String(linea[0]).toUpperCase(),
+        tipo: linea[1],
         forma: tracciati && tracciati.corse ? tracciati.corse[i] : -1
       });
     }
@@ -191,11 +201,14 @@
    * in quel giro. Le tratte stanno per giro (e non per fermata), così la
    * ricostruzione non può entrare in loop quando una fermata migliora due volte.
    */
-  function pianifica(chiave, origini, destinazioni, oraPartenza, maxCambi) {
+  function pianifica(chiave, origini, destinazioni, oraPartenza, maxCambi, vietate) {
     const rete = costruisciRete(chiave);
     const numeroFermate = dati.fermate.length;
     let orario = new Int32Array(numeroFermate).fill(INF);
     const giri = new Int32Array(numeroFermate).fill(-1);
+    // Tipo di linea con cui si arriva in ogni fermata: serve a decidere se il
+    // cambio è tra bus o coinvolge un treno.
+    const tipoArrivo = new Int8Array(numeroFermate).fill(3);
     const predecessori = [];
     const camminoOrigine = new Map();
 
@@ -243,6 +256,7 @@
             orario[altra] = arrivo;
             giri[altra] = giri[fermata];
             piediTotali[altra] = piediTotali[fermata] + secondi;
+            tipoArrivo[altra] = tipoArrivo[fermata];
             predecessori[round][altra] = { piedi: true, da: fermata, secondi: secondi };
             migliorate.push(altra);
             if (!inCoda.has(altra)) { coda.push(altra); inCoda.add(altra); }
@@ -259,11 +273,16 @@
 
       for (let m = 0; m < marcate.length; m += 1) {
         const fermata = marcate[m];
-        const pronto = orario[fermata] + (round === 0 ? 0 : CAMBIO_MINIMO);
         for (let k = rete.offset[fermata]; k < rete.offset[fermata + 1]; k += 1) {
           const indiceCorsa = rete.perCorsa[k];
           const posizione = rete.perPosizione[k];
           const corsa = rete.corse[indiceCorsa];
+          // Linea vietata: si sta cercando un'alternativa diversa da quella
+          // già trovata, non la stessa corsa con qualche minuto di scarto.
+          if (vietate && vietate.has(corsa.nome)) continue;
+          const attesaMinima = round === 0 ? 0
+            : ((tipoArrivo[fermata] === 2 || corsa.tipo === 2) ? CAMBIO_TRENO : CAMBIO_BUS);
+          const pronto = orario[fermata] + attesaMinima;
           if (corsa.orari[posizione] < pronto) continue;
           // Se la stessa corsa è già stata presa a una fermata raggiunta prima,
           // risalirci più avanti non può migliorare nessun arrivo.
@@ -276,6 +295,7 @@
             if (arrivo < nuovo[prossima]) {
               nuovo[prossima] = arrivo;
               giri[prossima] = round + 1;
+              tipoArrivo[prossima] = corsa.tipo;
               predecessoreGiro[prossima] = { corsa: indiceCorsa, salita: posizione, discesa: p, da: fermata };
               cambiate.add(prossima);
             }
@@ -432,6 +452,9 @@
     if (!dati) throw new Error('Orari non ancora caricati');
     const data = quando || new Date();
     const maxCambi = opzioni && opzioni.maxCambi != null ? opzioni.maxCambi : 3;
+    // Linee da evitare: si usa per chiedere un'alternativa davvero diversa.
+    const vietate = opzioni && Array.isArray(opzioni.vietate) && opzioni.vietate.length
+      ? new Set(opzioni.vietate.map((nome) => String(nome).toUpperCase())) : null;
     const origini = normalizzaElenco(daId);
     const destinazioni = normalizzaElenco(aId);
     if (!origini.length || !destinazioni.length) return { errore: 'senza-orari' };
@@ -448,14 +471,14 @@
     // presto sullo stesso asse temporale (mezzanotte del giorno prima).
     if (data.getHours() < 4) {
       const ieri = new Date(data.getTime() - 86400000);
-      const diIeri = pianifica(chiaveDi(ieri), origini, destinazioni, ora + 86400, maxCambi);
-      const diOggi = pianifica(chiaveDi(data), origini, destinazioni, ora, maxCambi);
+      const diIeri = pianifica(chiaveDi(ieri), origini, destinazioni, ora + 86400, maxCambi, vietate);
+      const diOggi = pianifica(chiaveDi(data), origini, destinazioni, ora, maxCambi, vietate);
       if (!diIeri) return diOggi || null;
       if (!diOggi) return diIeri;
       return diIeri.arrivo <= diOggi.arrivo + 86400 ? diIeri : diOggi;
     }
 
-    return pianifica(chiaveDi(data), origini, destinazioni, ora, maxCambi) || null;
+    return pianifica(chiaveDi(data), origini, destinazioni, ora, maxCambi, vietate) || null;
   }
 
   /* --- Geometria delle corse ------------------------------------------ */
