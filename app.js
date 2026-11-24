@@ -1389,6 +1389,12 @@
     }
     renderViaggio();
     renderLive();
+    // Un viaggio nuovo parte dall'alto: il pannello poteva restare scrollato
+    // dove lo aveva lasciato il viaggio precedente, con il prezzo fuori vista.
+    if (sel.partenza && sel.destinazione) {
+      const corpo = $('sheet-corpo');
+      if (corpo) corpo.scrollTop = 0;
+    }
   }
 
   // Le fermate si salvano per id, gli indirizzi per coordinate (l'id è finto).
@@ -1447,7 +1453,17 @@
       titolo = nomeBreve(p.nome) + ' → ' + nomeBreve(d.nome);
       const zp = eIndirizzo(p) ? etichettaGenere(p) : 'Zona ' + p.zona;
       const zd = eIndirizzo(d) ? etichettaGenere(d) : 'Zona ' + d.zona;
-      sotto = zp + ' → ' + zd;
+      // Il prezzo sta anche qui, sotto il titolo: l'intestazione resta visibile
+      // in ogni scheda e anche a pannello ridotto, quindi il costo non va cercato
+      // scorrendo fino in fondo al viaggio.
+      const tariffa = trattaAPiedi() ? null : Tariffe.calcola(p, d, abbonamento);
+      // Stessa zona: "Zona 500 → Zona 500" era solo rumore. Il prezzo sta
+      // davanti alle zone così, se la riga si accorcia, non viene tagliato lui.
+      const zone = zp === zd ? zp : zp + ' → ' + zd;
+      const prezzo = tariffa && tariffa.prezzo != null
+        ? (tariffa.prezzo === 0 ? 'Incluso' : euro(tariffa.prezzo))
+        : '';
+      sotto = prezzo ? prezzo + ' · ' + zone : zone;
     }
     $('sheet-titolo').textContent = titolo;
     $('sheet-sotto').textContent = sotto;
@@ -1463,15 +1479,21 @@
       '<span class="biglietto-prezzo">' + esc(prezzo) + '</span></div>';
   }
 
-  function htmlRisultato(r) {
-    // Sotto i 400 m il pianificatore usa solo il cammino: non serve un
-    // biglietto e non ha senso proporre gli orari in tempo reale.
-    const soloPiedi = !!(sel.partenza && sel.destinazione &&
+  // Sotto i 400 m il pianificatore usa solo il cammino: non serve un biglietto
+  // e non ha senso proporre gli orari in tempo reale.
+  function trattaAPiedi() {
+    return !!(sel.partenza && sel.destinazione &&
       sel.partenza.lat != null && sel.partenza.lon != null &&
       sel.destinazione.lat != null && sel.destinazione.lon != null &&
       distanzaMetri(sel.partenza, sel.destinazione) < 400);
-    let html = '<div id="blocco-percorso" class="blocco-percorso"></div>' +
-      (soloPiedi ? '' : htmlBiglietto(r) + htmlInterruttore());
+  }
+
+  function htmlRisultato(r) {
+    const soloPiedi = trattaAPiedi();
+    // Prima il costo, poi il viaggio: la scheda biglietto stava sotto tutte le
+    // opzioni e per vederla bisognava scorrere il pannello fino in fondo.
+    let html = (soloPiedi ? '' : '<div class="blocco-biglietto">' + htmlBiglietto(r) + htmlInterruttore() + '</div>') +
+      '<div id="blocco-percorso" class="blocco-percorso"></div>';
     if (r.avviso) {
       html += '<div class="avviso">' + ICONA_INFO + '<span>' + esc(r.avviso) + '</span></div>';
     }

@@ -148,6 +148,11 @@
   .interruttore input:checked + .binario::after{transform:translateX(16px);}
 
   /* ---------- Biglietto ---------- */
+  /* Prezzo e abbonamento in una sola scheda in cima al viaggio: prima erano
+     due riquadri separati sotto tutte le opzioni. */
+  .blocco-biglietto{background:var(--sup);border:1px solid var(--bordo);border-radius:var(--r);overflow:hidden;}
+  .blocco-biglietto .biglietto{border:0;border-radius:0;}
+  .blocco-biglietto .riga-interruttore{border-top:1px solid var(--bordo);padding:10px 16px 12px;}
   .biglietto{display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--sup);border:1px solid var(--bordo);border-radius:var(--r);padding:14px 16px;}
   .biglietto-testo{display:flex;flex-direction:column;gap:6px;min-width:0;}
   .biglietto-nota{font-size:11.5px;color:var(--testo-2);}

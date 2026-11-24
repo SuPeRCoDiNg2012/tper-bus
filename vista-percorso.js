@@ -174,12 +174,15 @@
     }
 
     const opzioni = vista.opzioni && vista.opzioni.length ? vista.opzioni : [vista.esito];
-    let html = navigaHTML() +
+    let html =
       // Riempito dall'app con il passaggio reale del primo bus (o l'avviso
       // che per i treni vale l'orario programmato).
       '<div class="live-percorso" id="live-percorso" hidden></div>' +
       '<div class="opzioni">' +
-      opzioni.map((e, indice) => opzioneHTML(e, indice, vista, etichetta)).join('') + '</div>';
+      opzioni.map((e, indice) => opzioneHTML(e, indice, vista, etichetta)).join('') + '</div>' +
+      // La navigazione arriva dopo le alternative: prima si sceglie il viaggio,
+      // poi si parte. In cima spingeva il confronto degli orari più in basso.
+      navigaHTML();
     html += '<div class="avviso nota-tracciato" id="nota-tracciato" hidden>' +
       Icone.svg('triangle-alert', 16) +
       '<span>Senza tracciato GTFS per un tratto: sulla mappa è una <b>linea diritta tratteggiata</b> tra le fermate, non il percorso reale del bus.</span></div>' +
