@@ -1466,7 +1466,7 @@
     const p = sel.partenza;
     const d = sel.destinazione;
     let titolo = 'Pianifica il tuo viaggio';
-    let sotto = 'Zone, biglietto e bus in arrivo';
+    let sotto = '';
     if (p && !d) {
       titolo = 'Dove vuoi andare?';
       sotto = 'Partenza da ' + nomeBreve(p.nome);
@@ -1546,9 +1546,8 @@
     }
     html += '<div class="azioni">' +
       (soloPiedi ? '' : '<button class="btn btn-primario" data-azione="live">Orari in tempo reale</button>') +
-      '<button class="btn btn-secondario" data-azione="inverti">Inverti</button>' +
       '</div>';
-    html += '<a class="link-ufficiale" href="' + URL_UFFICIALE + '" target="_blank" rel="noopener">Verifica sul calcolatore ufficiale TPER</a>';
+    html += '<a class="link-ufficiale" href="' + URL_UFFICIALE + '" target="_blank" rel="noopener">Verifica su tper.it</a>';
     return html;
   }
 
@@ -1560,7 +1559,7 @@
 
   function htmlInterruttore() {
     return '<div class="riga-interruttore"><div><span class="etichetta">Ho l\'abbonamento urbano</span>' +
-      '<span class="sotto">Copre la zona 500 e le zone neutre 501–509</span></div>' +
+      '<span class="sotto">Zona 500 e zone neutre</span></div>' +
       '<label class="interruttore"><input type="checkbox" id="check-abbonamento"' + (abbonamento ? ' checked' : '') + ' aria-label="Ho l\'abbonamento urbano"><span class="binario"></span></label></div>';
   }
 
@@ -1608,7 +1607,7 @@
     }
 
     let html = '<p class="testo-intro">' +
-      (sel.partenza ? 'Scegli dove andare: mostro le fermate più vicine e il prezzo del biglietto.' : 'Cerca una fermata o un indirizzo, oppure tocca la mappa per iniziare.') +
+      (sel.partenza ? 'Scegli la destinazione.' : 'Cerca una fermata o tocca la mappa.') +
       '</p>';
     if (sel.partenza && sel.partenza.lat != null) {
       const vicine = senzaDoppioni(fermateVicine(sel.partenza.lat, sel.partenza.lon, 10, sel.partenza.id)
@@ -2246,7 +2245,7 @@
     let html;
     if (treno) {
       html = '<span class="tag-orario">ORARIO</span><span>Treno <b>' + linea + '</b> alle <b>' + programmato +
-        '</b> · per i treni non esiste un feed in tempo reale aperto: vale l\'orario programmato.</span>';
+        '</b>.</span>';
     } else if (livePercorso.caricamento) {
       html = '<span class="punto-live off"></span><span>Controllo se il bus <b>' + linea +
         '</b> è in orario…</span>';
@@ -2262,11 +2261,11 @@
           : '') +
         (vivo ? '' : ' · orario programmato') + '</span>';
     } else if (livePercorso.stato === 'errore') {
-      html = '<span class="tag-orario">ORARIO</span><span>Tempo reale non raggiungibile: vale l\'orario programmato (' +
-        programmato + ').</span>';
+      html = '<span class="tag-orario">ORARIO</span><span>Bus <b>' + linea + '</b> alle <b>' + programmato +
+        '</b> · tempo reale non raggiungibile.</span>';
     } else {
-      html = '<span class="tag-orario">ORARIO</span><span>Nessun passaggio in tempo reale per il bus <b>' + linea +
-        '</b>: vale l\'orario programmato (' + programmato + ').</span>';
+      html = '<span class="tag-orario">ORARIO</span><span>Bus <b>' + linea + '</b> alle <b>' + programmato +
+        '</b> · orario programmato.</span>';
     }
     contenitore.innerHTML = html;
     contenitore.hidden = false;
@@ -2656,33 +2655,32 @@
       '<div><h2 class="sezione-titolo">Prossimi bus</h2>' +
       '<div class="live-nome">' + (fermata ? esc(fermata.nome) : 'Nessuna fermata selezionata') + '</div>' +
       (fermata ? '<div class="live-indirizzo">' + esc(riferimentoFermata(fermata)) + '</div>' : '') +
-      (fermata ? '<div class="voce-meta">Zona ' + esc(fermata.zona) + ' · ' + esc(tipoEtichetta(fermata.tipo)) + '</div>' : '') +
       '</div>' +
       '<button class="btn-aggiorna' + (live.caricamento ? ' gira' : '') + '" data-azione="aggiorna" aria-label="Aggiorna gli arrivi"' + (fermata ? '' : ' disabled') + '>' + ICONA_REFRESH + '</button>' +
       '</div>';
     if (live.avviso) html += '<div class="box-messaggio">' + esc(live.avviso) + '</div>';
 
     if (!fermata) {
-      html += '<div class="box-messaggio">Scegli una fermata nella ricerca: mostro i prossimi passaggi con la posizione reale dei bus.</div>';
+      html += '<div class="box-messaggio">Scegli una fermata per vedere i prossimi passaggi.</div>';
     } else if (live.stato === 'senza-linee') {
-      html += '<div class="box-messaggio">Per questa fermata non risultano linee bus nel dataset: il tempo reale di HelloBus copre solo il servizio su gomma. Per i treni non esiste un feed aperto, quindi vale l\'orario programmato.</div>';
+      html += '<div class="box-messaggio">Tempo reale solo per i bus: qui non passano linee bus.</div>';
     } else if (live.stato === 'non-gestita') {
-      html += '<div class="box-messaggio">HelloBus non gestisce questa fermata (succede per alcune fermate del dataset regionale o per i pali non attivi). Prova con il palo opposto o consulta tper.it.</div>';
+      html += '<div class="box-messaggio">HelloBus non gestisce questa fermata. Prova il palo opposto o tper.it.</div>';
     } else {
       html += statoLiveHTML();
       if (live.stato === 'errore' && !live.items.length) {
-        html += '<div class="box-messaggio errore">Impossibile contattare HelloBus (TPER) o il relay pubblico. Controlla la connessione e riprova.</div>' +
+        html += '<div class="box-messaggio errore">HelloBus non risponde. Controlla la connessione e riprova.</div>' +
           '<button class="btn btn-secondario" data-azione="aggiorna">Riprova</button>';
       } else if (!live.items.length && !live.caricamento) {
         const altroRuolo = stopLiveRuolo === 'partenza' ? 'destinazione' : 'partenza';
         const altro = sel[altroRuolo];
-        html += '<div class="box-messaggio">Nessun altro passaggio oggi a questa fermata per le linee disponibili. Riprova domani mattina o verifica su tper.it.' +
-          (altro ? '<br><button class="btn btn-secondario" data-live-ruolo="' + altroRuolo + '">Guarda i bus alla ' + altroRuolo + '</button>' : '') +
+        html += '<div class="box-messaggio">Nessun altro passaggio oggi.' +
+          (altro ? ' <button class="btn btn-secondario" data-live-ruolo="' + altroRuolo + '">Bus alla ' + altroRuolo + '</button>' : '') +
           '</div>';
       } else {
         html += arriviHTML();
       }
-      html += '<p class="testo-intro" style="font-size:12px">LIVE = posizione GPS reale del mezzo segnalata da TPER. ORARIO = orario programmato, non ancora aggiornato.</p>';
+      html += '<p class="nota-piccola">LIVE = posizione reale del bus. ORARIO = orario programmato.</p>';
     }
     pane.innerHTML = html;
   }
@@ -3065,21 +3063,22 @@
     if (pane.dataset.pronto === '1') return;
     pane.dataset.pronto = '1';
     pane.innerHTML =
-      '<div class="scheda"><h2>Come funziona il tempo reale</h2>' +
-      '<p>Gli arrivi vengono letti dal web service pubblico HelloBus di TPER, lo stesso usato dagli SMS alle fermate. I passaggi con etichetta LIVE sono bus localizzati via satellite; gli altri sono orari di tabella.</p></div>' +
-      '<div class="scheda"><h2>Dati del servizio</h2>' +
-      '<p>Fermate, zone e linee: open data TPER / Regione Emilia-Romagna (CC BY 3.0 IT).<br>Orari dei bus: GTFS ufficiale TPER.<br>Orari dei treni: GTFS nazionale Trenitalia via NAP (CC BY 4.0), conversione deryclem/trenitalia-gtfs; copre Bologna C.le, Imola e il ramo Bologna–Pianoro. La linea locale S2A Bologna–Vignola (con Casalecchio) viene dai PDF ufficiali TPER, con validazione delle corse. La linea S1 Porretta non è inclusa: il PDF ufficiale non è interpretabile con affidabilità, quindi l\'app non inventa orari intermedi.<br>Percorsi a piedi: OSRM pedonale FOSSGIS / OpenStreetMap.<br>Database fermate aggiornato al: ' + esc(aggiornato || 'non disponibile') + '.<br>Prezzi indicativi: verifica sempre su tper.it.</p>' +
+      '<div class="scheda"><h2>Tempo reale</h2>' +
+      '<p>Gli arrivi arrivano da HelloBus, il servizio TPER. LIVE = posizione reale del bus. ORARIO = orario programmato. Per i treni esiste solo l\'orario programmato.</p></div>' +
+      '<div class="scheda"><h2>Dati</h2>' +
+      '<p>Fermate, zone e linee: open data TPER / Regione Emilia-Romagna (CC BY 3.0 IT). Orari bus: GTFS TPER. Orari treni: GTFS Trenitalia (CC BY 4.0), conversione deryclem/trenitalia-gtfs. Percorsi a piedi: OSRM / OpenStreetMap.</p>' +
+      '<p>Treni coperti: Bologna C.le, Imola, Bologna–Pianoro e la linea S2A Bologna–Vignola. La S1 Porretta non è inclusa: il PDF ufficiale non dà orari intermedi affidabili.</p>' +
+      '<p>Fermate aggiornate al ' + esc(aggiornato || 'non disponibile') + '. Prezzi indicativi: verifica su tper.it.</p>' +
       '<a class="mini" href="https://www.tper.it" target="_blank" rel="noopener">Apri tper.it</a></div>' +
-      '<div class="scheda"><h2>Relay per gli orari</h2>' +
-      '<p>HelloBus non consente le chiamate dirette dal browser (manca l\'autorizzazione CORS): l\'app passa da un relay pubblico. Se ne hai uno tuo, incollalo qui sotto con <code>{url}</code> al posto dell\'indirizzo da chiamare.</p>' +
+      '<div class="scheda"><h2>Relay orari</h2>' +
+      '<p>HelloBus non accetta le chiamate del browser (CORS): l\'app passa da un relay pubblico. Puoi usarne uno tuo, con <code>{url}</code> al posto dell\'indirizzo. Vuoto = relay predefinito.</p>' +
       '<div class="campo-proxy"><input id="input-proxy" type="text" placeholder="https://mio-relay.example/?url={url}" value="' + esc(leggi(K_PROXY) || '') + '">' +
       '<button class="mini" data-azione="salva-proxy">Salva</button></div>' +
-      '<p style="font-size:12px">Vuoto = relay pubblico predefinito. Dopo il salvataggio premi di nuovo "In tempo reale".</p>' +
       '<button class="mini" data-azione="azzera-proxy">Usa il relay predefinito</button></div>' +
-      '<div class="scheda"><h2>Installa l\'app</h2>' +
-      '<p>Aggiungila alla schermata home: si apre come un\'app, funziona anche senza rete per zone e prezzi.</p>' +
+      '<div class="scheda"><h2>Installa</h2>' +
+      '<p>Su schermata home si apre come un\'app e funziona offline per zone e prezzi.</p>' +
       '<button class="mini" data-azione="installa">Installa Muovi Bologna</button></div>' +
-      '<p class="testo-intro" style="font-size:12px">App non ufficiale, non affiliata a TPER. Dati forniti da TPER e dalla Regione Emilia-Romagna.</p>';
+      '<p class="nota-piccola">App non ufficiale, non affiliata a TPER.</p>';
   }
 
   /* ------------------------------------------------------------------ *

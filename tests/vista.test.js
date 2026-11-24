@@ -39,9 +39,9 @@ function render(e) {
   }, (id) => id);
 }
 
-test('un treno mostra “Tratta ferroviaria”, non “1 fermata”', () => {
+test('un treno mostra “Treno”, non “1 fermata”', () => {
   const html = render(viaggio());
-  assert.match(html, /Tratta ferroviaria/);
+  assert.match(html, /Treno · 20 min/);
   assert.doesNotMatch(html, /1 fermata/);
   assert.match(html, /16:34/);
   assert.match(html, /16:54/);
@@ -51,7 +51,7 @@ test('un treno mostra “Tratta ferroviaria”, non “1 fermata”', () => {
 test('un bus continua a mostrare il numero di fermate', () => {
   const html = render(viaggio({}, corsa({ linea: '20', tipo: 3, fermate: 1 })));
   assert.match(html, /1 fermata/);
-  assert.doesNotMatch(html, /Tratta ferroviaria/);
+  assert.doesNotMatch(html, /Treno · /);
 });
 
 test('tempi a piedi e totale porta-a-porta', () => {
@@ -125,10 +125,10 @@ test('orari oltre 24 ore vengono mostrati sul quadrante 00–23', () => {
 
 test('messaggi per stazione senza orari, nessun viaggio e percorso a piedi', () => {
   const senzaOrari = Vista.esito({ stato: 'messaggio', esito: { errore: 'senza-orari' } }, (id) => id);
-  assert.match(senzaOrari, /GTFS aperto/);
+  assert.match(senzaOrari, /Nessuna fermata con orari entro 10 min a piedi/);
 
   const nessuno = Vista.esito({ stato: 'nessuno', modo: 'partenza' }, (id) => id);
-  assert.match(nessuno, /Nessun collegamento/);
+  assert.match(nessuno, /Nessun viaggio a quest'ora/);
 
   const piedi = Vista.esito({ stato: 'piedi', piedi: { metri: 326, minuti: 6 } }, (id) => id);
   assert.match(piedi, /326 m/);
@@ -158,7 +158,7 @@ test('il percorso riserva un riquadro all’orario reale e dichiara i treni', ()
   // Il riquadro nasce vuoto e nascosto: lo riempie l'app con il passaggio
   // reale del primo bus, quando TPER lo fornisce.
   assert.match(html, /id="live-percorso" hidden/);
-  assert.match(html, /Per i treni vale l'orario programmato/);
+  assert.match(html, /Orari programmati; il primo bus mostra il passaggio reale/);
 });
 
 test('la scheda espone quanto si è disposti a camminare, da 3 a 25 minuti', () => {

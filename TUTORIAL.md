@@ -160,5 +160,5 @@ Entrambe le opzioni sono gratuite per sempre, senza carta di credito.
 | L'app non trova nessuna fermata mentre scrivo | Hai aperto `index.html` con doppio click | Usa un server locale (Passo 6) |
 | Lo script dà errore "File non trovato" | Il percorso al file `tper-fermate-autobus.json` è sbagliato | Controlla di aver scritto il nome file corretto e di essere nella cartella giusta (usa `dir` o `ls` per controllare) |
 | Una fermata non ha nessuna linea mostrata | Nel dataset scaricato quella fermata non aveva righe con `codice_linea` valorizzato | Caso raro ma possibile nei dati sorgente; non è un bug dello script |
-| Il calcolo dice "Tratta complessa" | Partenza e destinazione sono entrambe fuori dall'Area Urbana | Comportamento previsto: usa il link al calcolatore ufficiale TPER mostrato nel risultato |
+| Il calcolo dice "Tratta complessa" | Partenza e destinazione sono entrambe fuori dall'Area Urbana | Comportamento previsto: usa il link "Verifica su tper.it" mostrato nel risultato |
 | Dopo il deploy l'app mostra dati vecchi | Cache del service worker | Ricarica la pagina con "svuota cache" (Ctrl+Shift+R / Cmd+Shift+R), oppure cambia il numero di versione `v1` in `sw.js` in `v2` |

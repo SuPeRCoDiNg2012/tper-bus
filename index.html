@@ -134,8 +134,9 @@
   .sheet-corpo{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(24px + env(safe-area-inset-bottom,0px));overscroll-behavior:contain;touch-action:pan-y;}
   .pannello{display:flex;flex-direction:column;gap:16px;}
 
-  .sezione-titolo{margin:0;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--testo-3);}
-  .testo-intro{font-size:13px;line-height:1.6;color:var(--testo-2);margin:0;}
+  /* Etichette di sezione: testo normale, non maiuscoletto spaziato. */
+  .sezione-titolo{margin:0;font-size:13px;font-weight:600;letter-spacing:-.1px;color:var(--testo);}
+  .testo-intro{font-size:13px;line-height:1.5;color:var(--testo-2);margin:0;}
 
   .riga-interruttore{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:14px;border-top:1px solid var(--bordo);}
   .riga-interruttore .etichetta{font-size:13px;font-weight:500;color:var(--testo);}
@@ -152,12 +153,12 @@
      due riquadri separati sotto tutte le opzioni. */
   .blocco-biglietto{background:var(--sup);border:1px solid var(--bordo);border-radius:var(--r);overflow:hidden;}
   .blocco-biglietto .biglietto{border:0;border-radius:0;}
-  .blocco-biglietto .riga-interruttore{border-top:1px solid var(--bordo);padding:10px 16px 12px;}
+  .blocco-biglietto .riga-interruttore{border-top:1px solid var(--bordo);padding:8px 16px 10px;}
   .biglietto{display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--sup);border:1px solid var(--bordo);border-radius:var(--r);padding:14px 16px;}
   .biglietto-testo{display:flex;flex-direction:column;gap:6px;min-width:0;}
   .biglietto-nota{font-size:11.5px;color:var(--testo-2);}
   .biglietto-prezzo{font-size:20px;font-weight:600;letter-spacing:-.5px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
-  .pill-stato{align-self:flex-start;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:5px 8px;border-radius:6px;line-height:1.2;}
+  .pill-stato{align-self:flex-start;font-size:11.5px;font-weight:600;padding:4px 8px;border-radius:6px;line-height:1.25;}
   .pill-stato.verde{background:var(--verde-soft);color:var(--verde);}
   .pill-stato.arancio{background:var(--ambra-soft);color:var(--ambra);}
   .pill-stato.rosso{background:var(--rosso-soft);color:var(--rosso-scuro);}
@@ -442,7 +443,7 @@
   </div>
   <div class="tab" role="tablist" aria-label="Sezioni" aria-orientation="horizontal">
     <button type="button" role="tab" id="tab-viaggio" data-tab="viaggio" aria-controls="pane-viaggio" aria-selected="true" tabindex="0" class="attivo">Viaggio</button>
-    <button type="button" role="tab" id="tab-live" data-tab="live" aria-controls="pane-live" aria-selected="false" tabindex="-1">In tempo reale</button>
+    <button type="button" role="tab" id="tab-live" data-tab="live" aria-controls="pane-live" aria-selected="false" tabindex="-1">Live</button>
     <button type="button" role="tab" id="tab-info" data-tab="info" aria-controls="pane-info" aria-selected="false" tabindex="-1">Info</button>
   </div>
   <div class="sheet-corpo" id="sheet-corpo">

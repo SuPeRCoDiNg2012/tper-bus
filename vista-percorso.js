@@ -100,7 +100,7 @@
       if (indice > 0) {
         // L'attesa è al netto del tratto a piedi, che ha la sua riga.
         const attesa = Math.round((tappa.attesa - (tappa.camminoPrima ? tappa.camminoPrima.secondi : 0)) / 60);
-        html += '<div class="cambio">Cambio' + (attesa >= 1 ? ' · ' + attesa + ' min di attesa' : '') + '</div>';
+        html += '<div class="cambio">Cambio' + (attesa >= 1 ? ' · ' + attesa + ' min' : '') + '</div>';
       }
       if (tappa.camminoPrima && tappa.camminoPrima.secondi >= 45) {
         const minPiedi = Math.max(1, Math.round(tappa.camminoPrima.secondi / 60));
@@ -116,7 +116,7 @@
         '<span class="corsa-badge' + (treno ? ' treno' : '') + '"' + colore + '>' + esc(tappa.linea) + '</span>' +
         '<div class="corsa-corpo">' +
         '<div class="corsa-riga"><span class="corsa-ora">' + hhmm(tappa.partenza) + '</span><span class="corsa-fermata">' + esc(etichetta(tappa.da)) + '</span></div>' +
-        '<div class="corsa-info">' + (treno ? 'Tratta ferroviaria' : tappa.fermate + ' ' + (tappa.fermate === 1 ? 'fermata' : 'fermate')) + ' · ' + durata + ' min</div>' +
+        '<div class="corsa-info">' + (treno ? 'Treno' : tappa.fermate + ' ' + (tappa.fermate === 1 ? 'fermata' : 'fermate')) + ' · ' + durata + ' min</div>' +
         '<div class="corsa-riga"><span class="corsa-ora">' + hhmm(tappa.arrivo) + '</span><span class="corsa-fermata">' + esc(etichetta(tappa.a)) + '</span></div>' +
         '</div></div>';
     });
@@ -161,7 +161,7 @@
       return '<div class="box-messaggio"><div class="scheletro"><span></span><span></span><span></span></div></div>';
     }
     if (vista.stato === 'errore') {
-      return '<div class="box-messaggio errore">Non riesco a calcolare il percorso (' + esc(vista.errore) + '). Controlla la connessione e riprova.' +
+      return '<div class="box-messaggio errore">Percorso non calcolato (' + esc(vista.errore) + '). Controlla la connessione.' +
         '<button class="btn btn-secondario" data-azione="riprova-percorso">Riprova</button></div>';
     }
     if (vista.stato === 'piedi') {
@@ -171,13 +171,13 @@
     if (vista.stato === 'messaggio') {
       const codice = vista.esito && vista.esito.errore;
       let testo = 'Percorso non disponibile per queste fermate.';
-      if (codice === 'senza-orari') testo = 'Nessuna fermata con orari entro ' + (vista.camminata || 10) + ' minuti a piedi: questa stazione non ha corse disponibili (per alcune linee ferroviarie locali non esiste un GTFS aperto). Scegli una fermata bus vicina o aumenta i minuti a piedi.';
+      if (codice === 'senza-orari') testo = 'Nessuna fermata con orari entro ' + (vista.camminata || 10) + ' min a piedi: scegli una fermata bus vicina o aumenta i minuti a piedi.';
       return '<div class="box-messaggio">' + esc(testo) + '</div>';
     }
     if (vista.stato === 'nessuno') {
       const testo = vista.modo === 'arrivo'
-        ? 'Nessun collegamento arriva entro le ' + esc(vista.orario || '') + '. Prova a spostare l\'orario o il giorno.'
-        : 'Nessun collegamento trovato a quest\'ora: di domenica e in tarda serata il servizio urbano è ridotto. Prova un altro orario o un giorno feriale.';
+        ? 'Nessun viaggio arriva entro le ' + esc(vista.orario || '') + '.'
+        : 'Nessun viaggio a quest\'ora: di domenica e in tarda serata i bus sono pochi.';
       return '<div class="box-messaggio">' + testo +
         '<button class="btn btn-secondario" data-azione="prova-domani">Prova domani alle 08:00</button></div>';
     }
@@ -195,7 +195,7 @@
     html += '<div class="avviso nota-tracciato" id="nota-tracciato" hidden>' +
       Icone.svg('triangle-alert', 16) +
       '<span>Senza tracciato GTFS per un tratto: sulla mappa è una <b>linea diritta tratteggiata</b> tra le fermate, non il percorso reale del bus.</span></div>' +
-      '<p class="nota-piccola">Orari programmati, con il passaggio reale del primo bus quando TPER lo fornisce. Per i treni vale l\'orario programmato.</p>';
+      '<p class="nota-piccola">Orari programmati; il primo bus mostra il passaggio reale quando c\'è.</p>';
     return html;
   }
 
