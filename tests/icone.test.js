@@ -7,7 +7,7 @@ const Icone = require('../icone');
 test('tutte le icone UI sono Lucide inline e non Material', () => {
   const richieste = [
     'x', 'arrow-up-down', 'credit-card', 'crosshair', 'locate-fixed', 'maximize',
-    'bus-front', 'train-front', 'map-pin', 'map-pin-pieno', 'footprints',
+    'bus-front', 'train-front', 'navigation', 'map-pin', 'map-pin-pieno', 'footprints',
     'accessibility', 'refresh-cw', 'info', 'chevron-down', 'chevron-right',
     'triangle-alert'
   ];

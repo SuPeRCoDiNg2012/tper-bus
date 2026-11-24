@@ -143,3 +143,12 @@ test('controlli data e ora cambiano etichetta in modalità arrivo', () => {
   assert.match(arrivo, /Arriva entro/);
   assert.match(arrivo, /Tra 1 ora/);
 });
+
+test('il percorso calcolato offre il pulsante per avviare la navigazione', () => {
+  const html = render(viaggio());
+  assert.match(html, /data-azione="avvia-navigazione"/);
+  assert.match(html, /Avvia navigazione/);
+  // Anche un tragitto tutto a piedi si può seguire sulla mappa.
+  const piedi = Vista.esito({ stato: 'piedi', piedi: { metri: 326, minuti: 6 } }, (id) => id);
+  assert.match(piedi, /data-azione="avvia-navigazione"/);
+});

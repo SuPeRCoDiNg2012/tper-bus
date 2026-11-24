@@ -60,6 +60,12 @@
   let campoAttivo = null;
   let stopLiveRuolo = 'partenza';
   let posizioneUtente = null;
+  // Navigazione guidata: posizione continua, passo corrente, mappa in follow.
+  const navigazione = {
+    attiva: false, watchId: null, ultima: null, precisione: null,
+    passi: [], indice: 0, follow: true, inquadrato: false, ultimoVolo: 0, arrivo: null
+  };
+  let markerUtente = null;
   let eventoInstallazione = null;
   let liveAbort = null;
   let timerLive = null;
@@ -82,6 +88,7 @@
   const ICONA_REFRESH = Icone.svg('refresh-cw', 18);
   const ICONA_INFO = Icone.svg('info', 18);
   const ICONA_CHEVRON = Icone.svg('chevron-right', 18, 'voce-freccia');
+  const ICONA_PIEDANA = Icone.svg('footprints', 20);
 
   /* ------------------------------------------------------------------ *
    * Utility
@@ -366,6 +373,15 @@
     // Le attribuzioni (OpenFreeMap / OpenMapTiles / OpenStreetMap) arrivano già dallo stile.
     mappa.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
     mappa.on('dragstart', () => {
+      // Durante la navigazione la mappa segue l'utente: chi la sposta sta
+      // guardando altrove e può ricentrare con il pulsante dedicato.
+      if (navigazione.attiva) {
+        if (navigazione.follow) {
+          navigazione.follow = false;
+          aggiornaNavFollow();
+        }
+        return;
+      }
       if (statoSheet !== 'peek') impostaSheet('peek');
     });
     mappa.on('click', chiudiOverlay);
@@ -398,6 +414,8 @@
   }
 
   function inquadra(animato) {
+    // In navigazione la camera appartiene all'utente, non al viaggio.
+    if (navigazione.attiva) return;
     if (!mappa) return;
     const punti = [];
     if (sel.partenza && sel.partenza.lat != null) punti.push([sel.partenza.lon, sel.partenza.lat]);
@@ -986,6 +1004,7 @@
   // Inquadra il percorso disegnato lasciando libera la parte coperta dal
   // pannello: i margini seguono l'altezza reale della finestra.
   function inquadraPercorso(durata) {
+    if (navigazione.attiva) return;
     if (!mappa || !ultimeFeatures.length) return;
     const limiti = new maplibregl.LngLatBounds();
     ultimeFeatures.forEach((f) => f.geometry.coordinates.forEach((punto) => limiti.extend(punto)));
@@ -997,6 +1016,243 @@
       maxZoom: 16,
       duration: durata == null ? 500 : durata
     });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Navigazione guidata
+   * ------------------------------------------------------------------ */
+  const NAV_SOGLIA = 35;              // metri: sotto questa distanza il passo è raggiunto
+  const NAV_VELOCITA_PIEDI = 1.25;    // m/s, passo medio di una persona
+  const NAV_ZOOM = 16.4;
+
+  function coordinataDi(luogo) {
+    return luogo && luogo.lat != null && luogo.lon != null ? [luogo.lon, luogo.lat] : null;
+  }
+
+  function distanzaInMetri(punto, coordinate) {
+    if (!punto || !coordinate) return null;
+    return distanzaMetri(punto, { lat: coordinate[1], lon: coordinate[0] });
+  }
+
+  function metriTesto(metri) {
+    if (metri == null || !isFinite(metri)) return '';
+    if (metri < 950) return Math.max(10, Math.round(metri / 10) * 10) + ' m';
+    const km = metri / 1000;
+    return km.toFixed(km < 9.95 ? 1 : 0).replace('.', ',') + ' km';
+  }
+
+  // Passi da seguire: cammino, corse (con la fermata di discesa) e cammino
+  // finale. Non rifà il routing: usa il percorso già calcolato.
+  function passiNavigazione() {
+    const passi = [];
+    if (routing.stato === 'piedi') {
+      const punto = coordinataDi(sel.destinazione);
+      if (punto) {
+        passi.push({ modo: 'piedi', titolo: 'A piedi', etichetta: 'fino a', nome: sel.destinazione.nome, punto: punto });
+      }
+      return passi;
+    }
+    const esito = routing.esito;
+    if (!esito || !esito.tappe || !esito.tappe.length) return passi;
+    if (esito.camminoIniziale > 0) {
+      const prima = coordinateFermata(esito.tappe[0].da);
+      if (prima) {
+        passi.push({ modo: 'piedi', titolo: 'A piedi', etichetta: 'fino a', nome: nomeFermata(esito.tappe[0].da), punto: prima });
+      }
+    }
+    esito.tappe.forEach((tappa) => {
+      const punto = coordinateFermata(tappa.a);
+      if (!punto) return;
+      const treno = tappa.tipo === 1 || tappa.tipo === 2;
+      passi.push({
+        modo: treno ? 'treno' : 'bus',
+        titolo: (treno ? 'Treno ' : 'Bus ') + tappa.linea,
+        etichetta: 'scendi a',
+        nome: nomeFermata(tappa.a),
+        punto: punto
+      });
+    });
+    const fine = coordinataDi(sel.destinazione);
+    if (esito.camminoFinale > 0 && fine) {
+      passi.push({ modo: 'piedi', titolo: 'A piedi', etichetta: 'fino a', nome: sel.destinazione.nome, punto: fine });
+    }
+    return passi;
+  }
+
+  // Orario di arrivo previsto: quello del viaggio scelto; per un tragitto
+  // tutto a piedi si stima dalla distanza che resta.
+  function arrivoPrevisto(passi) {
+    if (routing.stato === 'piedi' && routing.piedi) {
+      const diretta = passi.length ? distanzaInMetri(posizioneUtente, passi[0].punto) : null;
+      const metri = diretta == null ? routing.piedi.metri : diretta;
+      const ora = new Date();
+      const secondi = ora.getHours() * 3600 + ora.getMinutes() * 60 + ora.getSeconds() + metri / NAV_VELOCITA_PIEDI;
+      return hhmm(secondi);
+    }
+    if (routing.stato === 'ok' && routing.esito && routing.esito.arrivo != null) {
+      return hhmm(routing.esito.arrivo + (routing.esito.camminoFinale || 0));
+    }
+    return null;
+  }
+
+  function creaMarkerUtente() {
+    if (!mappa || !window.maplibregl) return null;
+    if (markerUtente) return markerUtente;
+    const elemento = document.createElement('div');
+    elemento.className = 'pin-utente';
+    elemento.setAttribute('aria-hidden', 'true');
+    elemento.innerHTML = '<span class="pin-utente-alone"></span><span class="pin-utente-punto"></span>';
+    markerUtente = new maplibregl.Marker({ element: elemento, anchor: 'center' });
+    return markerUtente;
+  }
+
+  function aggiornaNavFollow() {
+    const centro = $('nav-centra');
+    if (centro) centro.hidden = navigazione.follow;
+  }
+
+  function centraNavigazione() {
+    navigazione.follow = true;
+    navigazione.inquadrato = false;
+    navigazione.ultimoVolo = 0;
+    aggiornaNavFollow();
+    if (navigazione.ultima && mappa) {
+      mappa.easeTo({ center: [navigazione.ultima.lon, navigazione.ultima.lat], zoom: NAV_ZOOM, duration: 600 });
+      navigazione.inquadrato = true;
+      navigazione.ultimoVolo = Date.now();
+    }
+    disegnaNavigazione();
+  }
+
+  function disegnaNavigazione() {
+    if (!navigazione.attiva) return;
+    const passi = navigazione.passi;
+    const passo = passi[Math.min(navigazione.indice, passi.length - 1)];
+    if (!passo) return;
+    const distanza = distanzaInMetri(navigazione.ultima, passo.punto);
+    const arrivato = navigazione.indice >= passi.length - 1 && distanza != null && distanza < NAV_SOGLIA;
+    const icone = { piedi: ICONA_PIEDANA, bus: ICONA_BUS, treno: ICONA_TRENO };
+    const icona = $('nav-ico');
+    if (icona) {
+      icona.className = 'nav-ico ' + passo.modo;
+      icona.innerHTML = icone[passo.modo] || ICONA_BUS;
+    }
+    $('nav-titolo').textContent = arrivato ? 'Sei arrivato' : passo.titolo;
+    $('nav-sotto').textContent = arrivato
+      ? nomeBreve(passo.nome)
+      : passo.etichetta + ' ' + nomeBreve(passo.nome);
+    $('nav-distanza').textContent = !navigazione.ultima
+      ? '…'
+      : (arrivato ? '0 m' : metriTesto(distanza));
+    $('nav-passo').textContent = passi.length > 1
+      ? (navigazione.indice + 1) + '/' + passi.length
+      : '';
+    $('nav-eta').textContent = navigazione.arrivo || '—';
+  }
+
+  function avanzaPassi(punto) {
+    const passi = navigazione.passi;
+    for (let i = navigazione.indice; i < passi.length; i += 1) {
+      const distanza = distanzaInMetri(punto, passi[i].punto);
+      if (distanza == null || distanza > NAV_SOGLIA) {
+        navigazione.indice = i;
+        return;
+      }
+      navigazione.indice = Math.min(i + 1, passi.length - 1);
+      if (i + 1 >= passi.length) return;
+    }
+  }
+
+  function aggiornaNavigazione(posizione) {
+    if (!navigazione.attiva) return;
+    const punto = { lat: posizione.coords.latitude, lon: posizione.coords.longitude };
+    navigazione.precisione = isFinite(posizione.coords.accuracy) ? Math.round(posizione.coords.accuracy) : null;
+    navigazione.ultima = punto;
+    posizioneUtente = punto;
+    const marcatore = creaMarkerUtente();
+    if (marcatore && mappa) marcatore.setLngLat([punto.lon, punto.lat]).addTo(mappa);
+    avanzaPassi(punto);
+    if (mappa && navigazione.follow) {
+      const adesso = Date.now();
+      // La mappa si muove solo quando serve: un easeTo a ogni fix GPS
+      // renderebbe il trascinamento impossibile.
+      if (!navigazione.inquadrato || adesso - navigazione.ultimoVolo > 1200) {
+        navigazione.ultimoVolo = adesso;
+        mappa.easeTo({
+          center: [punto.lon, punto.lat],
+          zoom: navigazione.inquadrato ? mappa.getZoom() : NAV_ZOOM,
+          duration: navigazione.inquadrato ? 900 : 700
+        });
+        navigazione.inquadrato = true;
+      }
+    }
+    disegnaNavigazione();
+  }
+
+  function erroreNavigazione(errore) {
+    if (!navigazione.attiva) return;
+    // Permesso negato (codice 1): senza posizione la navigazione non ha senso.
+    if (errore && errore.code === 1) {
+      fermaNavigazione(true);
+      mostraToast('Posizione negata: consenti l\'accesso per navigare');
+      return;
+    }
+    const sotto = $('nav-sotto');
+    if (sotto) sotto.textContent = 'Cerco di nuovo la posizione…';
+  }
+
+  function avviaNavigazione() {
+    if (navigazione.attiva) return;
+    if (!sel.partenza || !sel.destinazione) {
+      mostraToast('Scegli partenza e destinazione per avviare la navigazione');
+      return;
+    }
+    if (!navigator.geolocation) {
+      mostraToast('Geolocalizzazione non supportata da questo browser');
+      return;
+    }
+    const passi = passiNavigazione();
+    if (!passi.length) {
+      mostraToast('Nessun percorso da seguire: ricalcola il viaggio');
+      return;
+    }
+    navigazione.attiva = true;
+    navigazione.passi = passi;
+    navigazione.indice = 0;
+    navigazione.follow = true;
+    navigazione.inquadrato = false;
+    navigazione.ultima = null;
+    navigazione.ultimoVolo = 0;
+    navigazione.arrivo = arrivoPrevisto(passi);
+    chiudiOverlay();
+    document.body.classList.add('in-navigazione');
+    // La scheda è nascosta: FAB, sfumatura e attribution seguono il pannello.
+    document.documentElement.style.setProperty('--h-sheet', '128px');
+    $('nav').hidden = false;
+    $('nav-fondo').hidden = false;
+    aggiornaNavFollow();
+    disegnaNavigazione();
+    navigazione.watchId = navigator.geolocation.watchPosition(aggiornaNavigazione, erroreNavigazione, {
+      enableHighAccuracy: true, timeout: 15000, maximumAge: 2000
+    });
+  }
+
+  function fermaNavigazione(silenzioso) {
+    if (!navigazione.attiva) return;
+    navigazione.attiva = false;
+    if (navigazione.watchId != null) {
+      try { navigator.geolocation.clearWatch(navigazione.watchId); } catch (e) { /* già fermo */ }
+      navigazione.watchId = null;
+    }
+    if (markerUtente) {
+      markerUtente.remove();
+      markerUtente = null;
+    }
+    document.body.classList.remove('in-navigazione');
+    $('nav').hidden = true;
+    $('nav-fondo').hidden = true;
+    impostaSheet(statoSheet);
+    if (!silenzioso) mostraToast('Navigazione terminata');
   }
 
   /* ------------------------------------------------------------------ *
@@ -1257,6 +1513,7 @@
   }
 
   function selezionaFermata(ruolo, f) {
+    if (navigazione.attiva) fermaNavigazione(true);
     sel[ruolo] = f;
     impostaInput(ruolo);
     if (!eIndirizzo(f)) aggiungiRecente(f);
@@ -2746,6 +3003,14 @@
       });
     }
 
+    $('nav-fondo').addEventListener('click', (evento) => {
+      const pulsante = evento.target.closest('[data-azione]');
+      if (!pulsante) return;
+      const azione = pulsante.getAttribute('data-azione');
+      if (azione === 'ferma-navigazione') fermaNavigazione();
+      if (azione === 'centra-navigazione') centraNavigazione();
+    });
+
     $('overlay-chiudi').addEventListener('click', chiudiOverlay);
     $('backdrop').addEventListener('click', chiudiOverlay);
     $('overlay-lista').addEventListener('click', (evento) => {
@@ -2800,6 +3065,7 @@
         const azione = pulsante.getAttribute('data-azione');
         if (azione === 'live') { attivaTab('live'); caricaLive(true); impostaSheet('piena'); }
         if (azione === 'inverti') { $('btn-scambia').click(); }
+        if (azione === 'avvia-navigazione') { avviaNavigazione(); }
         if (azione === 'ora-adesso') aggiornaQuando(oggiISO(), oraAdesso(), true);
         if (azione === 'tra-un-ora') {
           const d = new Date(Date.now() + 60 * 60000);
@@ -2861,6 +3127,11 @@
     // misura precedente. Si riadatta tutto e si reinquadra il percorso.
     const adattaAllaVista = debounce(() => {
       if (trascinando) return;
+      // In navigazione la camera è dell'utente: niente reinquadrature del viaggio.
+      if (navigazione.attiva) {
+        if (mappa) mappa.resize();
+        return;
+      }
       if (mappa) mappa.resize();
       adattaAltezzaSheet();
       applicaTrasformazione(traslazionePer(statoSheet), false);

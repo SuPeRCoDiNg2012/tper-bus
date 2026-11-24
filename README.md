@@ -170,6 +170,8 @@ Il criterio è l'arrivo più presto a destinazione, non il minor numero di corse
 
 La scheda mostra fino a quattro **opzioni** una sotto l'altra, chiuse: ognuna riporta orari, durata, cambi, minuti a piedi e le linee con il loro colore; cliccandoci sopra si apre l'itinerario completo e la mappa passa a disegnare quel percorso. Con "Parti alle" le alternative sono le partenze successive, con "Arriva entro" sono i viaggi che arrivano entro la scadenza (il primo è quello che parte più tardi, con il margine in minuti). In modalità "Parti alle / Adesso" l'ora segue il tempo reale: ogni 30 secondi, al cambio di minuto, il percorso viene ricalcolato da solo.
 
+**Navigazione**: con partenza e destinazione scelte, il pulsante **Avvia navigazione** nella scheda del percorso apre la modalità guida. L'app segue la posizione GPS (`watchPosition`, alta precisione) con un punto blu sulla mappa, tiene la camera centrata sull'utente e mostra in alto il passo da seguire — a piedi fino alla fermata, la linea da prendere con la fermata di discesa, il cammino finale — con la distanza che manca, e in basso l'orario di arrivo previsto e il pulsante **Termina**. Trascinando la mappa l'inseguimento si disattiva e compare il pulsante per ricentrare. La navigazione riusa il percorso già calcolato (nessun nuovo routing) e richiede il permesso di geolocalizzazione del browser.
+
 Per rigenerare gli orari dal feed GTFS ufficiale:
 
 ```bash
@@ -242,7 +244,7 @@ Una volta pubblicata su GitHub Pages/Netlify/Vercel/Cloudflare Pages (vedi sopra
 
 ## Test automatici
 
-La logica critica è coperta da test Node.js senza dipendenze esterne (43 test): dati e invarianti dei JSON, RAPTOR (diretto, cambi, cammini, calendari, dopo mezzanotte), tariffe, coordinate e risposta OSRM pedonale, icone Lucide, scheda percorso e un percorso reale Bologna C.le–Imola in treno con la sua geometria.
+La logica critica è coperta da test Node.js senza dipendenze esterne (47 test): dati e invarianti dei JSON, RAPTOR (diretto, cambi, cammini, calendari, dopo mezzanotte), tariffe, coordinate e risposta OSRM pedonale, icone Lucide, scheda percorso e un percorso reale Bologna C.le–Imola in treno con la sua geometria.
 
 ```bash
 node --test tests

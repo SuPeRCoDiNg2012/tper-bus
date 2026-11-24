@@ -55,6 +55,12 @@
       minutiPiedi + ' min">' + ICONA_PEDANA + '</span>';
   }
 
+  /** Unico ingresso alla navigazione guidata con la posizione reale. */
+  function navigaHTML() {
+    return '<button type="button" class="btn btn-primario btn-naviga" data-azione="avvia-navigazione">' +
+      Icone.svg('navigation', 16) + 'Avvia navigazione</button>';
+  }
+
   // Sequenza compatta dei modi: piedi → linea → piedi → linea → piedi.
   // Le linee non vengono più accorpate per nome, così un cambio bus/treno
   // resta visibile nell'ordine in cui avviene.
@@ -151,7 +157,7 @@
     }
     if (vista.stato === 'piedi') {
       return '<div class="box-messaggio">Partenza e arrivo distano ' + vista.piedi.metri + ' m: ci arrivi a piedi in circa ' +
-        vista.piedi.minuti + ' min.</div>';
+        vista.piedi.minuti + ' min.</div>' + navigaHTML();
     }
     if (vista.stato === 'messaggio') {
       const codice = vista.esito && vista.esito.errore;
@@ -168,7 +174,7 @@
     }
 
     const opzioni = vista.opzioni && vista.opzioni.length ? vista.opzioni : [vista.esito];
-    let html = '<div class="opzioni">' +
+    let html = navigaHTML() + '<div class="opzioni">' +
       opzioni.map((e, indice) => opzioneHTML(e, indice, vista, etichetta)).join('') + '</div>';
     html += '<div class="avviso nota-tracciato" id="nota-tracciato" hidden>' +
       Icone.svg('triangle-alert', 16) +
