@@ -22,6 +22,10 @@
   const K_TRATTA = 'tperzc_tratta_v2';
   const K_QUANDO = 'tperzc_quando_v1';
   const K_CAMMINATA = 'tperzc_camminata_v1';
+  const K_CRITERIO = 'tperzc_criterio_v1';
+  const K_CRITERIO_DEFAULT = 'tperzc_criterio_default_v1';
+  const K_CRITERIO_SCELTE = 'tperzc_criterio_scelte_v1';
+  const K_CRITERIO_PROPOSTO = 'tperzc_criterio_proposto_v1';
   const K_PROXY = 'tperzc_proxy';
   const K_RELAY = 'tperzc_relay';
   const URL_UFFICIALE = 'https://solweb.tper.it/web/tools/zone-calculator.aspx';
@@ -68,6 +72,19 @@
   }
 
   let camminata = leggiCamminata();
+
+  // Due criteri, un sola scelta per volta. 'veloce' è il default: è il
+  // comportamento storico dell'app.
+  const CRITERI = ['veloce', 'ottimizzato'];
+  function criterioValido(valore) {
+    return CRITERI.indexOf(valore) >= 0 ? valore : 'veloce';
+  }
+  function criterioPredefinito() {
+    return criterioValido(leggi(K_CRITERIO_DEFAULT) || 'veloce');
+  }
+  function leggiCriterio() {
+    return criterioValido(leggi(K_CRITERIO) || criterioPredefinito());
+  }
 
   function raggioCamminata() {
     return Math.round(camminata * 60 * PASSO_METRI_SECONDO);
@@ -1412,6 +1429,10 @@
       return;
     }
     stopLiveRuolo = ruolo;
+    // Viaggio nuovo, criterio predefinito: la scelta vale per la singola tratta.
+    routing.criterio = criterioPredefinito();
+    scrivi(K_CRITERIO, routing.criterio);
+    salvaQuando();
     mostraVista('percorso');
     impostaSheet('meta');
     inquadra();
@@ -1627,8 +1648,10 @@
     const piedi = Math.round(((e.camminoIniziale || 0) + (e.camminoFinale || 0)) / 60);
     if (piedi >= 1) meta += ' · ' + piedi + ' min a piedi';
     return '<div class="riepilogo">' +
-      '<div class="riep-titolo">' + totaleMinuti(e) + ' min' + (prezzo ? ' · ' + esc(prezzo) : '') + '</div>' +
+      '<div class="riep-titolo">' + totaleMinuti(e) + ' min' + (prezzo ? ' · ' + esc(prezzo) : '') + htmlBadgePiano() + '</div>' +
+      htmlCriteri() +
       '<div class="riep-meta">' + esc(meta) + '</div>' +
+      htmlSpiegazione() +
       '<div class="riep-azioni">' +
       '<button type="button" class="btn btn-primario" data-azione="avvia-navigazione">Avvia</button>' +
       '<button type="button" class="link" data-azione="dettagli">Dettagli</button>' +
@@ -1677,6 +1700,7 @@
     const e = routing.esito;
     if (routing.stato !== 'ok' || !e) return '';
     return '<div class="dettaglio">' +
+      rigaCriterioHTML() +
       '<h2 class="sez">Viaggio</h2>' +
       VistaPercorso.dettaglio(e, etichettaFermata) +
       '<div class="live-percorso" id="live-percorso" hidden></div>' +
@@ -1853,7 +1877,8 @@
       modo: salvato.modo === 'arrivo' ? 'arrivo' : 'partenza',
       adesso: typeof salvato.adesso === 'boolean'
         ? salvato.adesso
-        : !orarioValido(salvato.orario)
+        : !orarioValido(salvato.orario),
+      criterio: criterioValido(salvato.criterio)
     };
   }
 
@@ -1862,13 +1887,15 @@
       giorno: routing.giorno || '',
       orario: routing.orario || '',
       modo: routing.modo,
-      adesso: routing.adesso
+      adesso: routing.adesso,
+      criterio: routing.criterio
     }));
   }
 
   const routing = {
     stato: 'idle', esito: null, errore: null, chiave: null, richiesta: 0, piedi: null,
     opzioni: [], aperto: -1, scadenza: null,
+    criterio: 'veloce', opzioniVeloce: [], opzioniOttimizzato: [], confronto: null,
     ...leggiQuando()
   };
 
@@ -1976,7 +2003,7 @@
     scelti.sort((x, y) => (arrivo
       ? y.arrivoDestinazione - x.arrivoDestinazione
       : x.arrivoDestinazione - y.arrivoDestinazione));
-    return scelti.slice(0, 4);
+    return scelti.slice(0, 6);
   }
 
   // Il motore restituisce il viaggio che arriva prima a una data ora. Per avere
@@ -2028,6 +2055,21 @@
     esiti.forEach((esito) => {
       if (!migliore || esito.arrivoDestinazione < migliore.arrivoDestinazione) migliore = esito;
     });
+
+    // Il motore sa già costruire un pool con i due criteri: si aggiunge a
+    // quello dell'app, così l'ottimizzato può esistere davvero (un bus diretto
+    // più lento di dieci minuti non emerge escludendo solo le linee migliori).
+    if (migliore && typeof TPERRouting.calcolaConfronto === 'function') {
+      const confronto = TPERRouting.calcolaConfronto(da, a, migliore.quandoRichiesta, {
+        maxCambi: 3,
+        camminoMax: camminata * 60
+      });
+      const dalMotore = [confronto.veloce, confronto.ottimizzato]
+        .concat(confronto.alternative || [])
+        .filter(Boolean);
+      dalMotore.forEach((esito) => aggiungi(esito, migliore.quandoRichiesta));
+    }
+
     if (migliore) {
       // Si vietano al massimo due linee: sufficiente per un'alternativa vera
       // senza moltiplicare le chiamate al motore.
@@ -2057,6 +2099,145 @@
     }
 
     return { esiti: selezionaEsiti(esiti, arrivo), errore: errore };
+  }
+
+  // Ordine del pool per il criterio scelto: il costo sale, l'arrivo fa da
+  // spareggio. Nessuna ricerca: si ordina quello che è già in memoria.
+  function ordinaPer(elenco, criterio) {
+    const costo = (esito) => {
+      const p = esito && esito.punteggio;
+      if (!p) return Infinity;
+      return criterio === 'ottimizzato' ? p.costoOttimizzato : p.costoVeloce;
+    };
+    return (elenco || []).slice().sort((a, b) =>
+      costo(a) - costo(b) || (a.arrivo || 0) - (b.arrivo || 0));
+  }
+
+  function soluzioneConfronto(criterio) {
+    const confronto = routing.confronto;
+    if (!confronto || !confronto.veloce || !confronto.ottimizzato) return null;
+    return criterio === 'ottimizzato' ? confronto.ottimizzato : confronto.veloce;
+  }
+
+  function altraSoluzione() {
+    return soluzioneConfronto(routing.criterio === 'ottimizzato' ? 'veloce' : 'ottimizzato');
+  }
+
+  // Spiega in una riga perché questa soluzione è diversa dall'altra. Le
+  // priorità sono cambi, cammino, attesa, tempo: le prime due che cambiano.
+  function spiegaSoluzione(scelta, altra) {
+    if (!scelta || !altra || scelta === altra) return '';
+    const a = scelta.punteggio;
+    const b = altra.punteggio;
+    if (!a || !b) return '';
+    const minutiPrima = Math.round((b.tempoTotale - a.tempoTotale) / 60);
+    if (routing.criterio === 'veloce') {
+      const testa = minutiPrima > 0 ? 'Arrivi ' + minutiPrima + ' min prima' : 'Stesso arrivo';
+      let ma = '';
+      const cambi = a.numeroCambi - b.numeroCambi;
+      if (cambi > 0) ma = cambi === 1 ? '1 cambio in più' : cambi + ' cambi in più';
+      else if (a.metriCammino > b.metriCammino + 50) {
+        ma = Math.round((a.metriCammino - b.metriCammino) / 10) * 10 + ' m a piedi in più';
+      }
+      return ma ? testa + ', ma con ' + ma : testa;
+    }
+    const pezzi = [];
+    const cambi = b.numeroCambi - a.numeroCambi;
+    if (cambi > 0) pezzi.push(cambi === 1 ? '1 cambio in meno' : cambi + ' cambi in meno');
+    const metri = b.metriCammino - a.metriCammino;
+    if (metri >= 100) pezzi.push(Math.round(metri / 10) * 10 + ' m a piedi in meno');
+    const attesa = Math.round((b.tempoAttesa - a.tempoAttesa) / 60);
+    if (attesa >= 5) pezzi.push(attesa + ' min di attesa in meno');
+    if (!pezzi.length) {
+      if (minutiPrima > 0) pezzi.push(minutiPrima + ' min prima');
+      else if (minutiPrima < 0) pezzi.push(-minutiPrima + ' min dopo');
+    }
+    return pezzi.slice(0, 2).join(' · ');
+  }
+
+  // Le chip compaiono solo se le due soluzioni sono davvero diverse: una sola
+  // proposta non è una scelta.
+  function htmlCriteri() {
+    const confronto = routing.confronto;
+    if (!confronto || !confronto.veloce || !confronto.ottimizzato || confronto.uguali) return '';
+    const chip = (valore, testo) => {
+      const attiva = routing.criterio === valore;
+      return '<button type="button" class="chip-criterio' + (attiva ? ' attiva' : '') +
+        '" data-criterio="' + valore + '" aria-pressed="' + (attiva ? 'true' : 'false') + '">' +
+        testo + '</button>';
+    };
+    return '<div class="criteri" role="group" aria-label="Criterio del percorso">' +
+      chip('veloce', 'Veloce') + chip('ottimizzato', 'Ottimizzato') + '</div>';
+  }
+
+  function htmlBadgePiano() {
+    const confronto = routing.confronto;
+    const esito = routing.esito;
+    if (!confronto || !confronto.veloce || !confronto.ottimizzato || !esito || !esito.punteggio) return '';
+    if (confronto.uguali) return '<span class="badge-piano">Veloce e ottimizzato</span>';
+    const altro = altraSoluzione();
+    let badge = '';
+    if (esito === confronto.veloce && esito !== confronto.ottimizzato) {
+      badge = '<span class="badge-piano">Più veloce</span>';
+    } else if (esito === confronto.ottimizzato && altro && altro.punteggio) {
+      if (esito.punteggio.numeroCambi < altro.punteggio.numeroCambi) {
+        badge = '<span class="badge-piano ottimo">Meno cambi</span>';
+      } else if (esito.punteggio.metriCammino + 50 < altro.punteggio.metriCammino) {
+        badge = '<span class="badge-piano ottimo">Meno cammino</span>';
+      }
+    }
+    if (esito.punteggio.cambioRischioso) {
+      badge += '<span class="badge-piano rischio">Cambio stretto</span>';
+    }
+    return badge;
+  }
+
+  function htmlSpiegazione() {
+    const confronto = routing.confronto;
+    if (!confronto || confronto.uguali) return '';
+    const testo = spiegaSoluzione(routing.esito, altraSoluzione());
+    return testo ? '<p class="criterio-spiega">' + esc(testo) + '</p>' : '';
+  }
+
+  // Cambio criterio istantaneo: il pool è già in memoria, niente rete e
+  // niente skeleton. Un tap, il pannello si ridisegna e il tracciato resta.
+  function impostaCriterio(criterio) {
+    const nuovo = criterioValido(criterio);
+    routing.criterio = nuovo;
+    routing.opzioni = nuovo === 'ottimizzato' ? routing.opzioniOttimizzato : routing.opzioniVeloce;
+    const confronto = routing.confronto;
+    const scelta = (nuovo === 'ottimizzato' ? confronto && confronto.ottimizzato : confronto && confronto.veloce) ||
+      routing.opzioni[0] || null;
+    routing.esito = scelta;
+    routing.aperto = scelta ? Math.max(0, routing.opzioni.indexOf(scelta)) : -1;
+    scrivi(K_CRITERIO, nuovo);
+    salvaQuando();
+    if (nuovo === 'ottimizzato') contaScelteOttimizzato();
+    renderPercorso();
+    disegnaTracciato();
+  }
+
+  // Dopo tre scelte di fila per l'ottimizzato si propone di renderlo il
+  // criterio predefinito: una voce nel menu, una volta sola, niente popup.
+  function contaScelteOttimizzato() {
+    const scelte = (parseInt(leggi(K_CRITERIO_SCELTE), 10) || 0) + 1;
+    scrivi(K_CRITERIO_SCELTE, String(scelte));
+    const voce = $('menu-criterio');
+    if (voce) {
+      voce.hidden = scelte < 3 || leggi(K_CRITERIO_PROPOSTO) === '1' ||
+        criterioPredefinito() === 'ottimizzato';
+    }
+  }
+
+  // In cima al dettaglio: criterio scelto e perché, una riga sola.
+  function rigaCriterioHTML() {
+    const confronto = routing.confronto;
+    if (!confronto || !confronto.veloce || !confronto.ottimizzato || confronto.uguali) return '';
+    const testo = spiegaSoluzione(routing.esito, altraSoluzione());
+    if (!testo) return '';
+    return '<p class="criterio-riga">' +
+      (routing.criterio === 'ottimizzato' ? 'Ottimizzato' : 'Veloce') +
+      ' · ' + esc(testo) + '</p>';
   }
 
   function dataDaGiornoEOra(giorno, ora) {
@@ -2240,6 +2421,9 @@
     const richiesta = routing.richiesta;
     routing.esito = null;
     routing.opzioni = [];
+    routing.opzioniVeloce = [];
+    routing.opzioniOttimizzato = [];
+    routing.confronto = null;
     routing.piedi = null;
 
     if (distanza != null && distanza < 400) {
@@ -2278,10 +2462,18 @@
         }
       } else {
         routing.stato = 'ok';
-        routing.opzioni = risultato.esiti;
-        routing.aperto = routing.aperto >= 0 && routing.aperto < routing.opzioni.length ? routing.aperto : -1;
-        routing.esito = routing.opzioni[routing.aperto >= 0 ? routing.aperto : 0];
-        routing.opzioni.forEach((esito) => coloraTappe(esito));
+        // Il pool si calcola una volta: i due criteri sono due letture dello
+        // stesso elenco, non due ricerche.
+        risultato.esiti.forEach((esito) => coloraTappe(esito));
+        routing.confronto = typeof TPERRouting.confronta === 'function'
+          ? TPERRouting.confronta(risultato.esiti, routing.criterio)
+          : null;
+        routing.opzioniVeloce = ordinaPer(risultato.esiti, 'veloce');
+        routing.opzioniOttimizzato = ordinaPer(risultato.esiti, 'ottimizzato');
+        routing.opzioni = routing.criterio === 'ottimizzato'
+          ? routing.opzioniOttimizzato : routing.opzioniVeloce;
+        routing.esito = (routing.confronto && routing.confronto.scelto) || routing.opzioni[0] || null;
+        routing.aperto = routing.esito ? Math.max(0, routing.opzioni.indexOf(routing.esito)) : -1;
         // Le geometrie arrivano dopo il calcolo: appena pronte il tracciato
         // viene ridisegnato con il percorso reale della linea.
         if (typeof TPERRouting !== 'undefined' && TPERRouting.caricaTracciati) {
@@ -3194,6 +3386,12 @@
     }
     const statoPosizione = $('menu-posizione-stato');
     if (statoPosizione) statoPosizione.textContent = posizioneUtente ? 'Attiva' : 'Trova';
+    const voceCriterio = $('menu-criterio');
+    if (voceCriterio) {
+      const scelte = parseInt(leggi(K_CRITERIO_SCELTE), 10) || 0;
+      voceCriterio.hidden = scelte < 3 || leggi(K_CRITERIO_PROPOSTO) === '1' ||
+        criterioPredefinito() === 'ottimizzato';
+    }
   }
 
   function apriMenu() {
@@ -3366,6 +3564,13 @@
       calcolaPercorso();
     });
     $('menu-info').addEventListener('toggle', () => { if ($('menu-info').open) renderInfo(); });
+    $('menu-criterio').addEventListener('click', () => {
+      scrivi(K_CRITERIO_DEFAULT, 'ottimizzato');
+      scrivi(K_CRITERIO_PROPOSTO, '1');
+      $('menu-criterio').hidden = true;
+      chiudiMenu();
+      mostraToast('Criterio predefinito: Ottimizzato');
+    });
     $('drawer').addEventListener('click', (evento) => {
       const pulsante = evento.target.closest('[data-azione]');
       if (!pulsante) return;
@@ -3461,6 +3666,8 @@
       if (sopprimiClick) { evento.preventDefault(); evento.stopPropagation(); sopprimiClick = false; return; }
       const campo = evento.target.closest('[data-campo]');
       if (campo) { apriCerca(campo.getAttribute('data-campo')); return; }
+      const chip = evento.target.closest('[data-criterio]');
+      if (chip) { impostaCriterio(chip.getAttribute('data-criterio')); return; }
       const opzione = evento.target.closest('[data-opzione]');
       if (opzione) {
         const indice = parseInt(opzione.getAttribute('data-opzione'), 10);

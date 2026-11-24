@@ -16,6 +16,29 @@
   const CAMMINO_CAMBIO_MASSIMO = 300;   // secondi di cammino per un cambio a piedi
   const INF = 0x7fffffff;
 
+  /* ------------------------------------------------------------------ *
+   * Pesi del criterio "ottimizzato"
+   * Tutti i numeri che pesano l'attrito di un viaggio stanno qui: si tarano
+   * senza toccare né la ricerca né la UI. Un criterio nuovo (green, comfort)
+   * è un altro blocco come questo più una voce nel selettore.
+   * ------------------------------------------------------------------ */
+  const PESI_OTTIMIZZATO = {
+    MAX_RITARDO: 0.15,            // +15% di tempo massimo rispetto al veloce
+    PESO_CAMBIO: 300,             // un cambio vale 5 minuti
+    PESO_CAMMINO: 1.3,            // 1 m a piedi ≈ 1,3 s
+    PESO_FERMATA: 8,              // ogni fermata extra ≈ 8 s
+    PESO_ATTESA: 0.6,             // aspettare pesa meno che stare in moto
+    PESO_LINEA_DIVERSA: 60,       // cambiare linea è fastidioso di suo
+    PENALITA_CAMBIO_CORTO: 600,   // cambio < 120 s: rischio di perderlo
+    PENALITA_ATTESA_LUNGA: 900,   // attesa > 45 min
+    PENALITA_CAMMINO_800: 1200,
+    PENALITA_CAMMINO_1500: 1800,
+    PENALITA_CAMBI_2PLUS: 2400    // più di due cambi
+  };
+  const PASSO_PEDONALE = 1.25;    // m/s, la stessa stima usata per i cammini brevi
+  const CAMBIO_CORTO = 120;       // secondi sotto i quali un cambio è a rischio
+  const ATTESA_LUNGA = 45 * 60;   // secondi oltre i quali l'attesa è "lunga"
+
   let dati = null;
   let indiceFermate = null;
   let tracciati = null;            // geometrie reali delle linee (data/tracciati.json)
@@ -477,12 +500,193 @@
     }
 
     const ora = secondiDa(data);
+    // Criterio richiesto: 'veloce' resta una sola ricerca (è già il minimo
+    // arrivo), 'ottimizzato' guarda anche le alternative vicine.
+    if (opzioni && opzioni.criterio === 'ottimizzato') {
+      const scelte = confronta(soluzioni(data, origini, destinazioni, maxCambi, camminoMax, vietate));
+      return scelte.ottimizzato || scelte.veloce || null;
+    }
 
     // Dopo mezzanotte le corse serali appartengono al giorno precedente e
-    // hanno orari oltre 24:00. Non basta provare prima il giorno corrente:
-    // una corsa delle 24:30 verrebbe presa come se partisse tra 24 ore, con
-    // una durata assurda. Si calcolano entrambi e si sceglie l'arrivo più
-    // presto sullo stesso asse temporale (mezzanotte del giorno prima).
+    // hanno orari oltre 24:00: pianificaQuando confronta entrambi i giorni
+    // sullo stesso asse temporale (mezzanotte del giorno prima).
+    const esito = pianificaQuando(data, ora, origini, destinazioni, maxCambi, vietate, camminoMax) || null;
+    if (esito) punteggio(esito);
+    return esito;
+  }
+
+  /**
+   * I due criteri in un colpo solo: una ricerca, un pool, due scelte. Evita di
+   * ripetere la ricerca quando la scheda deve mostrare entrambe le proposte.
+   */
+  function calcolaConfronto(daId, aId, quando, opzioni) {
+    if (!dati) throw new Error('Orari non ancora caricati');
+    const data = quando || new Date();
+    const maxCambi = opzioni && opzioni.maxCambi != null ? opzioni.maxCambi : 3;
+    const vietate = opzioni && Array.isArray(opzioni.vietate) && opzioni.vietate.length
+      ? opzioni.vietate.map((nome) => String(nome).toUpperCase()) : [];
+    const camminoMax = opzioni && opzioni.camminoMax != null ? Number(opzioni.camminoMax) : null;
+    const origini = normalizzaElenco(daId);
+    const destinazioni = normalizzaElenco(aId);
+    if (!origini.length || !destinazioni.length) {
+      return { veloce: null, ottimizzato: null, alternative: [], uguali: true, errore: { errore: 'senza-orari' } };
+    }
+    if (origini.length === 1 && destinazioni.length === 1 && origini[0].indice === destinazioni[0].indice) {
+      return { veloce: null, ottimizzato: null, alternative: [], uguali: true, errore: { errore: 'stessa-fermata' } };
+    }
+    const scelte = confronta(soluzioni(data, origini, destinazioni, maxCambi, camminoMax, vietate));
+    return {
+      veloce: scelte.veloce,
+      ottimizzato: scelte.ottimizzato,
+      alternative: scelte.alternative,
+      uguali: scelte.uguali
+    };
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Punteggio: due criteri sullo stesso pool di soluzioni
+   * ------------------------------------------------------------------ */
+  // Firma di un viaggio: linee con i loro orari più i tratti a piedi. Due
+  // soluzioni con la stessa firma sono la stessa proposta.
+  function firmaEsito(e) {
+    return e.tappe.map((tappa) => tappa.linea + '@' + tappa.partenza + '-' + tappa.arrivo).join('>') +
+      '|' + Math.round(e.camminoIniziale || 0) + '|' + Math.round(e.camminoFinale || 0);
+  }
+
+  /**
+   * Misura un esito e ci attacca `esito.punteggio`. Il tempo totale è
+   * porta-a-porta: dall'ora richiesta all'arrivo a destinazione, cammino
+   * finale compreso.
+   */
+  function punteggio(esito) {
+    if (!esito || !Array.isArray(esito.tappe) || !esito.tappe.length) return null;
+    if (esito.punteggio) return esito.punteggio;
+    const tappe = esito.tappe;
+    const camminoIniziale = esito.camminoIniziale || 0;
+    const camminoFinale = esito.camminoFinale || 0;
+    const tempoCammino = camminoIniziale + camminoFinale;
+    const inizio = esito.richiesta != null
+      ? esito.richiesta
+      : tappe[0].partenza - (esito.attesaIniziale || 0) - camminoIniziale;
+    const tempoTotale = Math.max(0, esito.arrivo + camminoFinale - inizio);
+    let tempoInMoto = 0;
+    let tempoAttesa = 0;
+    let numeroFermate = 0;
+    let cambioRischioso = false;
+    let attesaLunga = false;
+    const linee = new Set();
+    tappe.forEach((tappa, indice) => {
+      tempoInMoto += Math.max(0, tappa.arrivo - tappa.partenza);
+      numeroFermate += tappa.fermate || 0;
+      linee.add(tappa.linea);
+      const attesa = Math.max(0, tappa.attesa || 0);
+      tempoAttesa += attesa;
+      // L'attesa prima della prima corsa non è un cambio: non è "a rischio".
+      if (indice > 0) {
+        if (attesa < CAMBIO_CORTO) cambioRischioso = true;
+        if (attesa > ATTESA_LUNGA) attesaLunga = true;
+      }
+    });
+    const numeroCambi = esito.cambi != null ? esito.cambi : Math.max(0, tappe.length - 1);
+    const numeroLinee = linee.size;
+    const metriCammino = Math.round(tempoCammino * PASSO_PEDONALE);
+    const p = PESI_OTTIMIZZATO;
+    let costoOttimizzato = tempoTotale +
+      numeroCambi * p.PESO_CAMBIO +
+      metriCammino * p.PESO_CAMMINO +
+      numeroFermate * p.PESO_FERMATA +
+      tempoAttesa * p.PESO_ATTESA +
+      Math.max(0, numeroLinee - 1) * p.PESO_LINEA_DIVERSA;
+    if (cambioRischioso) costoOttimizzato += p.PENALITA_CAMBIO_CORTO;
+    if (attesaLunga) costoOttimizzato += p.PENALITA_ATTESA_LUNGA;
+    if (metriCammino > 1500) costoOttimizzato += p.PENALITA_CAMMINO_1500;
+    else if (metriCammino > 800) costoOttimizzato += p.PENALITA_CAMMINO_800;
+    if (numeroCambi > 2) costoOttimizzato += p.PENALITA_CAMBI_2PLUS;
+    const misure = {
+      tempoTotale: Math.round(tempoTotale),
+      tempoInMoto: Math.round(tempoInMoto),
+      tempoAttesa: Math.round(tempoAttesa),
+      tempoCammino: Math.round(tempoCammino),
+      metriCammino: metriCammino,
+      numeroCambi: numeroCambi,
+      numeroFermate: numeroFermate,
+      numeroLinee: numeroLinee,
+      cambioRischioso: cambioRischioso,
+      attesaLunga: attesaLunga,
+      costoVeloce: Math.round(tempoTotale),
+      costoOttimizzato: Math.round(costoOttimizzato)
+    };
+    esito.punteggio = misure;
+    return misure;
+  }
+
+  function costo(esito, criterio) {
+    const misure = punteggio(esito);
+    if (!misure) return Infinity;
+    return criterio === 'ottimizzato' ? misure.costoOttimizzato : misure.costoVeloce;
+  }
+
+  /**
+   * Confronto sui due criteri di un pool già calcolato: nessuna ricerca in più.
+   * È la funzione che rende istantaneo il cambio criterio nella scheda.
+   */
+  function confronta(pool, criterio) {
+    const elenco = [];
+    const visti = new Set();
+    (pool || []).forEach((esito) => {
+      if (!esito || esito.errore || !punteggio(esito)) return;
+      const firma = firmaEsito(esito);
+      if (visti.has(firma)) return;
+      visti.add(firma);
+      elenco.push(esito);
+    });
+    if (!elenco.length) return { veloce: null, ottimizzato: null, alternative: [], uguali: true };
+
+    const perTempo = (a, b) => a.punteggio.costoVeloce - b.punteggio.costoVeloce ||
+      a.punteggio.tempoTotale - b.punteggio.tempoTotale;
+    const veloce = elenco.slice().sort(perTempo)[0];
+    // L'ottimizzato non può costare più del 15% in tempo: dentro la soglia si
+    // sceglie il minor attrito, fuori si resta sul veloce.
+    const limite = veloce.punteggio.tempoTotale * (1 + PESI_OTTIMIZZATO.MAX_RITARDO);
+    const ammesse = elenco.filter((esito) => esito.punteggio.tempoTotale <= limite);
+    const perCosto = (a, b) => a.punteggio.costoOttimizzato - b.punteggio.costoOttimizzato ||
+      a.punteggio.tempoTotale - b.punteggio.tempoTotale;
+    let ottimizzato = ammesse.slice().sort(perCosto)[0] || veloce;
+    // Mai "peggiore in tutto" e mai una differenza invisibile: l'ottimizzato
+    // resta solo se guadagna qualcosa che l'utente può capire (un cambio, un
+    // tratto a piedi, mezz'ora di attesa). Altrimenti è la stessa proposta.
+    if (ottimizzato !== veloce) {
+      const a = ottimizzato.punteggio;
+      const b = veloce.punteggio;
+      const tempoNonMigliore = a.tempoTotale >= b.tempoTotale;
+      const attritoNonMigliore = a.numeroCambi >= b.numeroCambi &&
+        a.metriCammino >= b.metriCammino && a.tempoAttesa >= b.tempoAttesa;
+      const guadagno = a.numeroCambi < b.numeroCambi ||
+        a.metriCammino + 100 <= b.metriCammino ||
+        a.tempoAttesa + 300 <= b.tempoAttesa ||
+        (a.numeroLinee < b.numeroLinee && a.tempoTotale < b.tempoTotale);
+      if ((tempoNonMigliore && attritoNonMigliore) || !guadagno) ottimizzato = veloce;
+    }
+    return {
+      veloce: veloce,
+      ottimizzato: ottimizzato,
+      alternative: elenco.slice().sort(perTempo),
+      uguali: firmaEsito(veloce) === firmaEsito(ottimizzato),
+      // Scelta già fatta per il criterio richiesto: la UI non deve decidere.
+      scelto: criterio === 'ottimizzato' ? ottimizzato : veloce
+    };
+  }
+
+  // Migliore soluzione di un pool per il criterio richiesto.
+  function valuta(pool, criterio) {
+    const scelte = confronta(pool);
+    if (criterio === 'ottimizzato') return scelte.ottimizzato || scelte.veloce || null;
+    return scelte.veloce || null;
+  }
+
+  // Come `calcola`, ma per la data scelta: dopo mezzanotte le corse serali
+  // appartengono al giorno precedente e vanno confrontate sullo stesso asse.
+  function pianificaQuando(data, ora, origini, destinazioni, maxCambi, vietate, camminoMax) {
     if (data.getHours() < 4) {
       const ieri = new Date(data.getTime() - 86400000);
       const diIeri = pianifica(chiaveDi(ieri), origini, destinazioni, ora + 86400, maxCambi, vietate, camminoMax);
@@ -491,8 +695,34 @@
       if (!diOggi) return diIeri;
       return diIeri.arrivo <= diOggi.arrivo + 86400 ? diIeri : diOggi;
     }
-
     return pianifica(chiaveDi(data), origini, destinazioni, ora, maxCambi, vietate, camminoMax) || null;
+  }
+
+  /**
+   * Pool di soluzioni per un solo calcolo: la migliore, poi le alternative
+   * ottenute vietando a turno le prime due linee. È lo stesso spazio di
+   * ricerca che l'app esplora con i suoi tentativi, in piccolo.
+   */
+  function soluzioni(data, origini, destinazioni, maxCambi, camminoMax, vietateBase) {
+    const ora = secondiDa(data);
+    const pool = [];
+    const firme = new Set();
+    const raccogli = (vietate) => {
+      const esito = pianificaQuando(data, ora, origini, destinazioni, maxCambi, vietate, camminoMax);
+      if (!esito) return null;
+      const firma = firmaEsito(esito);
+      if (!firme.has(firma)) { firme.add(firma); pool.push(esito); }
+      return esito;
+    };
+    const prima = raccogli(new Set(vietateBase || []));
+    if (!prima) return pool;
+    const linee = [];
+    prima.tappe.forEach((tappa) => {
+      if (linee.length < 2 && linee.indexOf(tappa.linea) === -1) linee.push(tappa.linea);
+    });
+    linee.forEach((linea) => raccogli(new Set([].concat(Array.from(vietateBase || []), linea))));
+    if (linee.length === 2) raccogli(new Set([].concat(Array.from(vietateBase || []), linee)));
+    return pool;
   }
 
   /* --- Geometria delle corse ------------------------------------------ */
@@ -622,6 +852,11 @@
     caricaTracciati: caricaTracciati,
     tratta: tratta,
     calcola: calcola,
+    calcolaConfronto: calcolaConfronto,
+    punteggio: punteggio,
+    confronta: confronta,
+    valuta: valuta,
+    PESI_OTTIMIZZATO: PESI_OTTIMIZZATO,
     disponibile: function () { return !!dati; },
     fermateDisponibili: function () { return indiceFermate ? Array.from(indiceFermate.keys()) : []; },
     etichettaTreno: etichettaTreno

@@ -236,3 +236,135 @@ test('fermate disponibili e disponibilità del motore', async () => {
   assert.equal(routing.disponibile(), true);
   assert.deepEqual(routing.fermateDisponibili(), ['A', 'B', 'C', 'D', 'E']);
 });
+
+/* ------------------------------------------------------------------ *
+ * Criteri "veloce" e "ottimizzato"
+ * ------------------------------------------------------------------ */
+
+function tappaFinta(linea, partenza, arrivo, fermate, attesa) {
+  return { linea: linea, partenza: partenza, arrivo: arrivo, fermate: fermate, attesa: attesa };
+}
+
+// Esito minimo con i soli campi che il punteggio usa: il pool dei test è
+// costruito a mano, così i numeri sono leggibili e non dipendono dal dataset.
+function esitoFinto(tappe, extra) {
+  const base = extra || {};
+  const esito = {
+    richiesta: base.richiesta != null ? base.richiesta : 0,
+    partenza: tappe[0].partenza,
+    arrivo: tappe[tappe.length - 1].arrivo,
+    camminoIniziale: base.camminoIniziale || 0,
+    camminoFinale: base.camminoFinale || 0,
+    cambi: tappe.length - 1,
+    tappe: tappe
+  };
+  return esito;
+}
+
+test('veloce restituisce sempre l\'arrivo minore', () => {
+  const routing = require('../routing');
+  const veloce = esitoFinto([
+    tappaFinta('20', 600, 1200, 6, 600),
+    tappaFinta('25', 1500, 2100, 4, 300)
+  ]);
+  const lento = esitoFinto([tappaFinta('27', 600, 3000, 8, 600)]);
+
+  assert.equal(routing.valuta([lento, veloce], 'veloce'), veloce);
+  assert.equal(routing.confronta([lento, veloce]).veloce, veloce);
+  assert.equal(veloce.punteggio.tempoTotale, 2100);
+  assert.equal(veloce.punteggio.numeroCambi, 1);
+});
+
+test('ottimizzato riduce i cambi a parità di tempi ragionevoli', () => {
+  const routing = require('../routing');
+  // Veloce: 2000 s con due cambi. Ottimizzato: 2200 s (+10%) con un cambio.
+  const dueCambi = esitoFinto([
+    tappaFinta('20', 600, 1100, 4, 300),
+    tappaFinta('25', 1200, 1700, 4, 600),
+    tappaFinta('27', 1800, 2000, 4, 600)
+  ]);
+  const unCambio = esitoFinto([
+    tappaFinta('20', 600, 1100, 6, 300),
+    tappaFinta('27', 1200, 2200, 6, 60 + 600)
+  ]);
+
+  assert.equal(routing.valuta([dueCambi, unCambio], 'veloce'), dueCambi);
+  assert.equal(routing.valuta([dueCambi, unCambio], 'ottimizzato'), unCambio);
+});
+
+test('ottimizzato scarta la soluzione oltre il +15%', () => {
+  const routing = require('../routing');
+  const veloce = esitoFinto([
+    tappaFinta('20', 600, 1100, 4, 300),
+    tappaFinta('25', 1200, 2000, 4, 600)
+  ]);
+  // 2500 s = +25%: comoda (zero cambi) ma fuori soglia.
+  const comoda = esitoFinto([tappaFinta('27', 600, 2500, 12, 60 + 600)]);
+
+  assert.equal(routing.valuta([veloce, comoda], 'ottimizzato'), veloce);
+});
+
+test('cambi uguali: a parità di attrito vince il tempo minore', () => {
+  const routing = require('../routing');
+  const prima = esitoFinto([
+    tappaFinta('20', 600, 1100, 5, 300),
+    tappaFinta('27', 1200, 2000, 5, 600)
+  ]);
+  const dopo = esitoFinto([
+    tappaFinta('20', 600, 1100, 5, 300),
+    tappaFinta('27', 1200, 2100, 5, 600)
+  ]);
+
+  assert.equal(routing.valuta([dopo, prima], 'ottimizzato'), prima);
+});
+
+test('la penalità del cambio corto batte il cambio in meno', () => {
+  const routing = require('../routing');
+  // Due cambi, tutti con attese tranquille (150 s: sopra la soglia di rischio).
+  const sicuro = esitoFinto([
+    tappaFinta('20', 600, 1100, 4, 150),
+    tappaFinta('25', 1250, 1750, 4, 150),
+    tappaFinta('27', 1900, 2100, 4, 150)
+  ]);
+  // Un cambio solo, ma con 60 s di coincidenza (rischio connessione).
+  const rischioso = esitoFinto([
+    tappaFinta('20', 600, 1100, 4, 300),
+    tappaFinta('27', 1400, 2100, 4, 60)
+  ]);
+
+  assert.equal(routing.valuta([sicuro, rischioso], 'veloce'), sicuro);
+  assert.equal(routing.valuta([sicuro, rischioso], 'ottimizzato'), sicuro);
+  assert.equal(rischioso.punteggio.cambioRischioso, true);
+  assert.equal(sicuro.punteggio.cambioRischioso, false);
+});
+
+test('calcolaConfronto è coerente con calcola per lo stesso criterio', async () => {
+  const routing = await caricaRouting(dati([
+    [0, 0, 0, 28800, 1, 600],       // L1 A 08:00 → B 08:10
+    [1, 0, 1, 29700, 1, 600]        // L2 B 08:15 → C 08:25
+  ]));
+
+  const veloce = routing.calcola('A', 'C', GIORNO, { maxCambi: 3, criterio: 'veloce' });
+  const ottimizzato = routing.calcola('A', 'C', GIORNO, { maxCambi: 3, criterio: 'ottimizzato' });
+  const confronto = routing.calcolaConfronto('A', 'C', GIORNO, { maxCambi: 3 });
+
+  assert.ok(veloce.punteggio);
+  assert.ok(ottimizzato.punteggio);
+  assert.equal(confronto.veloce.arrivo, veloce.arrivo);
+  assert.equal(confronto.ottimizzato.arrivo, ottimizzato.arrivo);
+  assert.equal(confronto.veloce.punteggio.costoVeloce, veloce.punteggio.costoVeloce);
+  assert.equal(confronto.ottimizzato.punteggio.costoOttimizzato, ottimizzato.punteggio.costoOttimizzato);
+  assert.ok(Array.isArray(confronto.alternative));
+  assert.ok(confronto.alternative.length >= 1);
+});
+
+test('il criterio assente vale veloce (retrocompatibilità)', async () => {
+  const routing = await caricaRouting(dati([
+    [0, 0, 0, 28800, 1, 600],
+    [1, 0, 1, 29700, 1, 600]
+  ]));
+  const senzaCriterio = routing.calcola('A', 'C', GIORNO, { maxCambi: 3 });
+  const esplicito = routing.calcola('A', 'C', GIORNO, { maxCambi: 3, criterio: 'veloce' });
+  assert.equal(senzaCriterio.arrivo, esplicito.arrivo);
+  assert.equal(senzaCriterio.punteggio.costoVeloce, esplicito.punteggio.costoVeloce);
+});
