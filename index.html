@@ -181,6 +181,9 @@
   .riep-durata b{display:block;font-size:13px;font-weight:600;color:var(--testo);letter-spacing:-.1px;}
 
   /* Opzioni di percorso: chiuse come righe compatte, si aprono al clic. */
+  .live-percorso{display:flex;align-items:flex-start;gap:8px;margin:0 0 10px;padding:9px 11px;border:1px solid var(--bordo);border-radius:12px;background:var(--sup);font-size:12.5px;line-height:1.4;}
+  .live-percorso[hidden]{display:none;}
+  .live-percorso .tag-live,.live-percorso .tag-orario{flex:0 0 auto;margin-top:1px;}
   .opzioni{display:flex;flex-direction:column;gap:8px;}
   .opzione{background:var(--sup);border:1px solid var(--bordo);border-radius:var(--r);overflow:hidden;}
   .opzione[open]{border-color:var(--bordo-2);box-shadow:var(--ombra-1);}

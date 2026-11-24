@@ -174,12 +174,16 @@
     }
 
     const opzioni = vista.opzioni && vista.opzioni.length ? vista.opzioni : [vista.esito];
-    let html = navigaHTML() + '<div class="opzioni">' +
+    let html = navigaHTML() +
+      // Riempito dall'app con il passaggio reale del primo bus (o l'avviso
+      // che per i treni vale l'orario programmato).
+      '<div class="live-percorso" id="live-percorso" hidden></div>' +
+      '<div class="opzioni">' +
       opzioni.map((e, indice) => opzioneHTML(e, indice, vista, etichetta)).join('') + '</div>';
     html += '<div class="avviso nota-tracciato" id="nota-tracciato" hidden>' +
       Icone.svg('triangle-alert', 16) +
       '<span>Senza tracciato GTFS per un tratto: sulla mappa è una <b>linea diritta tratteggiata</b> tra le fermate, non il percorso reale del bus.</span></div>' +
-      '<p class="nota-piccola">Orari programmati: possibili variazioni.</p>';
+      '<p class="nota-piccola">Orari programmati, con il passaggio reale del primo bus quando TPER lo fornisce. Per i treni vale l\'orario programmato.</p>';
     return html;
   }
 

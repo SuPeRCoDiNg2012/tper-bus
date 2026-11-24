@@ -152,3 +152,11 @@ test('il percorso calcolato offre il pulsante per avviare la navigazione', () =>
   const piedi = Vista.esito({ stato: 'piedi', piedi: { metri: 326, minuti: 6 } }, (id) => id);
   assert.match(piedi, /data-azione="avvia-navigazione"/);
 });
+
+test('il percorso riserva un riquadro all’orario reale e dichiara i treni', () => {
+  const html = render(viaggio());
+  // Il riquadro nasce vuoto e nascosto: lo riempie l'app con il passaggio
+  // reale del primo bus, quando TPER lo fornisce.
+  assert.match(html, /id="live-percorso" hidden/);
+  assert.match(html, /Per i treni vale l'orario programmato/);
+});

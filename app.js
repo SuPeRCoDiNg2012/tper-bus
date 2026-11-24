@@ -2078,6 +2078,8 @@
     if (routing.aperto >= 0 && dettagli[routing.aperto] && !dettagli[routing.aperto].open) {
       dettagli[routing.aperto].open = true;
     }
+    caricaLivePercorso();
+    avviaTimerPercorso();
     disegnaTracciato();
   }
 
@@ -2178,6 +2180,155 @@
       if (routing.giorno !== oggiISO()) return;
       if (routing.orario === oraAdesso()) return;
       aggiornaQuando(oggiISO(), oraAdesso(), true);
+    }, 30000);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Tempo reale dentro la scheda percorso
+   * Il primo bus dell'itinerario viene chiesto a HelloBus: così la scheda
+   * mostra il passaggio reale invece del solo orario programmato. Per i treni
+   * non esiste un feed aperto e resta l'orario del dataset.
+   * ------------------------------------------------------------------ */
+  const livePercorso = {
+    chiave: null, ts: 0, stato: 'idle', corsa: null, ritardo: 0,
+    caricamento: false, errore: null
+  };
+  let livePercorsoAbort = null;
+  let timerPercorso = null;
+
+  function primaCorsaPercorso() {
+    if (routing.stato !== 'ok' || !routing.esito) return null;
+    const tappe = routing.esito.tappe || [];
+    return tappe.length ? tappe[0] : null;
+  }
+
+  function hhmmDaSecondi(secondi) {
+    const s = ((Math.round(secondi) % 86400) + 86400) % 86400;
+    return String(Math.floor(s / 3600)).padStart(2, '0') + ':' +
+      String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  }
+
+  /** Distanza in secondi tra un orario del giorno e adesso, in -43200..43200. */
+  function minutiDaAdesso(secondi) {
+    const ora = new Date();
+    const adesso = ora.getHours() * 3600 + ora.getMinutes() * 60 + ora.getSeconds();
+    return ((secondi - adesso + 43200 + 86400) % 86400) - 43200;
+  }
+
+  function disegnaLivePercorso() {
+    const contenitore = $('live-percorso');
+    if (!contenitore) return;
+    const tappa = primaCorsaPercorso();
+    if (!tappa) {
+      contenitore.hidden = true;
+      contenitore.innerHTML = '';
+      return;
+    }
+    const treno = tappa.tipo === 1 || tappa.tipo === 2;
+    const corsa = livePercorso.corsa;
+    const linea = esc(tappa.linea);
+    const programmato = hhmmDaSecondi(tappa.partenza);
+    let html;
+    if (treno) {
+      html = '<span class="tag-orario">ORARIO</span><span>Treno <b>' + linea + '</b> alle <b>' + programmato +
+        '</b> · per i treni non esiste un feed in tempo reale aperto: vale l\'orario programmato.</span>';
+    } else if (livePercorso.caricamento) {
+      html = '<span class="punto-live off"></span><span>Controllo se il bus <b>' + linea +
+        '</b> è in orario…</span>';
+    } else if (livePercorso.stato === 'ok' && corsa) {
+      const minutiAttesa = minutiA(corsa.ora);
+      const quando = minutiAttesa <= 0 ? 'in arrivo' : 'tra ' + minutiAttesa + ' min';
+      const scarto = Math.round(livePercorso.ritardo / 60);
+      const vivo = corsa.tipo === 'live';
+      html = '<span class="' + (vivo ? 'tag-live' : 'tag-orario') + '">' + (vivo ? 'LIVE' : 'ORARIO') + '</span>' +
+        '<span>Bus <b>' + linea + '</b> · <b>' + quando + '</b> · ore ' + esc(corsa.ora) +
+        (vivo && Math.abs(scarto) >= 2
+          ? ' · ' + (scarto > 0 ? scarto + ' min di ritardo' : Math.abs(scarto) + ' min di anticipo')
+          : '') +
+        (vivo ? '' : ' · orario programmato') + '</span>';
+    } else if (livePercorso.stato === 'errore') {
+      html = '<span class="tag-orario">ORARIO</span><span>Tempo reale non raggiungibile: vale l\'orario programmato (' +
+        programmato + ').</span>';
+    } else {
+      html = '<span class="tag-orario">ORARIO</span><span>Nessun passaggio in tempo reale per il bus <b>' + linea +
+        '</b>: vale l\'orario programmato (' + programmato + ').</span>';
+    }
+    contenitore.innerHTML = html;
+    contenitore.hidden = false;
+  }
+
+  async function caricaLivePercorso(forza) {
+    const tappa = primaCorsaPercorso();
+    if (!tappa) {
+      if (livePercorsoAbort) livePercorsoAbort.abort();
+      livePercorso.stato = 'idle';
+      livePercorso.corsa = null;
+      livePercorso.chiave = null;
+      disegnaLivePercorso();
+      return;
+    }
+    if (tappa.tipo === 1 || tappa.tipo === 2) {
+      if (livePercorsoAbort) livePercorsoAbort.abort();
+      livePercorso.stato = 'treno';
+      livePercorso.corsa = null;
+      livePercorso.chiave = null;
+      disegnaLivePercorso();
+      return;
+    }
+    const chiave = [tappa.da, tappa.linea, tappa.partenza].join('|');
+    if (!forza && livePercorso.chiave === chiave && livePercorso.stato === 'ok' &&
+      Date.now() - livePercorso.ts < 60000) {
+      disegnaLivePercorso();
+      return;
+    }
+    if (livePercorsoAbort) livePercorsoAbort.abort();
+    livePercorsoAbort = new AbortController();
+    const segnale = livePercorsoAbort.signal;
+    livePercorso.chiave = chiave;
+    livePercorso.caricamento = true;
+    livePercorso.stato = 'caricamento';
+    disegnaLivePercorso();
+    try {
+      const testo = await queryHellobus(tappa.da, tappa.linea, segnale);
+      if (segnale.aborted) return;
+      const tutti = parseHellobus(testo);
+      const lineaCorsa = String(tappa.linea).toUpperCase();
+      const dellaLinea = tutti.filter((arrivo) => arrivo.linea === lineaCorsa);
+      const candidati = dellaLinea.length ? dellaLinea : tutti;
+      const pianificato = minutiDaAdesso(tappa.partenza);
+      let migliore = null;
+      let scarto = Infinity;
+      candidati.forEach((arrivo) => {
+        const delta = minutiA(arrivo.ora) * 60 - pianificato;
+        // Oltre 25 minuti di scarto è un'altra corsa, non la nostra.
+        if (Math.abs(delta) > 25 * 60) return;
+        if (Math.abs(delta) < Math.abs(scarto)) {
+          migliore = arrivo;
+          scarto = delta;
+        }
+      });
+      livePercorso.corsa = migliore;
+      livePercorso.ritardo = migliore ? scarto : 0;
+      livePercorso.stato = migliore ? 'ok' : 'nessuna-corsa';
+      livePercorso.errore = null;
+      livePercorso.ts = Date.now();
+    } catch (errore) {
+      if (segnale.aborted) return;
+      livePercorso.stato = 'errore';
+      livePercorso.errore = errore;
+      livePercorso.corsa = null;
+    }
+    livePercorso.caricamento = false;
+    disegnaLivePercorso();
+  }
+
+  function avviaTimerPercorso() {
+    if (timerPercorso) return;
+    timerPercorso = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      if (tabAttivo !== 'viaggio') return;
+      if (!primaCorsaPercorso()) return;
+      caricaLivePercorso(true);
     }, 30000);
   }
 
@@ -2448,7 +2599,7 @@
     if (!fermata) {
       html += '<div class="box-messaggio">Scegli una fermata nella ricerca: mostro i prossimi passaggi con la posizione reale dei bus.</div>';
     } else if (live.stato === 'senza-linee') {
-      html += '<div class="box-messaggio">Per questa fermata non risultano linee bus nel dataset: gli orari in tempo reale di HelloBus coprono il servizio su gomma urbano ed extraurbano.</div>';
+      html += '<div class="box-messaggio">Per questa fermata non risultano linee bus nel dataset: il tempo reale di HelloBus copre solo il servizio su gomma. Per i treni non esiste un feed aperto, quindi vale l\'orario programmato.</div>';
     } else if (live.stato === 'non-gestita') {
       html += '<div class="box-messaggio">HelloBus non gestisce questa fermata (succede per alcune fermate del dataset regionale o per i pali non attivi). Prova con il palo opposto o consulta tper.it.</div>';
     } else {
