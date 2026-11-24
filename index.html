@@ -200,7 +200,18 @@
   .opzione-freccia{color:var(--testo-3);flex:0 0 auto;transition:transform .18s;}
   .opzione[open] .opzione-freccia{transform:rotate(180deg);}
   .opzione-corpo .viaggio{border:0;border-top:1px solid var(--bordo);border-radius:0;padding:2px 14px;}
-  @media (max-width: 390px){.opzione-meta{display:none;}}
+  /* Su schermi stretti il riepilogo veniva tagliato ("23 min · 1 cambi…"):
+     orari e freccia sulla prima riga, durata/cambi e linee sulla seconda. */
+  @media (max-width: 480px){
+    .opzione-testa{display:grid;grid-template-columns:minmax(0,1fr) auto;
+      grid-template-areas:"orari freccia" "meta linee";align-items:center;gap:4px 10px;}
+    .opzione-orari{grid-area:orari;}
+    .opzione-freccia{grid-area:freccia;}
+    .opzione-meta{grid-area:meta;white-space:normal;overflow:visible;font-size:12px;}
+    .opzione-linee{grid-area:linee;max-width:none;justify-self:end;}
+  }
+  /* Con il riepilogo a due righe la durata non va più nascosta: si rimpicciolisce. */
+  @media (max-width: 390px){.opzione-meta{font-size:11px;}}
 
   .viaggio{display:flex;flex-direction:column;background:var(--sup);border:1px solid var(--bordo);border-radius:var(--r);padding:2px 15px;}
   .corsa{display:flex;gap:12px;padding:12px 0;}

@@ -76,7 +76,7 @@
   let ultimaRichiestaIndirizzi = 0;
   const suggerimenti = { token: 0, campo: null, query: '', gruppi: [], indirizzi: [], caricamento: false, errore: false };
 
-  const live = { items: [], ts: 0, stato: 'idle', caricamento: false, errore: null, stopId: null };
+  const live = { items: [], ts: 0, stato: 'idle', caricamento: false, errore: null, stopId: null, avviso: '' };
 
   const $ = (id) => document.getElementById(id);
   // Set unico di icone: Lucide inline, nessuna CDN e nessun font esterno.
@@ -1238,7 +1238,9 @@
     if (indirizziAbort) indirizziAbort.abort();
     indirizziAbort = new AbortController();
     const url = NOMINATIM + '?format=jsonv2&addressdetails=1&namedetails=1&limit=8&dedupe=1&accept-language=it&countrycodes=it' +
-      '&viewbox=11.20,44.62,11.50,44.34&q=' + encodeURIComponent(testo);
+      // bounded=1: senza, il viewbox è solo un suggerimento e la ricerca
+      // restituiva anche un "Mercato" di Napoli con la sua zona.
+      '&viewbox=11.20,44.62,11.50,44.34&bounded=1&q=' + encodeURIComponent(testo);
     const risposta = await fetch(url, { signal: indirizziAbort.signal, headers: { Accept: 'application/json' } });
     if (!risposta.ok) throw new Error('Nominatim: ' + risposta.status);
     const elenco = await risposta.json();
@@ -2163,8 +2165,10 @@
       let scarto = Infinity;
       candidati.forEach((arrivo) => {
         const delta = minutiA(arrivo.ora) * 60 - pianificato;
-        // Oltre 25 minuti di scarto è un'altra corsa, non la nostra.
-        if (Math.abs(delta) > 25 * 60) return;
+        // Oltre 12 minuti di scarto è un'altra corsa: mostrarla come "la
+        // nostra" produceva avvisi tipo "24 min di anticipo" su un bus che
+        // non è quello dell'itinerario (capitava con "arriva entro").
+        if (Math.abs(delta) > 12 * 60) return;
         if (Math.abs(delta) < Math.abs(scarto)) {
           migliore = arrivo;
           scarto = delta;
@@ -2318,21 +2322,47 @@
       .slice(0, 4);
   }
 
+  // Il dataset lega le linee al codice palina: alcuni nodi "hub" (la Stazione
+  // Centrale 500135, per esempio) non ne hanno, ma il palo accanto nella stessa
+  // fermata sì. Senza questo ripiego il tempo reale restava vuoto proprio alle
+  // fermate più importanti, con un messaggio che sembrava un guasto dell'app.
+  const PALINA_VICINA_MAX = 220;   // metri
+
+  function palinaConLinee(fermata) {
+    if (!fermata) return null;
+    if (lineeDaInterrogare(fermata).length) return fermata;
+    if (fermata.lat == null || fermata.lon == null) return null;
+    const candidate = fermateVicine(fermata.lat, fermata.lon, 12, fermata.id)
+      .filter((f) => lineeDaInterrogare(f).length);
+    for (let i = 0; i < candidate.length; i += 1) {
+      const d = distanzaMetri(fermata, candidate[i]);
+      if (d <= PALINA_VICINA_MAX) return Object.assign({}, candidate[i], { distacco: Math.round(d) });
+    }
+    return null;
+  }
+
   async function caricaLive(forza) {
     const fermata = fermataLive();
     if (!fermata) {
       live.stato = 'nessuna-fermata';
+      live.avviso = '';
       renderLive();
       return;
     }
-    if (!lineePerFermata[fermata.id] || lineeDaInterrogare(fermata).length === 0) {
+    const palina = palinaConLinee(fermata);
+    // Fermata e palina coincidono quasi sempre; quando non succede va detto,
+    // altrimenti sembra che l'app mostri i bus sbagliati.
+    live.avviso = palina && palina.id !== fermata.id
+      ? 'La palina ' + (fermata.palina || fermata.id) + ' non ha linee bus nel dataset: uso la fermata più vicina (' + palina.nome + ', ' + palina.distacco + ' m).'
+      : '';
+    if (!palina) {
       live.stato = 'senza-linee';
       live.items = [];
       renderLive();
       return;
     }
     if (!forza) {
-      const cache = leggiJSON('tperzc_live_' + fermata.id);
+      const cache = leggiJSON('tperzc_live_' + palina.id);
       if (cache && cache.items && Date.now() - cache.ts < 120000) {
         live.items = cache.items;
         live.ts = cache.ts;
@@ -2347,18 +2377,39 @@
     if (live.stato !== 'ok') live.stato = 'caricamento';
     renderLive();
 
-    const linee = lineeDaInterrogare(fermata);
+    const linee = lineeDaInterrogare(palina);
     const raccolti = [];
     let risposteOk = 0;
     let nonGestite = 0;
-    const risposte = await Promise.all(linee.map(async (linea) => {
+    // Un relay lento non deve lasciare il pannello su "Cerco i passaggi…" per
+    // sempre: prima si aspettava la risposta più lenta di tutte, senza scadenza.
+    const scadenzaTotale = new Promise((risolvi) => {
+      setTimeout(() => risolvi(null), 15000);
+    });
+    const risposte = await Promise.race([Promise.all(linee.map(async (linea) => {
       try {
-        return await queryHellobus(fermata.id, linea, segnale);
+        return await queryHellobus(palina.id, linea, segnale);
       } catch (errore) {
         return null;
       }
-    }));
-    if (segnale.aborted) return;
+    })), scadenzaTotale]);
+    if (segnale.aborted) {
+      // Se ad abortire è stata una richiesta più recente, quella si occupa
+      // dello stato; altrimenti lo spinner resterebbe acceso per sempre.
+      if (liveAbort && liveAbort.signal === segnale) {
+        live.caricamento = false;
+        renderLive();
+      }
+      return;
+    }
+    if (!risposte) {
+      if (liveAbort) liveAbort.abort();
+      live.caricamento = false;
+      live.stato = 'errore';
+      live.errore = 'Il servizio HelloBus non ha risposto in tempo.';
+      renderLive();
+      return;
+    }
     risposte.forEach((testo) => {
       if (!testo) return;
       if (/NON GESTITA/i.test(testo)) { nonGestite += 1; return; }
@@ -2392,7 +2443,7 @@
     live.items = unici.slice(0, 12);
     live.ts = Date.now();
     live.stato = 'ok';
-    scrivi('tperzc_live_' + fermata.id, JSON.stringify({ ts: live.ts, items: live.items }));
+    scrivi('tperzc_live_' + palina.id, JSON.stringify({ ts: live.ts, items: live.items }));
     renderLive();
   }
 
@@ -2441,6 +2492,7 @@
       live.items = [];
       live.ts = 0;
       live.stato = 'idle';
+      live.avviso = '';
     }
     let html = '';
     if (sel.partenza && sel.destinazione) {
@@ -2458,6 +2510,7 @@
       '</div>' +
       '<button class="btn-aggiorna' + (live.caricamento ? ' gira' : '') + '" data-azione="aggiorna" aria-label="Aggiorna gli arrivi"' + (fermata ? '' : ' disabled') + '>' + ICONA_REFRESH + '</button>' +
       '</div>';
+    if (live.avviso) html += '<div class="box-messaggio">' + esc(live.avviso) + '</div>';
 
     if (!fermata) {
       html += '<div class="box-messaggio">Scegli una fermata nella ricerca: mostro i prossimi passaggi con la posizione reale dei bus.</div>';
