@@ -75,9 +75,10 @@
   let mappa = null;
   const marker = { partenza: null, destinazione: null };
   let statoSheet = 'meta';
-  let tabAttivo = 'viaggio';
+  let vistaAttiva = 'percorso';
   let campoAttivo = null;
   let stopLiveRuolo = 'partenza';
+  let miniFermata = null;
   let posizioneUtente = null;
   // Navigazione guidata: posizione continua, passo corrente, mappa in follow.
   const navigazione = {
@@ -95,7 +96,7 @@
   let ultimaRichiestaIndirizzi = 0;
   const suggerimenti = { token: 0, campo: null, query: '', gruppi: [], indirizzi: [], caricamento: false, errore: false };
 
-  const live = { items: [], ts: 0, stato: 'idle', caricamento: false, errore: null, stopId: null, avviso: '' };
+  const live = { items: [], ts: 0, stato: 'idle', caricamento: false, errore: null, stopId: null, avviso: '', fermata: null };
 
   const $ = (id) => document.getElementById(id);
   // Set unico di icone: Lucide inline, nessuna CDN e nessun font esterno.
@@ -108,6 +109,9 @@
   const ICONA_INFO = Icone.svg('info', 18);
   const ICONA_CHEVRON = Icone.svg('chevron-right', 18, 'voce-freccia');
   const ICONA_PIEDANA = Icone.svg('footprints', 20);
+  const ICONA_OROLOGIO = Icone.svg('clock', 16);
+  const ICONA_SCAMBIA = Icone.svg('arrow-up-down', 18);
+  const ICONA_GIU = Icone.svg('chevron-down', 16);
 
   /* ------------------------------------------------------------------ *
    * Utility
@@ -225,12 +229,14 @@
     if (eIndirizzo(f)) return f.indirizzo || f.nome || 'Indirizzo';
     return 'Palina ' + f.id + (f.indirizzo ? ' · ' + f.indirizzo : '');
   }
+  // Niente toast: i messaggi vivono in una riga dentro il pannello.
   function mostraToast(messaggio, durata) {
-    const toast = $('toast');
-    toast.textContent = messaggio;
-    toast.hidden = false;
+    const riga = $('riga-stato');
+    if (!riga) return;
+    riga.textContent = messaggio;
+    riga.hidden = false;
     clearTimeout(mostraToast._timer);
-    mostraToast._timer = setTimeout(() => { toast.hidden = true; }, durata || 2600);
+    mostraToast._timer = setTimeout(() => { riga.hidden = true; }, durata || 3200);
   }
 
   /* ------------------------------------------------------------------ *
@@ -365,9 +371,7 @@
     });
     elemento.addEventListener('click', (evento) => {
       evento.stopPropagation();
-      stopLiveRuolo = ruolo;
-      attivaTab('live');
-      impostaSheet('meta');
+      if (sel[ruolo]) apriMini(sel[ruolo]);
     });
     return elemento;
   }
@@ -1332,10 +1336,22 @@
     });
   }
 
+  // La ricerca è una schermata intera: il campo ha il focus e la lista usa
+  // tutto lo spazio, invece di un pannello che copre il testo mentre si scrive.
+  function apriCerca(ruolo) {
+    campoAttivo = ruolo;
+    const schermo = $('cerca');
+    const input = $('cerca-input');
+    if (!schermo || !input) return;
+    input.value = sel[ruolo] ? sel[ruolo].nome : '';
+    input.placeholder = ruolo === 'partenza' ? 'Da dove parti?' : 'Dove vai?';
+    schermo.hidden = false;
+    aggiornaPulisci();
+    apriSuggerimenti(ruolo, input.value);
+    setTimeout(() => { input.focus(); input.select(); }, 30);
+  }
+
   function apriSuggerimenti(campo, query) {
-    const input = $(campo === 'partenza' ? 'input-partenza' : 'input-destinazione');
-    // I suggerimenti compaiono solo per il campo che l'utente sta usando davvero.
-    if (document.activeElement !== input) return;
     campoAttivo = campo;
     const testo = (query || '').trim();
     suggerimenti.campo = campo;
@@ -1349,33 +1365,32 @@
       suggerimenti.token += 1;
       if (indirizziAbort) { indirizziAbort.abort(); indirizziAbort = null; }
       suggerimenti.gruppi = gruppiSuggerimenti(campo);
-      if (!suggerimenti.gruppi.length) { chiudiOverlay(); return; }
     }
-    $('overlay-titolo').textContent = campo === 'partenza' ? 'Da dove parti' : 'Dove vai';
-    $('overlay-ricerca').hidden = false;
-    $('backdrop').hidden = false;
     if (testo.length >= LUOGHI_MIN) cercaIndirizzi(testo);
     else disegnaSuggerimenti();
   }
 
   function chiudiOverlay() {
-    const overlay = $('overlay-ricerca');
-    const backdrop = $('backdrop');
-    if (overlay) overlay.hidden = true;
-    if (backdrop) backdrop.hidden = true;
+    const schermo = $('cerca');
+    if (schermo) schermo.hidden = true;
+    const input = $('cerca-input');
+    if (input) input.blur();
   }
 
   function aggiornaPulisci() {
-    document.querySelectorAll('[data-pulisci]').forEach((bottone) => {
-      const ruolo = bottone.getAttribute('data-pulisci');
-      bottone.hidden = !sel[ruolo];
-    });
+    const pulsante = $('cerca-pulisci');
+    const input = $('cerca-input');
+    if (pulsante && input) pulsante.hidden = !input.value;
   }
 
+  // I campi del pannello mostrano il valore scelto: non sono input, quindi
+  // nessuna tastiera si apre quando si guarda la tratta.
   function impostaInput(ruolo) {
-    const input = $(ruolo === 'partenza' ? 'input-partenza' : 'input-destinazione');
-    input.value = sel[ruolo] ? sel[ruolo].nome : '';
-    aggiornaPulisci();
+    const valore = $(ruolo === 'partenza' ? 'val-partenza' : 'val-destinazione');
+    if (!valore) return;
+    const f = sel[ruolo];
+    valore.textContent = f ? f.nome : (ruolo === 'partenza' ? 'Da dove parti?' : 'Dove vai?');
+    valore.classList.toggle('vuoto', !f);
   }
 
   function selezionaFermata(ruolo, f) {
@@ -1386,36 +1401,24 @@
     chiudiOverlay();
     aggiornaMarker();
     salvaTratta();
-    if (ruolo === 'partenza') {
-      stopLiveRuolo = 'partenza';
-      inquadra();
-      if (!sel.destinazione) {
-        impostaSheet('meta');
-        renderViaggio();
-        setTimeout(() => {
-          $('input-destinazione').focus();
-          apriSuggerimenti('destinazione', '');
-        }, 180);
-        return;
-      }
-    }
-    if (sel.partenza && sel.destinazione) {
-      stopLiveRuolo = 'partenza';
-      inquadra();
+    live.fermata = null;
+    live.items = [];
+    live.ts = 0;
+    live.stato = 'idle';
+    if (!sel.partenza || !sel.destinazione) {
       impostaSheet('meta');
-      attivaTab('viaggio');
-      live.items = [];
-      live.ts = 0;
-      live.stato = 'idle';
+      renderPercorso();
+      setTimeout(() => apriCerca(sel.partenza ? 'destinazione' : 'partenza'), 160);
+      return;
     }
-    renderViaggio();
-    renderLive();
-    // Un viaggio nuovo parte dall'alto: il pannello poteva restare scrollato
-    // dove lo aveva lasciato il viaggio precedente, con il prezzo fuori vista.
-    if (sel.partenza && sel.destinazione) {
-      const corpo = $('sheet-corpo');
-      if (corpo) corpo.scrollTop = 0;
-    }
+    stopLiveRuolo = ruolo;
+    mostraVista('percorso');
+    impostaSheet('meta');
+    inquadra();
+    renderPercorso();
+    calcolaPercorso();
+    const corpo = $('sheet-corpo');
+    if (corpo) corpo.scrollTop = 0;
   }
 
   // Le fermate si salvano per id, gli indirizzi per coordinate (l'id è finto).
@@ -1460,48 +1463,123 @@
    * Calcolo zone e prezzo
    * ------------------------------------------------------------------ */
   /* ------------------------------------------------------------------ *
-   * Rendering: tab Viaggio
+   * Rendering: pannello percorso
    * ------------------------------------------------------------------ */
-  function aggiornaTestata() {
-    const p = sel.partenza;
-    const d = sel.destinazione;
-    let titolo = 'Pianifica il tuo viaggio';
-    let sotto = '';
-    if (p && !d) {
-      titolo = 'Dove vuoi andare?';
-      sotto = 'Partenza da ' + nomeBreve(p.nome);
-    } else if (p && d) {
-      titolo = nomeBreve(p.nome) + ' → ' + nomeBreve(d.nome);
-      const zp = eIndirizzo(p) ? etichettaGenere(p) : 'Zona ' + p.zona;
-      const zd = eIndirizzo(d) ? etichettaGenere(d) : 'Zona ' + d.zona;
-      // Il prezzo sta anche qui, sotto il titolo: l'intestazione resta visibile
-      // in ogni scheda e anche a pannello ridotto, quindi il costo non va cercato
-      // scorrendo fino in fondo al viaggio.
-      const tariffa = trattaAPiedi() ? null : tariffaCorrente();
-      // Stessa zona: "Zona 500 → Zona 500" era solo rumore. Il prezzo sta
-      // davanti alle zone così, se la riga si accorcia, non viene tagliato lui.
-      const zone = zp === zd ? zp : zp + ' → ' + zd;
-      const prezzo = tariffa && tariffa.prezzo != null
-        ? (tariffa.prezzo === 0 ? 'Incluso' : euro(tariffa.prezzo))
-        : '';
-      sotto = prezzo ? prezzo + ' · ' + zone : zone;
+  // Quanto pannello resta visibile nella posizione ridotta: due campi, la
+  // riga di data/ora e il pulsante di ricerca.
+  const PEEK_VISIBILE = 168;
+  let quandoAperto = false;
+  let alternativeAperte = false;
+
+  function quandoEtichetta() {
+    const d = dataDaGiorno(routing.giorno);
+    const oggi = routing.giorno === oggiISO();
+    const giorno = oggi ? 'Oggi' : (d ? d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) : routing.giorno);
+    if (routing.adesso) return 'Adesso · ' + giorno + ' ' + routing.orario;
+    return (routing.modo === 'arrivo' ? 'Arrivo entro ' : 'Partenza ') + giorno + ' ' + routing.orario;
+  }
+
+  function rigaCampoHTML(ruolo) {
+    const f = sel[ruolo];
+    const eti = ruolo === 'partenza' ? 'Partenza' : 'Destinazione';
+    const vuoto = ruolo === 'partenza' ? 'Da dove parti?' : 'Dove vai?';
+    return '<div class="campo-riga">' +
+      '<span class="pallino ' + (ruolo === 'partenza' ? 'pallino-p' : 'pallino-d') + '" aria-hidden="true"></span>' +
+      '<button type="button" class="campo" data-campo="' + ruolo + '">' +
+      '<span class="eti">' + eti + '</span>' +
+      '<span class="val' + (f ? '' : ' vuoto') + '" id="val-' + ruolo + '">' + esc(f ? f.nome : vuoto) + '</span>' +
+      '</button></div>';
+  }
+
+  function pannelloQuandoHTML() {
+    const arrivo = routing.modo === 'arrivo';
+    return '<div class="quando-pannello">' +
+      '<div class="segmento" role="group" aria-label="Tipo di orario">' +
+      '<button type="button" data-azione="modo-partenza" class="' + (arrivo ? '' : 'attivo') + '" aria-pressed="' + (arrivo ? 'false' : 'true') + '">Parti alle</button>' +
+      '<button type="button" data-azione="modo-arrivo" class="' + (arrivo ? 'attivo' : '') + '" aria-pressed="' + (arrivo ? 'true' : 'false') + '">Arriva entro</button>' +
+      '</div>' +
+      '<div class="quando-campi">' +
+      '<input id="input-data" type="date" value="' + esc(routing.giorno) + '" aria-label="Giorno">' +
+      '<input id="input-ora" type="time" step="300" value="' + esc(routing.orario) + '" aria-label="' + (arrivo ? 'Ora di arrivo' : 'Ora di partenza') + '">' +
+      '</div>' +
+      '<div class="camminata">' +
+      '<span class="eti">A piedi</span>' +
+      '<input id="input-camminata" type="range" min="3" max="25" step="1" value="' + camminata + '" aria-label="Minuti disposti a camminare">' +
+      '<output id="valore-camminata">' + camminata + ' min</output>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px">' +
+      (arrivo
+        ? '<button type="button" class="btn btn-tenue" style="flex:1" data-azione="tra-un-ora">Tra 1 ora</button>'
+        : '<button type="button" class="btn btn-tenue" style="flex:1" data-azione="ora-adesso">Adesso</button>') +
+      '</div></div>';
+  }
+
+  // Unica sorgente del pannello: campi, data/ora e risultato.
+  function renderPercorso() {
+    const vista = $('vista-percorso');
+    if (!vista) return;
+    const tratta = !!(sel.partenza && sel.destinazione);
+    vista.classList.toggle('con-percorso', tratta);
+    vista.innerHTML =
+      '<div class="campi">' + rigaCampoHTML('partenza') + rigaCampoHTML('destinazione') + '</div>' +
+      '<div class="riga-quando">' +
+      '<button type="button" class="quando-btn" id="btn-quando" aria-expanded="' + (quandoAperto ? 'true' : 'false') + '">' +
+      ICONA_OROLOGIO + '<span>' + esc(quandoEtichetta()) + '</span>' + ICONA_GIU + '</button>' +
+      (sel.partenza && sel.destinazione
+        ? '<button type="button" class="icona" data-azione="inverti" aria-label="Inverti partenza e destinazione">' + ICONA_SCAMBIA + '</button>'
+        : '') +
+      '</div>' +
+      (quandoAperto ? pannelloQuandoHTML() : '') +
+      (tratta ? '' : '<button type="button" class="btn btn-primario" data-azione="cerca">Cerca percorso</button>') +
+      '<div id="vista-risultato"></div>';
+    collegaCampi();
+    disegnaPercorso();
+  }
+
+  function collegaCampi() {
+    const quando = $('btn-quando');
+    if (quando) quando.addEventListener('click', () => { quandoAperto = !quandoAperto; renderPercorso(); });
+    const inputOra = $('input-ora');
+    if (inputOra) {
+      inputOra.addEventListener('change', () => {
+        if (!inputOra.isConnected) return;
+        aggiornaQuando(routing.giorno, inputOra.value, false);
+      });
     }
-    $('sheet-titolo').textContent = titolo;
-    $('sheet-sotto').textContent = sotto;
-    document.title = p && d ? titolo + ' · Muovi Bologna' : 'Muovi Bologna';
+    const inputData = $('input-data');
+    if (inputData) {
+      inputData.min = oggiISO();
+      inputData.addEventListener('change', () => {
+        if (!inputData.isConnected) return;
+        aggiornaQuando(inputData.value, routing.orario, false);
+      });
+    }
+    // Quanto si è disposti a camminare: cambia il raggio di ricerca a piedi.
+    const inputCamminata = $('input-camminata');
+    if (inputCamminata) {
+      const valore = $('valore-camminata');
+      inputCamminata.addEventListener('input', () => {
+        if (valore) valore.textContent = inputCamminata.value + ' min';
+      });
+      inputCamminata.addEventListener('change', () => {
+        if (!inputCamminata.isConnected) return;
+        const scelto = parseInt(inputCamminata.value, 10);
+        camminata = Math.min(CAMMINATA_MAX, Math.max(CAMMINATA_MIN, isFinite(scelto) ? scelto : CAMMINATA_DEFAULT));
+        scrivi(K_CAMMINATA, String(camminata));
+        preparaCammini(true);
+        routing.chiave = null;
+        calcolaPercorso();
+      });
+    }
   }
 
-  function htmlBiglietto(r) {
-    const prezzo = r.prezzo === null ? '—' : (r.prezzo === 0 ? 'Incluso' : euro(r.prezzo));
-    const nota = r.prezzo === 0 ? 'Nessun costo aggiuntivo' : r.prezzoNota;
-    return '<div class="biglietto"><div class="biglietto-testo">' +
-      '<span class="pill-stato ' + r.badge + '">' + esc(r.titolo) + '</span>' +
-      '<span class="biglietto-nota">' + esc(nota) + '</span></div>' +
-      '<span class="biglietto-prezzo">' + esc(prezzo) + '</span></div>';
+  function totaleMinuti(e) {
+    const uscita = Math.max(0, e.partenza - (e.camminoIniziale || 0));
+    const arrivo = e.arrivo + (e.camminoFinale || 0);
+    return Math.max(1, Math.round((arrivo - uscita) / 60));
   }
 
-  // Sotto i 400 m il pianificatore usa solo il cammino: non serve un biglietto
-  // e non ha senso proporre gli orari in tempo reale.
+  // Sotto i 400 m il pianificatore usa solo il cammino: non serve un biglietto.
   function trattaAPiedi() {
     return !!(sel.partenza && sel.destinazione &&
       sel.partenza.lat != null && sel.partenza.lon != null &&
@@ -1510,8 +1588,7 @@
   }
 
   // Il prezzo dipende dal mezzo: se l'itinerario usa un treno vale la tariffa
-  // regionale a km, altrimenti quella a zone. Prima del calcolo si guarda il
-  // tipo delle fermate scelte.
+  // regionale a km, altrimenti quella a zone.
   function trenoNellItinerario() {
     const scelta = (routing.opzioni && routing.opzioni.length)
       ? (routing.opzioni[routing.aperto >= 0 ? routing.aperto : 0] || routing.esito)
@@ -1529,83 +1606,205 @@
     return Tariffe.calcola(sel.partenza, sel.destinazione, abbonamento, trenoNellItinerario());
   }
 
-  function firmaBiglietto(r) {
-    return r ? [r.badge, r.titolo, r.prezzo, r.prezzoNota, r.avviso || ''].join('|') : '';
+  function lineeBadge(e) {
+    return (e.tappe || []).map((tappa) => {
+      const treno = tappa.tipo === 1 || tappa.tipo === 2;
+      const stile = !treno && tappa.colore
+        ? ' style="background:' + esc(tappa.colore) + ';color:' + esc(tappa.coloreTesto || '#FFFFFF') + '"'
+        : '';
+      return '<span class="linea' + (treno ? ' treno' : '') + '"' + stile + '>' + esc(tappa.linea) + '</span>';
+    }).join('');
   }
 
-  function htmlRisultato(r) {
-    const soloPiedi = trattaAPiedi();
-    // Prima il costo, poi il viaggio: la scheda biglietto stava sotto tutte le
-    // opzioni e per vederla bisognava scorrere il pannello fino in fondo.
-    let html = (soloPiedi ? '' :
-      '<div class="blocco-biglietto" data-firma="' + esc(firmaBiglietto(r)) + '">' +
-      htmlBiglietto(r) + '</div>') +
-      '<div id="blocco-percorso" class="blocco-percorso"></div>';
-    if (r.avviso) {
-      html += '<div class="avviso">' + ICONA_INFO + '<span>' + esc(r.avviso) + '</span></div>';
-    }
-    html += '<div class="azioni">' +
-      (soloPiedi ? '' : '<button class="btn btn-primario" data-azione="live">Orari in tempo reale</button>') +
+  function htmlRiepilogo(r) {
+    if (routing.stato !== 'ok' || !routing.esito) return '';
+    const e = routing.esito;
+    const prezzo = r && r.prezzo != null ? (r.prezzo === 0 ? 'Incluso' : euro(r.prezzo)) : '';
+    const tappa = e.tappe && e.tappe[0];
+    let meta = tappa ? 'Linea ' + tappa.linea : 'A piedi';
+    if (tappa) meta += ' · ' + tappa.fermate + (tappa.fermate === 1 ? ' fermata' : ' fermate');
+    if (e.cambi) meta += ' · ' + (e.cambi === 1 ? '1 cambio' : e.cambi + ' cambi');
+    const piedi = Math.round(((e.camminoIniziale || 0) + (e.camminoFinale || 0)) / 60);
+    if (piedi >= 1) meta += ' · ' + piedi + ' min a piedi';
+    return '<div class="riepilogo">' +
+      '<div class="riep-titolo">' + totaleMinuti(e) + ' min' + (prezzo ? ' · ' + esc(prezzo) : '') + '</div>' +
+      '<div class="riep-meta">' + esc(meta) + '</div>' +
+      '<div class="riep-azioni">' +
+      '<button type="button" class="btn btn-primario" data-azione="avvia-navigazione">Avvia</button>' +
+      '<button type="button" class="link" data-azione="dettagli">Dettagli</button>' +
+      '</div></div>';
+  }
+
+  function htmlAlternative() {
+    const opzioni = routing.opzioni || [];
+    if (opzioni.length < 2) return '';
+    const scelto = routing.aperto >= 0 ? routing.aperto : 0;
+    const righe = opzioni.map((e, indice) => {
+      const uscita = Math.max(0, e.partenza - (e.camminoIniziale || 0));
+      const arrivo = e.arrivo + (e.camminoFinale || 0);
+      const piedi = Math.round(((e.camminoIniziale || 0) + (e.camminoFinale || 0)) / 60);
+      const meta = totaleMinuti(e) + ' min · ' +
+        (e.cambi === 0 ? 'diretto' : e.cambi === 1 ? '1 cambio' : e.cambi + ' cambi') +
+        (piedi ? ' · ' + piedi + ' min a piedi' : '');
+      return '<button type="button" class="opzione-riga" data-opzione="' + indice + '" aria-current="' + (indice === scelto ? 'true' : 'false') + '">' +
+        '<span class="testo"><span class="orari">' + hhmm(uscita) + ' → ' + hhmm(arrivo) + '</span>' +
+        '<span class="meta">' + esc(meta) + '</span></span>' +
+        '<span class="linee">' + lineeBadge(e) + '</span></button>';
+    }).join('');
+    const aperte = alternativeAperte || statoSheet === 'piena';
+    return '<button type="button" class="altre" data-azione="altre" aria-expanded="' + (aperte ? 'true' : 'false') + '">' +
+      'Altre soluzioni (' + (opzioni.length - 1) + ')' + ICONA_GIU + '</button>' +
+      '<div class="opzioni"' + (aperte ? '' : ' hidden') + '>' + righe + '</div>';
+  }
+
+  function bigliettoHTML(r) {
+    if (!r) return '';
+    const prezzo = r.prezzo === null ? '—' : (r.prezzo === 0 ? 'Incluso' : euro(r.prezzo));
+    const nota = r.prezzo === 0 ? 'Nessun costo aggiuntivo' : r.prezzoNota;
+    return '<details class="biglietto">' +
+      '<summary><span class="b-prezzo">' + esc(prezzo) + '</span><span class="b-nota">' + esc(nota) + '</span></summary>' +
+      '<div class="b-corpo">' +
+      '<span class="b-stato">' + esc(r.titolo) + '</span>' +
+      (r.avviso ? '<p>' + esc(r.avviso) + '</p>' : '') +
+      '<div class="riga"><span>Ho l\'abbonamento urbano</span>' +
+      '<span class="interruttore"><input type="checkbox" id="check-abbonamento"' + (abbonamento ? ' checked' : '') +
+      ' aria-label="Ho l\'abbonamento urbano"><span class="binario"></span></span></div>' +
+      '<a href="' + URL_UFFICIALE + '" target="_blank" rel="noopener">Verifica sul calcolatore TPER</a>' +
+      '</div></details>';
+  }
+
+  function htmlDettaglio(r) {
+    const e = routing.esito;
+    if (routing.stato !== 'ok' || !e) return '';
+    return '<div class="dettaglio">' +
+      '<h2 class="sez">Viaggio</h2>' +
+      VistaPercorso.dettaglio(e, etichettaFermata) +
+      '<div class="live-percorso" id="live-percorso" hidden></div>' +
+      bigliettoHTML(r) +
+      '<p class="micro">Orari programmati; il primo bus mostra il passaggio reale quando c\'è.</p>' +
       '</div>';
-    html += '<a class="link-ufficiale" href="' + URL_UFFICIALE + '" target="_blank" rel="noopener">Verifica su tper.it</a>';
-    return html;
   }
 
-  function htmlListaFermate(titolo, elenco, ruolo) {
+  function htmlStatoPercorso() {
+    if (routing.stato === 'caricamento' || routing.stato === 'idle') {
+      return '<div class="schema"><span></span><span></span></div>';
+    }
+    if (routing.stato === 'errore') {
+      return '<div class="box">Percorso non calcolato (' + esc(routing.errore || 'errore') + ').' +
+        '<div style="margin-top:10px"><button type="button" class="btn btn-tenue" data-azione="riprova-percorso">Riprova</button></div></div>';
+    }
+    if (routing.stato === 'piedi') {
+      return '<div class="box">Ci arrivi a piedi: ' + routing.piedi.metri + ' m, circa ' + routing.piedi.minuti + ' min.</div>';
+    }
+    if (routing.stato === 'messaggio') {
+      const codice = routing.esito && routing.esito.errore;
+      const testo = codice === 'senza-orari'
+        ? 'Nessuna fermata con orari entro ' + camminata + ' min a piedi. Prova ad aumentare i minuti a piedi.'
+        : 'Percorso non disponibile per queste fermate.';
+      return '<div class="box">' + esc(testo) + '</div>';
+    }
+    if (routing.stato === 'nessuno') {
+      const testo = routing.modo === 'arrivo'
+        ? 'Nessun viaggio arriva entro le ' + esc(routing.orario) + '.'
+        : 'Nessun viaggio a quest\'ora.';
+      return '<div class="box">' + esc(testo) +
+        '<div style="margin-top:10px"><button type="button" class="btn btn-tenue" data-azione="prova-domani">Prova domani alle 08:00</button></div></div>';
+    }
+    if (routing.stato === 'ok') {
+      return htmlAlternative() + htmlDettaglio(tariffaCorrente());
+    }
+    return '';
+  }
+
+  function listaViciniHTML() {
+    let elenco;
+    if (sel.partenza && sel.partenza.lat != null) {
+      elenco = senzaDoppioni(fermateVicine(sel.partenza.lat, sel.partenza.lon, 10, sel.partenza.id)
+        .filter((f) => f.nome !== sel.partenza.nome)).slice(0, 6);
+    } else {
+      elenco = posizioneUtente
+        ? senzaDoppioni(fermateVicine(posizioneUtente.lat, posizioneUtente.lon, 8)).slice(0, 6)
+        : fermatePrincipali();
+    }
     if (!elenco.length) return '';
-    return '<h2 class="sezione-titolo">' + esc(titolo) + '</h2>' +
-      elenco.map((f) => voceHTML(f, ruolo)).join('');
+    const titolo = sel.partenza && sel.partenza.lat != null ? 'Vicine a ' + nomeBreve(sel.partenza.nome) : 'Fermate vicine';
+    return '<div class="gruppo">' + esc(titolo) + '</div>' +
+      elenco.map((f) => voceHTML(f, 'destinazione')).join('');
   }
 
-  // Unico punto in cui il tab Viaggio viene montato.
-  function montaPannelloViaggio(html) {
-    $('pane-viaggio').innerHTML = html;
-  }
-
-  // Il prezzo viene rifatto quando il percorso è pronto: solo allora si sa se
-  // il viaggio usa un treno (tariffa a km) o qualche bus (tariffa a zone).
+  // Il pannello si ridisegna quando cambia la tariffa (abbonamento) o la scelta.
   function aggiornaCardBiglietto() {
-    const card = document.querySelector('.blocco-biglietto');
-    if (!card || trattaAPiedi()) return;
+    const card = document.querySelector('.biglietto');
+    if (!card) return;
     const r = tariffaCorrente();
     if (!r) return;
-    const firma = firmaBiglietto(r);
-    if (card.dataset.firma === firma) return;
-    card.dataset.firma = firma;
-    card.innerHTML = htmlBiglietto(r);
-    aggiornaTestata();
+    const prezzo = r.prezzo === null ? '—' : (r.prezzo === 0 ? 'Incluso' : euro(r.prezzo));
+    const nota = card.querySelector('.b-nota');
+    const testa = card.querySelector('.b-prezzo');
+    if (testa) testa.textContent = prezzo;
+    if (nota) nota.textContent = r.prezzo === 0 ? 'Nessun costo aggiuntivo' : r.prezzoNota;
   }
 
-  function renderViaggio() {
-    const risultato = tariffaCorrente();
-    aggiornaTestata();
-    aggiornaChipAbbonamento();
-
-    if (risultato) {
-      montaPannelloViaggio(htmlRisultato(risultato));
-      disegnaPercorso();
-      calcolaPercorso();
-      return;
+  function collegaRisultato() {
+    const check = $('check-abbonamento');
+    if (check) {
+      check.addEventListener('change', () => {
+        abbonamento = check.checked;
+        sincronizzaMenu();
+        renderPercorso();
+      });
     }
-
-    let html = '<p class="testo-intro">' +
-      (sel.partenza ? 'Scegli la destinazione.' : 'Cerca una fermata o tocca la mappa.') +
-      '</p>';
-    if (sel.partenza && sel.partenza.lat != null) {
-      const vicine = senzaDoppioni(fermateVicine(sel.partenza.lat, sel.partenza.lon, 10, sel.partenza.id)
-        .filter((f) => f.nome !== sel.partenza.nome)).slice(0, 6);
-      html += htmlListaFermate('Vicine a ' + nomeBreve(sel.partenza.nome), vicine, 'destinazione');
-    } else {
-      html += htmlListaFermate('Fermate vicine a te', posizioneUtente ? senzaDoppioni(fermateVicine(posizioneUtente.lat, posizioneUtente.lon, 8)).slice(0, 6) : fermatePrincipali(), 'destinazione');
-    }
-    montaPannelloViaggio(html);
   }
 
-  function aggiornaChipAbbonamento() {
-    const chip = $('chip-abbonamento');
-    chip.setAttribute('aria-pressed', abbonamento ? 'true' : 'false');
+  // La barra superiore è ridotta a una freccia quando c'è un percorso.
+  function aggiornaBarra() {
+    const attivo = !!(sel.partenza && sel.destinazione) || vistaAttiva === 'orari';
+    const barra = $('barra');
+    if (!barra) return;
+    barra.classList.toggle('percorso', attivo);
+    const indietro = $('btn-indietro');
+    const menu = $('btn-menu');
+    if (indietro) indietro.hidden = !attivo;
+    if (menu) menu.hidden = attivo;
+    const inquadra = $('btn-inquadra');
+    if (inquadra) inquadra.hidden = !(attivo && routing.stato === 'ok');
+    document.title = attivo
+      ? nomeBreve(sel.partenza.nome) + ' → ' + nomeBreve(sel.destinazione.nome) + ' · Muovi Bologna'
+      : 'Muovi Bologna';
   }
 
+  /* Mini-card della fermata: orari e impostazione come partenza o arrivo. */
+  function apriMini(f) {
+    if (!f) return;
+    miniFermata = f;
+    const box = $('mini-fermata');
+    if (!box) return;
+    $('mini-nome').textContent = f.nome;
+    const linee = lineaDi(f).slice(0, 4);
+    $('mini-meta').textContent = (eIndirizzo(f) ? 'Indirizzo' : 'Palina ' + f.id) +
+      ' · zona ' + f.zona + (linee.length ? ' · ' + linee.join(' · ') : '');
+    box.hidden = false;
+  }
+
+  function chiudiMini() {
+    miniFermata = null;
+    const box = $('mini-fermata');
+    if (box) box.hidden = true;
+  }
+
+  function apriOrari(f) {
+    if (!f) return;
+    chiudiMini();
+    live.fermata = f;
+    live.stopId = null;
+    live.items = [];
+    live.ts = 0;
+    live.stato = 'idle';
+    live.avviso = '';
+    mostraVista('orari');
+    impostaSheet('piena');
+    caricaLive(true);
+  }
   /* ------------------------------------------------------------------ *
    * Percorso con gli orari programmati (GTFS TPER)
    * ------------------------------------------------------------------ */
@@ -2001,84 +2200,25 @@
   }
 
   function disegnaPercorso() {
-    const blocco = $('blocco-percorso');
-    if (!blocco) return;
+    const box = $('vista-risultato');
+    if (!box) return;
     assicuraQuando();
     // La scheda legge da qui quanti minuti a piedi sono concessi.
     routing.camminata = camminata;
-    blocco.innerHTML = VistaPercorso.controlli(routing.giorno, routing.orario, routing.modo, camminata) +
-      VistaPercorso.esito(routing, etichettaFermata);
-    aggiornaScrim();
-    // I campi vengono ricreati a ogni render: un change di un campo già
-    // staccato dal DOM (capita quando l'orologio aggiorna l'ora) non deve
-    // spegnere la modalità "adesso".
-    const inputOra = $('input-ora');
-    if (inputOra) {
-      inputOra.addEventListener('change', () => {
-        if (!inputOra.isConnected) return;
-        aggiornaQuando(routing.giorno, inputOra.value, false);
-      });
+    aggiornaBarra();
+    if (!sel.destinazione) {
+      box.innerHTML = listaViciniHTML();
+      aggiornaScrim();
+      return;
     }
-    const inputData = $('input-data');
-    if (inputData) {
-      inputData.min = oggiISO();
-      inputData.addEventListener('change', () => {
-        if (!inputData.isConnected) return;
-        aggiornaQuando(inputData.value, routing.orario, false);
-      });
-    }
-    // Quanto si è disposti a camminare: si salva e si ricalcola il viaggio.
-    const inputCamminata = $('input-camminata');
-    if (inputCamminata) {
-      const valore = $('valore-camminata');
-      inputCamminata.addEventListener('input', () => {
-        if (valore) valore.textContent = inputCamminata.value + ' min';
-      });
-      inputCamminata.addEventListener('change', () => {
-        if (!inputCamminata.isConnected) return;
-        const scelto = parseInt(inputCamminata.value, 10);
-        camminata = Math.min(CAMMINATA_MAX, Math.max(CAMMINATA_MIN, isFinite(scelto) ? scelto : CAMMINATA_DEFAULT));
-        scrivi(K_CAMMINATA, String(camminata));
-        // Il raggio dei cambi a piedi cambia con la soglia: si ricostruisce.
-        preparaCammini(true);
-        routing.chiave = null;
-        calcolaPercorso();
-      });
-    }
-    // Le opzioni sono <details>: si aprono al clic. Aperta una, la mappa mostra
-    // quel percorso; l'ultima scelta resta aperta anche dopo un ricalcolo.
-    const dettagli = blocco.querySelectorAll('details.opzione');
-    dettagli.forEach((dettaglio) => {
-      // Un <details> aperto viene chiuso anche quando il render sostituisce il
-      // nodo: solo un clic dell'utente deve azzerare l'opzione ricordata.
-      let chiusuraUtente = false;
-      const summary = dettaglio.querySelector('summary');
-      if (summary) summary.addEventListener('click', () => { if (dettaglio.open) chiusuraUtente = true; });
-      dettaglio.addEventListener('toggle', () => {
-        const indice = parseInt(dettaglio.dataset.opzione, 10);
-        if (!dettaglio.open) {
-          if (chiusuraUtente && routing.aperto === indice) routing.aperto = -1;
-          chiusuraUtente = false;
-          return;
-        }
-        dettagli.forEach((altra) => { if (altra !== dettaglio) altra.open = false; });
-        routing.aperto = indice;
-        if (routing.opzioni && routing.opzioni[indice]) {
-          routing.esito = routing.opzioni[indice];
-          disegnaTracciato();
-          aggiornaCardBiglietto();
-        }
-      });
-    });
-    if (routing.aperto >= 0 && dettagli[routing.aperto] && !dettagli[routing.aperto].open) {
-      dettagli[routing.aperto].open = true;
-    }
+    const r = tariffaCorrente();
+    box.innerHTML = htmlRiepilogo(r) + htmlStatoPercorso();
+    collegaRisultato();
     caricaLivePercorso();
     avviaTimerPercorso();
     disegnaTracciato();
-    aggiornaCardBiglietto();
+    aggiornaScrim();
   }
-
   function calcolaPercorso() {
     if (!sel.partenza || !sel.destinazione) return;
     if (typeof TPERRouting === 'undefined') {
@@ -2229,7 +2369,7 @@
       html = '<span class="tag-orario">ORARIO</span><span>Treno <b>' + linea + '</b> alle <b>' + programmato +
         '</b>.</span>';
     } else if (livePercorso.caricamento) {
-      html = '<span class="punto-live off"></span><span>Controllo se il bus <b>' + linea +
+      html = '<span class="punto off"></span><span>Controllo se il bus <b>' + linea +
         '</b> è in orario…</span>';
     } else if (livePercorso.stato === 'ok' && corsa) {
       const minutiAttesa = minutiA(corsa.ora);
@@ -2324,7 +2464,7 @@
     if (timerPercorso) return;
     timerPercorso = setInterval(() => {
       if (document.visibilityState === 'hidden') return;
-      if (tabAttivo !== 'viaggio') return;
+      if (vistaAttiva !== 'percorso') return;
       if (!primaCorsaPercorso()) return;
       caricaLivePercorso(true);
     }, 30000);
@@ -2432,7 +2572,7 @@
   }
 
   function fermataLive() {
-    const scelta = sel[stopLiveRuolo] || sel.partenza || sel.destinazione || null;
+    const scelta = live.fermata || sel[stopLiveRuolo] || sel.partenza || sel.destinazione || null;
     if (!scelta || !eIndirizzo(scelta)) return scelta;
     // Per un indirizzo il tempo reale si chiede alla palina più vicina.
     const vicina = fermateVicine(scelta.lat, scelta.lon, 1)[0];
@@ -2580,16 +2720,16 @@
 
   function statoLiveHTML() {
     if (live.caricamento && !live.items.length) {
-      return '<div class="stato-live"><span class="punto-live"></span>Cerco i passaggi in tempo reale…</div>';
+      return '<div class="stato-live"><span class="punto"></span>Cerco i passaggi in tempo reale…</div>';
     }
     if (live.stato === 'errore' && !live.items.length) {
-      return '<div class="stato-live"><span class="punto-live off"></span>Dati realtime non raggiungibili</div>';
+      return '<div class="stato-live"><span class="punto off"></span>Dati realtime non raggiungibili</div>';
     }
     if (!live.ts && !live.items.length) {
-      return '<div class="stato-live"><span class="punto-live off"></span>In attesa di aggiornamento</div>';
+      return '<div class="stato-live"><span class="punto off"></span>In attesa di aggiornamento</div>';
     }
     const liveCount = live.items.filter((a) => a.tipo === 'live').length;
-    return '<div class="stato-live"><span class="punto-live' + (liveCount ? '' : ' off') + '"></span>' +
+    return '<div class="stato-live"><span class="punto' + (liveCount ? '' : ' off') + '"></span>' +
       'Aggiornato alle ' + esc(orarioCorto(live.ts || Date.now())) +
       (liveCount ? ' · ' + liveCount + ' bus localizzati via GPS' : ' · solo orario programmato') + '</div>';
   }
@@ -2615,8 +2755,10 @@
     }).join('') + '</ul>';
   }
 
+  // Vista orari: arrivi della fermata scelta, aggiornati ogni 30 secondi.
   function renderLive() {
-    const pane = $('pane-live');
+    const box = $('vista-orari');
+    if (!box) return;
     const fermata = fermataLive();
     if (fermata && live.stopId !== fermata.id) {
       live.stopId = fermata.id;
@@ -2625,52 +2767,40 @@
       live.stato = 'idle';
       live.avviso = '';
     }
-    let html = '';
-    if (sel.partenza && sel.destinazione) {
-      const suP = stopLiveRuolo === 'partenza';
-      html += '<div class="segmented" role="group" aria-label="Fermata degli arrivi">' +
-        '<button type="button" data-live-ruolo="partenza" aria-pressed="' + (suP ? 'true' : 'false') + '" class="' + (suP ? 'attivo' : '') + '">Partenza</button>' +
-        '<button type="button" data-live-ruolo="destinazione" aria-pressed="' + (suP ? 'false' : 'true') + '" class="' + (suP ? '' : 'attivo') + '">Destinazione</button>' +
-        '</div>';
-    }
-    html += '<div class="live-intesta">' +
-      '<div><h2 class="sezione-titolo">Prossimi bus</h2>' +
-      '<div class="live-nome">' + (fermata ? esc(fermata.nome) : 'Nessuna fermata selezionata') + '</div>' +
-      (fermata ? '<div class="live-indirizzo">' + esc(riferimentoFermata(fermata)) + '</div>' : '') +
+    let html = '<div class="orari-testa"><div>' +
+      '<h2 class="orari-nome">' + esc(fermata ? fermata.nome : 'Scegli una fermata') + '</h2>' +
+      (fermata ? '<p class="orari-pos">' + esc(riferimentoFermata(fermata)) + '</p>' : '') +
       '</div>' +
-      '<button class="btn-aggiorna' + (live.caricamento ? ' gira' : '') + '" data-azione="aggiorna" aria-label="Aggiorna gli arrivi"' + (fermata ? '' : ' disabled') + '>' + ICONA_REFRESH + '</button>' +
-      '</div>';
-    if (live.avviso) html += '<div class="box-messaggio">' + esc(live.avviso) + '</div>';
+      '<button type="button" class="btn-aggiorna' + (live.caricamento ? ' gira' : '') +
+      '" data-azione="aggiorna" aria-label="Aggiorna gli arrivi"' + (fermata ? '' : ' disabled') + '>' +
+      ICONA_REFRESH + '</button></div>';
 
     if (!fermata) {
-      html += '<div class="box-messaggio">Scegli una fermata per vedere i prossimi passaggi.</div>';
+      html += '<div class="box">Tocca una fermata sulla mappa per vedere gli orari.</div>';
     } else if (live.stato === 'senza-linee') {
-      html += '<div class="box-messaggio">Tempo reale solo per i bus: qui non passano linee bus.</div>';
+      html += '<div class="box">Qui passano solo treni: per loro vale l\'orario programmato, non il tempo reale.</div>';
     } else if (live.stato === 'non-gestita') {
-      html += '<div class="box-messaggio">HelloBus non gestisce questa fermata. Prova il palo opposto o tper.it.</div>';
+      html += '<div class="box">HelloBus non gestisce questa fermata. Prova la palina accanto o tper.it.</div>';
     } else {
       html += statoLiveHTML();
       if (live.stato === 'errore' && !live.items.length) {
-        html += '<div class="box-messaggio errore">HelloBus non risponde. Controlla la connessione e riprova.</div>' +
-          '<button class="btn btn-secondario" data-azione="aggiorna">Riprova</button>';
+        html += '<div class="box">Dati non aggiornati. ' +
+          '<button type="button" class="link" data-azione="aggiorna">Riprova</button></div>';
       } else if (!live.items.length && !live.caricamento) {
-        const altroRuolo = stopLiveRuolo === 'partenza' ? 'destinazione' : 'partenza';
-        const altro = sel[altroRuolo];
-        html += '<div class="box-messaggio">Nessun altro passaggio oggi.' +
-          (altro ? ' <button class="btn btn-secondario" data-live-ruolo="' + altroRuolo + '">Bus alla ' + altroRuolo + '</button>' : '') +
-          '</div>';
+        html += '<div class="box">Nessun passaggio in programma.</div>';
       } else {
         html += arriviHTML();
       }
-      html += '<p class="nota-piccola">LIVE = posizione reale del bus. ORARIO = orario programmato.</p>';
+      html += '<p class="micro">LIVE = posizione reale del bus. ORARIO = orario programmato.</p>';
     }
-    pane.innerHTML = html;
+    box.innerHTML = html;
+    aggiornaScrim();
   }
 
   function avviaTimerLive() {
     fermaTimerLive();
     timerLive = setInterval(() => {
-      if (tabAttivo === 'live' && document.visibilityState === 'visible' && !live.caricamento) caricaLive(true);
+      if (vistaAttiva === 'orari' && document.visibilityState === 'visible' && !live.caricamento) caricaLive(true);
     }, INTERVALLO_LIVE);
   }
   function fermaTimerLive() {
@@ -2678,49 +2808,23 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * Tab e pannello inferiore
+   * Viste del pannello
    * ------------------------------------------------------------------ */
-  function attivaTab(nome) {
-    tabAttivo = nome;
-    document.querySelectorAll('[role="tab"]').forEach((bottone) => {
-      const attivo = bottone.getAttribute('data-tab') === nome;
-      bottone.classList.toggle('attivo', attivo);
-      bottone.setAttribute('aria-selected', attivo ? 'true' : 'false');
-      bottone.tabIndex = attivo ? 0 : -1;
-    });
-    $('pane-viaggio').hidden = nome !== 'viaggio';
-    $('pane-live').hidden = nome !== 'live';
-    $('pane-info').hidden = nome !== 'info';
-    // Ogni scheda parte dall'inizio: prima ereditava lo scorrimento della
-    // precedente e si apriva con titolo e nomi tagliati sotto le tab.
+  function mostraVista(nome) {
+    vistaAttiva = nome;
+    $('vista-percorso').hidden = nome !== 'percorso';
+    $('vista-orari').hidden = nome !== 'orari';
     const corpo = $('sheet-corpo');
     if (corpo) corpo.scrollTop = 0;
-    if (nome === 'viaggio') renderViaggio();
-    if (nome === 'live') {
+    if (nome === 'orari') {
       renderLive();
       if (!live.items.length && !live.caricamento) caricaLive(false);
       avviaTimerLive();
     } else {
       fermaTimerLive();
     }
-    if (nome === 'info') renderInfo();
-    aggiornaPannelliFocus();
     aggiornaScrim();
-    if (statoSheet === 'peek') impostaSheet('meta');
   }
-
-  // Un pannello senza elementi raggiungibili va reso focalizzabile, altrimenti
-  // chi usa la tastiera non riesce a scorrerlo (pattern tabpanel dell'APG).
-  function aggiornaPannelliFocus() {
-    document.querySelectorAll('.pannello').forEach((pannello) => {
-      const raggiungibile = !pannello.hidden &&
-        pannello.querySelector('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
-      if (raggiungibile) pannello.removeAttribute('tabindex');
-      else if (!pannello.hidden) pannello.setAttribute('tabindex', '0');
-      else pannello.removeAttribute('tabindex');
-    });
-  }
-
   // Quanto pannello si vede davvero: aggiorna --h-sheet e restituisce il valore,
   // così chi lo usa non deve rileggerlo dal DOM.
   function altezzaVisibile() {
@@ -2734,20 +2838,22 @@
     const sheet = $('sheet');
     const altezza = sheet.offsetHeight || 600;
     if (stato === 'piena') return 0;
-    // La posizione ridotta mostra testata, tab e riga data/ora: si misura
-    // quanto occupano davvero, così un titolo su due righe non la taglia.
-    // Nei tab Live/Info il blocco data/ora è nascosto (rect 0): senza il
-    // controllo su height il pannello finiva fuori dallo schermo.
-    const quando = document.querySelector('.quando');
-    const rect = quando ? quando.getBoundingClientRect() : null;
-    const distanza = rect && rect.height > 0
-      ? rect.bottom - sheet.getBoundingClientRect().top : 0;
-    const peek = Math.min(distanza > 0 ? altezza - distanza - 12 : altezza - 190, altezza - 96);
-    if (stato === 'peek') return Math.max(0, Math.round(peek));
-    // Metà pannello, ma sempre almeno 90 px sopra il punto ridotto: con i due
-    // punti quasi coincidenti (schermi bassi) il gesto sembrava non fare nulla.
-    const meta = Math.min(Math.round(altezza * 0.46), Math.round(peek) - 90);
-    return Math.max(0, meta);
+    // PEEK: si misura quanto occupano davvero i campi, la riga di data/ora e
+    // il pulsante di ricerca, così nessuno dei tre resta tagliato dal bordo.
+    const vista = $('vista-percorso');
+    // Solo i primi tre blocchi contano: la lista delle fermate vicine e il
+    // risultato del percorso stanno sotto e non devono allungare il PEEK.
+    let contenuto = PEEK_VISIBILE - 28;
+    if (vista && !vista.hidden) {
+      const ultimo = vista.querySelector('[data-azione="cerca"]') || $('btn-quando');
+      if (ultimo) contenuto = Math.max(0, ultimo.getBoundingClientRect().bottom - vista.getBoundingClientRect().top);
+    }
+    const peekVisibile = Math.max(120, Math.min(altezza - 96, contenuto + 28));
+    const peek = Math.max(0, altezza - peekVisibile);
+    if (stato === 'peek') return Math.round(peek);
+    // HALF: il 45% dello schermo, sempre sopra il punto ridotto.
+    const meta = Math.max(0, Math.round(altezza - Math.min(window.innerHeight * 0.45, altezza - 96)));
+    return Math.round(Math.min(meta, peek));
   }
 
   // Posizione del pannello in un unico posto: il dito riparte sempre da dove
@@ -2757,17 +2863,16 @@
   let framePannello = null;
 
   function aggiornaFisicaPannello() {
-    const visibile = altezzaVisibile();
-    const fab = document.querySelector('.col-fab');
-    if (fab) fab.classList.toggle('nascosto', traslazionePannello <= 8 || visibile > window.innerHeight * 0.6);
+    altezzaVisibile();
     aggiornaScrim();
+    aggiornaBarra();
   }
 
   function applicaTrasformazione(pixel, animato, silenzioso) {
     const sheet = $('sheet');
     traslazionePannello = Math.max(0, Math.round(pixel));
     sheet.style.transition = animato ? 'transform .34s cubic-bezier(.22,.9,.28,1)' : 'none';
-    sheet.style.transform = 'translate(-50%,' + traslazionePannello + 'px)';
+    sheet.style.transform = 'translateY(' + traslazionePannello + 'px)';
     // Il pannello tradotto verso il basso lascia il fondo del corpo sotto il
     // bordo dello schermo: scorrendo fino in fondo gli ultimi elementi
     // (pulsanti e link) restavano invisibili. Il padding pari allo scostamento
@@ -2805,16 +2910,11 @@
     scrim.hidden = corpo.scrollTop + visibile >= corpo.scrollHeight - 4;
   }
 
-  // Il pannello aperto non deve incollarsi alla barra di ricerca né coprire
-  // i chip: parte 12 px sotto la barra e lascia sempre visibile la ricerca.
+  // FULL = 85% dello schermo: sopra il pannello resta sempre un pezzo di mappa.
   function adattaAltezzaSheet() {
     const sheet = $('sheet');
     if (!sheet) return;
-    const strato = document.querySelector('.strato-alto');
-    const fondo = strato ? Math.round(strato.getBoundingClientRect().bottom) : 114;
-    // In orizzontale lo schermo è basso: 320 px di altezza minima lasciavano
-    // quasi nessuna mappa. Con 240 la scheda resta usabile anche a 390 px.
-    const altezza = Math.max(240, Math.min(760, window.innerHeight - fondo - 12));
+    const altezza = Math.max(280, Math.min(760, Math.round(window.innerHeight * 0.85)));
     if (Math.abs((sheet.offsetHeight || 0) - altezza) <= 1) return;
     sheet.style.height = altezza + 'px';
     // Cambiando altezza cambiano anche i punti di aggancio: senza questo il
@@ -2826,8 +2926,11 @@
   function impostaSheet(stato) {
     const cambiato = stato !== statoSheet;
     statoSheet = stato;
+    const pannello = $('sheet');
+    if (pannello) pannello.setAttribute('data-stato', stato);
     adattaAltezzaSheet();
     applicaTrasformazione(traslazionePer(stato), true);
+    aggiornaBarra();
     // Lo spazio visibile cambia con il pannello: il percorso si reinquadra, ma
     // solo quando il pannello si muove davvero (prima anche un semplice resize
     // o un richiamo identico spostavano la mappa).
@@ -2836,9 +2939,10 @@
 
   function cicloSheet() {
     if (sopprimiClick) return;
+    // Il tocco sul pomello fa il giro completo: chiuso → metà → tutto → chiuso.
     if (statoSheet === 'peek') impostaSheet('meta');
     else if (statoSheet === 'meta') impostaSheet('piena');
-    else impostaSheet('meta');
+    else impostaSheet('peek');
   }
 
   function traslazioneAttuale() {
@@ -3052,27 +3156,65 @@
   /* ------------------------------------------------------------------ *
    * Tab Info
    * ------------------------------------------------------------------ */
+  /* ------------------------------------------------------------------ *
+   * Menu laterale
+   * ------------------------------------------------------------------ */
   function renderInfo() {
-    const pane = $('pane-info');
-    if (pane.dataset.pronto === '1') return;
-    pane.dataset.pronto = '1';
-    pane.innerHTML =
-      '<div class="scheda"><h2>Tempo reale</h2>' +
-      '<p>Gli arrivi arrivano da HelloBus, il servizio TPER. LIVE = posizione reale del bus. ORARIO = orario programmato. Per i treni esiste solo l\'orario programmato.</p></div>' +
-      '<div class="scheda"><h2>Dati</h2>' +
-      '<p>Fermate, zone e linee: open data TPER / Regione Emilia-Romagna (CC BY 3.0 IT). Orari bus: GTFS TPER. Orari treni: GTFS Trenitalia (CC BY 4.0), conversione deryclem/trenitalia-gtfs. Percorsi a piedi: OSRM / OpenStreetMap.</p>' +
-      '<p>Treni coperti: Bologna C.le, Imola, Bologna–Pianoro e la linea S2A Bologna–Vignola. La S1 Porretta non è inclusa: il PDF ufficiale non dà orari intermedi affidabili.</p>' +
+    const box = $('menu-info-corpo');
+    if (!box || box.dataset.pronto === '1') return;
+    box.dataset.pronto = '1';
+    box.innerHTML =
+      '<div><h3>Tempo reale</h3><p>Gli arrivi arrivano da HelloBus, il servizio TPER. LIVE = posizione reale del bus. ORARIO = orario programmato. Per i treni esiste solo l\'orario programmato.</p></div>' +
+      '<div><h3>Dati</h3><p>Fermate, zone e linee: open data TPER / Regione Emilia-Romagna (CC BY 3.0 IT). Orari bus: GTFS TPER. Orari treni: GTFS Trenitalia (CC BY 4.0), conversione deryclem/trenitalia-gtfs. Percorsi a piedi: OSRM / OpenStreetMap.</p>' +
+      '<p>Treni coperti: Bologna C.le, Imola, Bologna–Pianoro e la linea S2A Bologna–Vignola. La S1 Porretta non è inclusa.</p>' +
       '<p>Fermate aggiornate al ' + esc(aggiornato || 'non disponibile') + '. Prezzi indicativi: verifica su tper.it.</p>' +
-      '<a class="mini" href="https://www.tper.it" target="_blank" rel="noopener">Apri tper.it</a></div>' +
-      '<div class="scheda"><h2>Relay orari</h2>' +
-      '<p>HelloBus non accetta le chiamate del browser (CORS): l\'app passa da un relay pubblico. Puoi usarne uno tuo, con <code>{url}</code> al posto dell\'indirizzo. Vuoto = relay predefinito.</p>' +
-      '<div class="campo-proxy"><input id="input-proxy" type="text" placeholder="https://mio-relay.example/?url={url}" value="' + esc(leggi(K_PROXY) || '') + '">' +
-      '<button class="mini" data-azione="salva-proxy">Salva</button></div>' +
-      '<button class="mini" data-azione="azzera-proxy">Usa il relay predefinito</button></div>' +
-      '<div class="scheda"><h2>Installa</h2>' +
-      '<p>Su schermata home si apre come un\'app e funziona offline per zone e prezzi.</p>' +
-      '<button class="mini" data-azione="installa">Installa Muovi Bologna</button></div>' +
-      '<p class="nota-piccola">App non ufficiale, non affiliata a TPER.</p>';
+      '<a href="https://www.tper.it" target="_blank" rel="noopener">Apri tper.it</a></div>' +
+      '<div><h3>Relay orari</h3><p>HelloBus non accetta le chiamate del browser (CORS): l\'app passa da un relay pubblico. Puoi usarne uno tuo, con {url} al posto dell\'indirizzo.</p>' +
+      '<div class="campo-relay"><input id="input-proxy" type="text" placeholder="https://mio-relay.example/?url={url}" value="' + esc(leggi(K_PROXY) || '') + '">' +
+      '<button type="button" data-azione="salva-proxy">Salva</button></div>' +
+      '<button type="button" data-azione="azzera-proxy">Usa il relay predefinito</button></div>' +
+      '<p>App non ufficiale, non affiliata a TPER.</p>';
+  }
+
+  function sincronizzaMenu() {
+    const check = $('menu-abbonamento');
+    if (check) check.checked = abbonamento;
+    const recente = $('menu-recente');
+    const vuoto = $('menu-recente-vuoto');
+    if (recente && vuoto) {
+      if (sel.partenza && sel.destinazione) {
+        recente.innerHTML = '<span>' + esc(nomeBreve(sel.partenza.nome)) + ' → ' + esc(nomeBreve(sel.destinazione.nome)) + '</span>' +
+          '<small>' + esc(quandoEtichetta()) + '</small>';
+        recente.hidden = false;
+        vuoto.hidden = true;
+      } else {
+        recente.hidden = true;
+        vuoto.hidden = false;
+      }
+    }
+    const statoPosizione = $('menu-posizione-stato');
+    if (statoPosizione) statoPosizione.textContent = posizioneUtente ? 'Attiva' : 'Trova';
+  }
+
+  function apriMenu() {
+    const drawer = $('drawer');
+    if (!drawer) return;
+    sincronizzaMenu();
+    renderInfo();
+    drawer.classList.add('aperto');
+    drawer.setAttribute('aria-hidden', 'false');
+    $('drawer-velo').hidden = false;
+    $('btn-menu').setAttribute('aria-expanded', 'true');
+  }
+
+  function chiudiMenu() {
+    const drawer = $('drawer');
+    if (!drawer) return;
+    drawer.classList.remove('aperto');
+    drawer.setAttribute('aria-hidden', 'true');
+    $('drawer-velo').hidden = true;
+    $('btn-menu').setAttribute('aria-expanded', 'false');
+    if (drawer.contains(document.activeElement)) document.activeElement.blur();
   }
 
   /* ------------------------------------------------------------------ *
@@ -3097,14 +3239,10 @@
       posizioneUtente = { lat: posizione.coords.latitude, lon: posizione.coords.longitude };
       const vicine = senzaDoppioni(fermateVicine(posizioneUtente.lat, posizioneUtente.lon, 8)).slice(0, 6);
       if (mappa) mappa.flyTo({ center: [posizioneUtente.lon, posizioneUtente.lat], zoom: 15, offset: [0, -120] });
+      mostraVista('percorso');
       impostaSheet('meta');
-      attivaTab('viaggio');
-      if (vicine.length) {
-        montaPannelloViaggio('<p class="testo-intro">Fermate più vicine alla tua posizione: tocca quella di partenza.</p>' +
-          htmlListaFermate('Vicino a te', vicine, 'partenza'));
-        aggiornaTestata();
-        mostraToast('Trovate ' + vicine.length + ' fermate vicine');
-      }
+      renderPercorso();
+      if (vicine.length) mostraToast('Trovate ' + vicine.length + ' fermate vicine');
     }, () => {
       mostraToast('Posizione non disponibile: controlla i permessi del browser');
     }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
@@ -3115,12 +3253,13 @@
    * ------------------------------------------------------------------ */
   let ricaricaDaAggiornamento = false;
 
+  // L'aggiornamento è una voce del menu: niente banner sopra la mappa.
   function mostraAvvisoAggiornamento(registrazione) {
-    const avviso = $('avviso-aggiorna');
-    if (!avviso || !avviso.hidden) return;
-    avviso.hidden = false;
-    $('btn-aggiorna').onclick = () => {
-      avviso.hidden = true;
+    const voce = $('menu-aggiorna');
+    if (!voce || !voce.hidden) return;
+    voce.hidden = false;
+    voce.onclick = () => {
+      voce.hidden = true;
       ricaricaDaAggiornamento = true;
       const nuovo = registrazione.waiting || registrazione.installing;
       if (nuovo) nuovo.postMessage({ type: 'SKIP_WAITING' });
@@ -3155,14 +3294,14 @@
   }
 
   function gestisciInstallazione() {
-    const banner = $('banner-installa');
+    const voce = $('menu-installa');
     window.addEventListener('beforeinstallprompt', (evento) => {
       evento.preventDefault();
       eventoInstallazione = evento;
-      banner.hidden = false;
+      if (voce) voce.hidden = false;
     });
     const installa = async () => {
-      banner.hidden = true;
+      if (voce) voce.hidden = true;
       if (!eventoInstallazione) {
         mostraToast('Usa il menu del browser → "Aggiungi a schermata home"');
         return;
@@ -3171,8 +3310,7 @@
       await eventoInstallazione.userChoice;
       eventoInstallazione = null;
     };
-    $('btn-installa').addEventListener('click', installa);
-    $('btn-chiudi-banner').addEventListener('click', () => { banner.hidden = true; });
+    if (voce) voce.addEventListener('click', installa);
     window.installaApp = installa;
   }
 
@@ -3180,128 +3318,108 @@
    * Eventi
    * ------------------------------------------------------------------ */
   function collegaEventi() {
-    ['partenza', 'destinazione'].forEach((ruolo) => {
-      const input = $(ruolo === 'partenza' ? 'input-partenza' : 'input-destinazione');
-      const cerca = debounce(() => {
-        campoAttivo = ruolo;
-        if (!fermate.length) return;
-        // Se l'utente non ha cambiato il testo della fermata scelta, non c'è nulla da cercare.
-        if (sel[ruolo] && input.value === sel[ruolo].nome) { aggiornaPulisci(); return; }
-        const avevaSelezione = !!sel[ruolo];
-        sel[ruolo] = null;
-        aggiornaPulisci();
-        // Il viaggio mostrato non vale più: si riparte dalla ricerca.
-        if (avevaSelezione) { salvaTratta(); renderViaggio(); renderLive(); }
-        apriSuggerimenti(ruolo, input.value);
-      }, 300);
-      input.addEventListener('input', cerca);
-      input.addEventListener('change', () => {
-        // Ripristino del valore da parte del browser: non è una ricerca.
-        if (fermate.length && sel[ruolo] && input.value !== sel[ruolo].nome) {
-          sel[ruolo] = null;
-          aggiornaPulisci();
-          salvaTratta();
-          renderViaggio();
-          renderLive();
-        }
-      });
-      input.addEventListener('focus', () => {
-        campoAttivo = ruolo;
-        if (!fermate.length) return;
-        // Se il campo mostra già la fermata scelta, non riaprire i suggerimenti da solo.
-        if (sel[ruolo] && input.value === sel[ruolo].nome) return;
-        apriSuggerimenti(ruolo, input.value);
-      });
-      input.addEventListener('keydown', (evento) => {
-        if (evento.key === 'Enter') {
-          evento.preventDefault();
-          const primo = $('overlay-lista').querySelector('[data-voce], [data-indirizzo]');
-          if (primo) primo.click();
-        } else if (evento.key === 'Escape') {
-          chiudiOverlay();
-          input.blur();
-        }
-      });
+    // ---- Barra superiore ----
+    $('btn-menu').addEventListener('click', apriMenu);
+    $('drawer-chiudi').addEventListener('click', chiudiMenu);
+    $('drawer-velo').addEventListener('click', chiudiMenu);
+    $('btn-geo').addEventListener('click', vaiVicino);
+    $('btn-inquadra').addEventListener('click', () => {
+      if (routing.stato === 'ok' && ultimeFeatures.length) inquadraPercorso(400);
+      else inquadra();
     });
-
-    document.querySelectorAll('[data-pulisci]').forEach((bottone) => {
-      bottone.addEventListener('click', (evento) => {
-        evento.stopPropagation();
-        const ruolo = bottone.getAttribute('data-pulisci');
-        sel[ruolo] = null;
-        impostaInput(ruolo);
+    $('btn-indietro').addEventListener('click', () => {
+      if (vistaAttiva === 'orari') { mostraVista('percorso'); impostaSheet('meta'); return; }
+      if (statoSheet === 'piena') { impostaSheet('meta'); return; }
+      if (statoSheet === 'meta') { impostaSheet('peek'); return; }
+      if (sel.destinazione) {
+        sel.destinazione = null;
+        impostaInput('destinazione');
         aggiornaMarker();
         salvaTratta();
-        renderViaggio();
-        renderLive();
-        if (ruolo === 'destinazione' && sel.partenza) {
-          $(ruolo === 'partenza' ? 'input-partenza' : 'input-destinazione').focus();
-        }
-      });
-    });
-
-    $('btn-scambia').addEventListener('click', () => {
-      if (!sel.partenza && !sel.destinazione) {
-        mostraToast('Seleziona prima partenza e destinazione');
-        return;
+        renderPercorso();
       }
-      const partenza = sel.partenza;
-      sel.partenza = sel.destinazione;
-      sel.destinazione = partenza;
-      impostaInput('partenza');
-      impostaInput('destinazione');
-      aggiornaMarker();
-      salvaTratta();
-      inquadra();
-      live.items = [];
-      live.ts = 0;
-      live.stato = 'idle';
-      renderViaggio();
-      renderLive();
-      if (tabAttivo === 'live') caricaLive(true);
     });
 
-    $('chip-abbonamento').addEventListener('click', () => {
-      abbonamento = !abbonamento;
-      renderViaggio();
+    // ---- Mini-card fermata ----
+    $('mini-chiudi').addEventListener('click', chiudiMini);
+    $('mini-fermata').addEventListener('click', (evento) => {
+      const bottone = evento.target.closest('[data-mini]');
+      if (!bottone || !miniFermata) return;
+      const azione = bottone.getAttribute('data-mini');
+      if (azione === 'orari') { apriOrari(miniFermata); return; }
+      const f = miniFermata;
+      chiudiMini();
+      selezionaFermata(azione, f);
     });
-    $('chip-vicino').addEventListener('click', vaiVicino);
-    $('btn-geo').addEventListener('click', vaiVicino);
-    $('btn-inquadra').addEventListener('click', () => inquadra());
 
-    document.querySelectorAll('.tab button').forEach((bottone) => {
-      bottone.addEventListener('click', () => attivaTab(bottone.getAttribute('data-tab')));
+    // ---- Menu laterale ----
+    $('menu-abbonamento').addEventListener('change', (evento) => {
+      abbonamento = evento.target.checked;
+      renderPercorso();
     });
-
-    // Navigazione da tastiera tra le schede (frecce, Home, End).
-    const barraTab = document.querySelector('.tab');
-    if (barraTab) {
-      barraTab.addEventListener('keydown', (evento) => {
-        const bottoni = Array.from(barraTab.querySelectorAll('[role="tab"]'));
-        const corrente = bottoni.indexOf(document.activeElement);
-        if (corrente === -1) return;
-        let prossimo = null;
-        if (evento.key === 'ArrowRight') prossimo = (corrente + 1) % bottoni.length;
-        else if (evento.key === 'ArrowLeft') prossimo = (corrente - 1 + bottoni.length) % bottoni.length;
-        else if (evento.key === 'Home') prossimo = 0;
-        else if (evento.key === 'End') prossimo = bottoni.length - 1;
-        if (prossimo === null) return;
-        evento.preventDefault();
-        bottoni[prossimo].focus();
-        bottoni[prossimo].click();
-      });
-    }
-
-    $('nav-fondo').addEventListener('click', (evento) => {
+    $('menu-posizione').addEventListener('click', () => { chiudiMenu(); vaiVicino(); });
+    $('menu-recente').addEventListener('click', () => {
+      chiudiMenu();
+      routing.chiave = null;
+      mostraVista('percorso');
+      impostaSheet('meta');
+      calcolaPercorso();
+    });
+    $('menu-info').addEventListener('toggle', () => { if ($('menu-info').open) renderInfo(); });
+    $('drawer').addEventListener('click', (evento) => {
       const pulsante = evento.target.closest('[data-azione]');
       if (!pulsante) return;
       const azione = pulsante.getAttribute('data-azione');
-      if (azione === 'ferma-navigazione') fermaNavigazione();
-      if (azione === 'centra-navigazione') centraNavigazione();
+      if (azione === 'salva-proxy') {
+        const valore = ($('input-proxy').value || '').trim();
+        if (valore) scrivi(K_PROXY, valore); else localStorage.removeItem(K_PROXY);
+        live.items = []; live.ts = 0; live.stato = 'idle';
+        mostraToast(valore ? 'Relay salvato' : 'Relay predefinito ripristinato');
+        caricaLive(true);
+      }
+      if (azione === 'azzera-proxy') {
+        localStorage.removeItem(K_PROXY);
+        const campo = $('input-proxy');
+        if (campo) campo.value = '';
+        live.items = []; live.ts = 0; live.stato = 'idle';
+        mostraToast('Relay predefinito ripristinato');
+        caricaLive(true);
+      }
+      if (azione === 'installa') {
+        if (window.installaApp) window.installaApp();
+        else mostraToast('Usa il menu del browser → "Aggiungi a schermata home"');
+      }
+    });
+    document.addEventListener('keydown', (evento) => {
+      if (evento.key !== 'Escape') return;
+      if ($('drawer').classList.contains('aperto')) { chiudiMenu(); return; }
+      if (!$('cerca').hidden) { chiudiOverlay(); return; }
+      if (miniFermata) { chiudiMini(); return; }
     });
 
-    $('overlay-chiudi').addEventListener('click', chiudiOverlay);
-    $('backdrop').addEventListener('click', chiudiOverlay);
+    // ---- Ricerca a tutto schermo ----
+    const inputCerca = $('cerca-input');
+    const cercaTesto = debounce(() => {
+      if (!campoAttivo) return;
+      apriSuggerimenti(campoAttivo, inputCerca.value);
+    }, 260);
+    inputCerca.addEventListener('input', () => { aggiornaPulisci(); cercaTesto(); });
+    inputCerca.addEventListener('keydown', (evento) => {
+      if (evento.key === 'Enter') {
+        evento.preventDefault();
+        const primo = $('overlay-lista').querySelector('[data-voce], [data-indirizzo]');
+        if (primo) primo.click();
+      } else if (evento.key === 'Escape') {
+        chiudiOverlay();
+      }
+    });
+    $('cerca-indietro').addEventListener('click', chiudiOverlay);
+    $('cerca-pulisci').addEventListener('click', () => {
+      inputCerca.value = '';
+      aggiornaPulisci();
+      apriSuggerimenti(campoAttivo, '');
+      inputCerca.focus();
+    });
     $('overlay-lista').addEventListener('click', (evento) => {
       const indirizzo = evento.target.closest('[data-indirizzo]');
       if (indirizzo) {
@@ -3331,30 +3449,59 @@
       selezionaFermata(ruolo, fermata);
     });
 
-    $('sheet-testa').addEventListener('click', cicloSheet);
+    // ---- Pannello ----
     $('grab').addEventListener('click', cicloSheet);
     $('grab').addEventListener('keydown', (evento) => {
       if (evento.key === 'Enter' || evento.key === ' ') { evento.preventDefault(); cicloSheet(); }
     });
     abilitaTrascinamento($('grab'));
-    abilitaTrascinamento($('sheet-testa'));
     abilitaScorrimentoSheet();
-
     $('sheet-corpo').addEventListener('scroll', aggiornaScrim, { passive: true });
-
     $('sheet-corpo').addEventListener('click', (evento) => {
-      if (sopprimiClick) {
-        evento.preventDefault();
-        evento.stopPropagation();
-        sopprimiClick = false;
+      if (sopprimiClick) { evento.preventDefault(); evento.stopPropagation(); sopprimiClick = false; return; }
+      const campo = evento.target.closest('[data-campo]');
+      if (campo) { apriCerca(campo.getAttribute('data-campo')); return; }
+      const opzione = evento.target.closest('[data-opzione]');
+      if (opzione) {
+        const indice = parseInt(opzione.getAttribute('data-opzione'), 10);
+        if (routing.opzioni && routing.opzioni[indice]) {
+          routing.aperto = indice;
+          routing.esito = routing.opzioni[indice];
+          disegnaTracciato();
+          renderPercorso();
+        }
         return;
       }
       const pulsante = evento.target.closest('[data-azione]');
       if (pulsante) {
         const azione = pulsante.getAttribute('data-azione');
-        if (azione === 'live') { attivaTab('live'); caricaLive(true); impostaSheet('piena'); }
-        if (azione === 'inverti') { $('btn-scambia').click(); }
-        if (azione === 'avvia-navigazione') { avviaNavigazione(); }
+        if (azione === 'cerca') {
+          if (!sel.destinazione) apriCerca(sel.partenza ? 'destinazione' : 'partenza');
+          else { routing.chiave = null; impostaSheet('meta'); calcolaPercorso(); }
+        }
+        if (azione === 'dettagli') impostaSheet('piena');
+        if (azione === 'altre') {
+          alternativeAperte = !alternativeAperte;
+          if (alternativeAperte) impostaSheet('piena');
+          renderPercorso();
+        }
+        if (azione === 'inverti') {
+          const partenza = sel.partenza;
+          sel.partenza = sel.destinazione;
+          sel.destinazione = partenza;
+          impostaInput('partenza');
+          impostaInput('destinazione');
+          aggiornaMarker();
+          salvaTratta();
+          live.fermata = null;
+          live.items = [];
+          live.ts = 0;
+          live.stato = 'idle';
+          routing.chiave = null;
+          inquadra();
+          calcolaPercorso();
+        }
+        if (azione === 'avvia-navigazione') avviaNavigazione();
         if (azione === 'ora-adesso') aggiornaQuando(oggiISO(), oraAdesso(), true);
         if (azione === 'tra-un-ora') {
           const d = new Date(Date.now() + 60 * 60000);
@@ -3372,43 +3519,30 @@
           domani.setDate(domani.getDate() + 1);
           aggiornaQuando(isoDi(domani), '08:00');
         }
-        if (azione === 'aggiorna') { caricaLive(true); }
-        if (azione === 'salva-proxy') {
-          const valore = ($('input-proxy').value || '').trim();
-          if (valore) scrivi(K_PROXY, valore); else localStorage.removeItem(K_PROXY);
-          live.items = []; live.ts = 0; live.stato = 'idle';
-          mostraToast(valore ? 'Relay salvato' : 'Relay predefinito ripristinato');
-          caricaLive(true);
-        }
-        if (azione === 'azzera-proxy') {
-          localStorage.removeItem(K_PROXY);
-          const campo = $('input-proxy');
-          if (campo) campo.value = '';
-          live.items = []; live.ts = 0; live.stato = 'idle';
-          mostraToast('Relay predefinito ripristinato');
-          caricaLive(true);
-        }
-        if (azione === 'installa') {
-          if (window.installaApp) window.installaApp();
-          else mostraToast('Usa il menu del browser → "Aggiungi a schermata home"');
-        }
+        if (azione === 'aggiorna') caricaLive(true);
         return;
       }
       const voce = evento.target.closest('[data-voce]');
       if (voce) {
         const fermata = fermataPerId(voce.getAttribute('data-voce'));
         if (fermata) selezionaFermata(voce.getAttribute('data-ruolo') || 'destinazione', fermata);
-        return;
       }
-      const ruoloLive = evento.target.closest('[data-live-ruolo]');
-      if (ruoloLive) {
-        stopLiveRuolo = ruoloLive.getAttribute('data-live-ruolo');
-        live.items = [];
-        live.ts = 0;
-        live.stato = 'idle';
-        renderLive();
-        caricaLive(true);
-      }
+    });
+
+    // ---- Mappa: un tap chiude il pannello espanso e la mini-card ----
+    if (mappa) {
+      mappa.on('click', () => {
+        chiudiMini();
+        if (statoSheet === 'piena' && !navigazione.attiva) impostaSheet('meta');
+      });
+    }
+
+    $('nav-fondo').addEventListener('click', (evento) => {
+      const pulsante = evento.target.closest('[data-azione]');
+      if (!pulsante) return;
+      const azione = pulsante.getAttribute('data-azione');
+      if (azione === 'ferma-navigazione') fermaNavigazione();
+      if (azione === 'centra-navigazione') centraNavigazione();
     });
 
     // Rotazione e tastiera virtuale cambiano l'altezza utile: il canvas della
@@ -3416,7 +3550,6 @@
     // misura precedente. Si riadatta tutto e si reinquadra il percorso.
     const adattaAllaVista = debounce(() => {
       if (trascinando) return;
-      // In navigazione la camera è dell'utente: niente reinquadrature del viaggio.
       if (navigazione.attiva) {
         if (mappa) mappa.resize();
         return;
@@ -3429,18 +3562,20 @@
       else if (sel.partenza || sel.destinazione) inquadra(false);
     }, 150);
     window.addEventListener('resize', adattaAllaVista);
-    // Su iOS orientationchange può arrivare prima che il viewport sia
-    // aggiornato; il debounce fa vincere l'ultimo evento (di solito resize).
     window.addEventListener('orientationchange', adattaAllaVista);
     if (window.screen && screen.orientation && screen.orientation.addEventListener) {
       screen.orientation.addEventListener('change', adattaAllaVista);
     }
 
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && tabAttivo === 'live' && Date.now() - live.ts > INTERVALLO_LIVE) {
-        caricaLive(true);
-      }
+      if (document.visibilityState !== 'visible') return;
+      if (vistaAttiva === 'orari' && Date.now() - live.ts > INTERVALLO_LIVE) caricaLive(true);
+      else if (vistaAttiva === 'percorso' && ultimiOrari > 0) disegnaPercorso();
     });
+
+    window.addEventListener('offline', () => { $('pill-offline').hidden = false; });
+    window.addEventListener('online', () => { $('pill-offline').hidden = true; });
+    $('pill-offline').hidden = navigator.onLine !== false;
   }
 
   /* ------------------------------------------------------------------ *
@@ -3452,16 +3587,26 @@
     avviaOrologio();
     gestisciInstallazione();
     registraServiceWorker();
-    applicaTrasformazione(traslazionePer('meta'), false);
+    disposizioneIniziale();
     await caricaDati();
     ripristinaTratta();
     aggiornaMarker();
-    renderViaggio();
-    renderLive();
-    attivaTab('viaggio');
-    impostaSheet('meta');
+    mostraVista('percorso');
+    renderPercorso();
+    if (sel.partenza && sel.destinazione) calcolaPercorso();
+    impostaSheet(sel.partenza && sel.destinazione ? 'meta' : 'peek');
+    // La mappa è stata creata prima che il layout fosse definitivo: senza un
+    // resize il canvas resta vuoto finché la finestra non cambia dimensione.
+    if (mappa) mappa.resize();
     if (sel.partenza || sel.destinazione) inquadra(false);
     else if (mappa) mappa.jumpTo({ center: [11.3426, 44.4949], zoom: 13 });
+  }
+
+  // Con la tastiera chiusa i campi sono già leggibili senza aprire il pannello:
+  // il punto di partenza è il PEEK, non il pannello a metà schermo.
+  function disposizioneIniziale() {
+    adattaAltezzaSheet();
+    applicaTrasformazione(traslazionePer(statoSheet), false);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', avvia);

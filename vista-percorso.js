@@ -191,6 +191,7 @@
   const API = {
     controlli: controlli,
     esito: esito,
+    dettaglio: dettaglioHTML,
     ICONA_PEDANA: ICONA_PEDANA
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
