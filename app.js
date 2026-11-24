@@ -2533,31 +2533,51 @@
     const sheet = $('sheet');
     const altezza = sheet.offsetHeight || 600;
     if (stato === 'piena') return 0;
-    if (stato === 'meta') return Math.round(altezza * 0.46);
     // La posizione ridotta mostra testata, tab e riga data/ora: si misura
     // quanto occupano davvero, così un titolo su due righe non la taglia.
     // Nei tab Live/Info il blocco data/ora è nascosto (rect 0): senza il
     // controllo su height il pannello finiva fuori dallo schermo.
-    const meta = Math.round(altezza * 0.46);
     const quando = document.querySelector('.quando');
     const rect = quando ? quando.getBoundingClientRect() : null;
     const distanza = rect && rect.height > 0
       ? rect.bottom - sheet.getBoundingClientRect().top : 0;
-    const peek = distanza > 0 ? altezza - distanza - 12 : altezza - 190;
-    return Math.max(meta, Math.round(peek));
+    const peek = Math.min(distanza > 0 ? altezza - distanza - 12 : altezza - 190, altezza - 96);
+    if (stato === 'peek') return Math.max(0, Math.round(peek));
+    // Metà pannello, ma sempre almeno 90 px sopra il punto ridotto: con i due
+    // punti quasi coincidenti (schermi bassi) il gesto sembrava non fare nulla.
+    const meta = Math.min(Math.round(altezza * 0.46), Math.round(peek) - 90);
+    return Math.max(0, meta);
+  }
+
+  // Posizione del pannello in un unico posto: il dito riparte sempre da dove
+  // il pannello è davvero, non dallo stato "già impostato" mentre l'animazione
+  // precedente è ancora in corso (era il salto a inizio gesto).
+  let traslazionePannello = 0;
+  let framePannello = null;
+
+  function aggiornaFisicaPannello() {
+    const visibile = altezzaVisibile();
+    const fab = document.querySelector('.col-fab');
+    if (fab) fab.classList.toggle('nascosto', traslazionePannello <= 8 || visibile > window.innerHeight * 0.6);
+    aggiornaScrim();
   }
 
   function applicaTrasformazione(pixel, animato, silenzioso) {
     const sheet = $('sheet');
+    traslazionePannello = Math.max(0, Math.round(pixel));
     sheet.style.transition = animato ? 'transform .34s cubic-bezier(.22,.9,.28,1)' : 'none';
-    sheet.style.transform = 'translate(-50%,' + pixel + 'px)';
-    // Durante il dito niente letture di layout a ogni pointermove: erano la
-    // causa degli scatti. Si aggiorna tutto una volta allo snap.
-    if (silenzioso) return;
-    const visibile = altezzaVisibile();
-    const fab = document.querySelector('.col-fab');
-    if (fab) fab.classList.toggle('nascosto', pixel <= 8 || visibile > window.innerHeight * 0.6);
-    aggiornaScrim();
+    sheet.style.transform = 'translate(-50%,' + traslazionePannello + 'px)';
+    // Durante il dito si aggiorna al massimo una volta per frame: le letture di
+    // layout a ogni pointermove erano la causa degli scatti.
+    if (silenzioso) {
+      if (framePannello) return;
+      framePannello = requestAnimationFrame(() => {
+        framePannello = null;
+        aggiornaFisicaPannello();
+      });
+      return;
+    }
+    aggiornaFisicaPannello();
   }
 
   // La sfumatura in basso compare solo se c'è ancora contenuto sotto il bordo
@@ -2586,15 +2606,23 @@
     // In orizzontale lo schermo è basso: 320 px di altezza minima lasciavano
     // quasi nessuna mappa. Con 240 la scheda resta usabile anche a 390 px.
     const altezza = Math.max(240, Math.min(760, window.innerHeight - fondo - 12));
-    if (Math.abs((sheet.offsetHeight || 0) - altezza) > 1) sheet.style.height = altezza + 'px';
+    if (Math.abs((sheet.offsetHeight || 0) - altezza) <= 1) return;
+    sheet.style.height = altezza + 'px';
+    // Cambiando altezza cambiano anche i punti di aggancio: senza questo il
+    // pannello restava a metà (succedeva dopo il caricamento dei font) e il
+    // primo gesto faceva uno scatto per tornare al punto giusto.
+    if (!trascinando) applicaTrasformazione(traslazionePer(statoSheet), false);
   }
 
   function impostaSheet(stato) {
+    const cambiato = stato !== statoSheet;
     statoSheet = stato;
     adattaAltezzaSheet();
     applicaTrasformazione(traslazionePer(stato), true);
-    // Lo spazio visibile cambia con il pannello: il percorso si reinquadra.
-    if (routing.stato === 'ok') setTimeout(() => inquadraPercorso(400), 340);
+    // Lo spazio visibile cambia con il pannello: il percorso si reinquadra, ma
+    // solo quando il pannello si muove davvero (prima anche un semplice resize
+    // o un richiamo identico spostavano la mappa).
+    if (cambiato && routing.stato === 'ok') setTimeout(() => inquadraPercorso(400), 340);
   }
 
   function cicloSheet() {
@@ -2606,7 +2634,7 @@
 
   function traslazioneAttuale() {
     const matrice = new DOMMatrixReadOnly(getComputedStyle($('sheet')).transform);
-    return Math.max(0, Math.abs(matrice.m42));
+    return isFinite(matrice.m42) ? Math.max(0, matrice.m42) : traslazionePannello;
   }
 
   // Punti di aggancio reali, non una stima: così lo snap non salta quando la
@@ -2619,24 +2647,29 @@
     ].sort((a, b) => a.valore - b.valore);
   }
 
+  const SNAP_INERZIA = 160;   // ms di proiezione della velocità del gesto
+  const SNAP_COLPO = 0.35;    // px/ms: oltre, il gesto sceglie la direzione
+
   function concludiTrascinamento(velocita) {
     const sheet = $('sheet');
     trascinando = false;
     sheet.classList.remove('trascinando');
     const attuale = traslazioneAttuale();
     const punti = puntiSheet();
-    let scelto = null;
-    // La direzione del gesto vince sulla sola distanza: un colpo veloce apre o
-    // chiude anche se il pannello è più vicino all'altro stato.
-    if (velocita > 0.4) {
-      scelto = punti.find((p) => p.valore > attuale + 2) || punti[punti.length - 1];
-    } else if (velocita < -0.4) {
-      scelto = punti.slice().reverse().find((p) => p.valore < attuale - 2) || punti[0];
-    }
-    if (!scelto) {
-      scelto = punti.reduce((migliore, p) =>
-        Math.abs(p.valore - attuale) < Math.abs(migliore.valore - attuale) ? p : migliore, punti[0]);
-    }
+    const minimo = punti[0].valore;
+    const massimo = punti[punti.length - 1].valore;
+    const v = Math.max(-3, Math.min(3, isFinite(velocita) ? velocita : 0));
+    // Dove finirebbe il pannello lasciandolo andare con la sua inerzia: la
+    // velocità conta più della distanza già percorsa, come in un carrello.
+    const proiezione = Math.max(minimo, Math.min(massimo, attuale + v * SNAP_INERZIA));
+    // Un colpo deciso deve cambiare stato anche se il pannello è più vicino
+    // all'altro punto: si sceglie solo tra i punti nella direzione del gesto.
+    let candidati = punti;
+    if (v > SNAP_COLPO) candidati = punti.filter((p) => p.valore > attuale + 4);
+    else if (v < -SNAP_COLPO) candidati = punti.filter((p) => p.valore < attuale - 4);
+    if (!candidati.length) candidati = punti;
+    const scelto = candidati.reduce((migliore, p) =>
+      Math.abs(p.valore - proiezione) < Math.abs(migliore.valore - proiezione) ? p : migliore, candidati[0]);
     sopprimiClick = true;
     setTimeout(() => { sopprimiClick = false; }, 350);
     impostaSheet(scelto.stato);
@@ -2647,6 +2680,7 @@
     let inizioY = 0;
     let inizioX = 0;
     let iniziale = 0;
+    let massimo = 0;
     let ultimoY = 0;
     let ultimoT = 0;
     let velocita = 0;
@@ -2657,7 +2691,7 @@
       if (evento.pointerId !== idPuntatore) return;
       const dy = evento.clientY - inizioY;
       if (!attivo) {
-        if (Math.abs(dy) < 4) return;
+        if (Math.abs(dy) < 3) return;
         if (Math.abs(evento.clientX - inizioX) > Math.abs(dy) * 1.5) return;
         attivo = true;
         trascinando = true;
@@ -2669,11 +2703,11 @@
       if (ora > ultimoT) velocita = (evento.clientY - ultimoY) / (ora - ultimoT);
       ultimoY = evento.clientY;
       ultimoT = ora;
+      // Il pannello si ferma sul punto ridotto vero, non a "altezza - 120":
+      // prima si poteva trascinarlo nel vuoto sotto il bordo dello schermo.
       let pixel = iniziale + dy;
-      const massimo = Math.max(0, sheet.offsetHeight - 120);
-      // Oltre il fondo si oppone resistenza, così il gesto non si blocca.
       if (pixel < 0) pixel = 0;
-      else if (pixel > massimo) pixel = massimo + Math.min(36, (pixel - massimo) * 0.35);
+      else if (pixel > massimo) pixel = massimo + Math.min(28, (pixel - massimo) * 0.3);
       applicaTrasformazione(pixel, false, true);
     };
 
@@ -2683,7 +2717,13 @@
       elemento.removeEventListener('pointermove', muovi);
       elemento.removeEventListener('pointerup', fine);
       elemento.removeEventListener('pointercancel', fine);
-      if (!attivo) return;
+      if (!attivo) {
+        // Un semplice tocco non deve congelare il pannello a metà animazione:
+        // si riporta al punto del suo stato.
+        const target = traslazionePer(statoSheet);
+        if (Math.abs(traslazioneAttuale() - target) > 1) applicaTrasformazione(target, true);
+        return;
+      }
       attivo = false;
       if (performance.now() - ultimoT > 140) velocita = 0;
       concludiTrascinamento(velocita);
@@ -2695,9 +2735,13 @@
       idPuntatore = evento.pointerId;
       inizioY = ultimoY = evento.clientY;
       inizioX = evento.clientX;
-      // Se si afferra durante l'animazione, si parte da dove il pannello è
-      // davvero: prima si saltava al valore dello stato già impostato.
+      // Fermare subito l'animazione in corso: così la posizione letta è quella
+      // vera e il gesto non "salta" al primo movimento.
+      sheet.style.transition = 'none';
       iniziale = traslazioneAttuale();
+      traslazionePannello = iniziale;
+      const punti = puntiSheet();
+      massimo = punti[punti.length - 1].valore;
       ultimoT = performance.now();
       velocita = 0;
       attivo = false;
@@ -2708,33 +2752,64 @@
     });
   }
 
-  // Trascinamento dalla parte scorrevole: su si apre, giù si chiude solo
-  // quando il contenuto è in cima. Altrimenti resta lo scroll nativo.
+  // Trascinamento dalla parte scorrevole: in cima al contenuto il gesto apre
+  // o chiude il pannello, altrimenti resta lo scroll nativo del browser.
   function abilitaScorrimentoSheet() {
     const corpo = $('sheet-corpo');
     const sheet = $('sheet');
     let inizioY = 0;
     let inizioX = 0;
     let iniziale = 0;
+    let massimo = 0;
     let ultimoY = 0;
     let ultimoT = 0;
     let velocita = 0;
     let attivo = false;
+    let decisione = 'attesa';   // 'attesa' | 'pannello' | 'browser'
+
+    const rilascia = () => {
+      if (!attivo) {
+        // Tocco che non è diventato trascinamento (o gesto lasciato al
+        // browser): il pannello torna al punto del suo stato se era a metà.
+        if (decisione === 'attesa') {
+          const target = traslazionePer(statoSheet);
+          if (Math.abs(traslazioneAttuale() - target) > 1) applicaTrasformazione(target, true);
+        }
+        decisione = 'attesa';
+        return;
+      }
+      attivo = false;
+      decisione = 'attesa';
+      if (performance.now() - ultimoT > 140) velocita = 0;
+      concludiTrascinamento(velocita);
+    };
 
     const muovi = (evento) => {
-      if (evento.touches.length !== 1) return;
+      if (evento.touches.length !== 1) { rilascia(); return; }
+      if (decisione === 'browser') return;
       const tocco = evento.touches[0];
       const dy = tocco.clientY - inizioY;
-      if (!attivo) {
-        if (Math.abs(dy) < 6) return;
-        if (Math.abs(tocco.clientX - inizioX) > Math.abs(dy)) return;
-        // Giù solo dal bordo superiore del contenuto; su solo se c'è ancora
-        // pannello da mostrare. Negli altri casi lo scroll resta del browser.
-        if (dy > 0 ? corpo.scrollTop > 0 : statoSheet === 'piena') return;
+      if (decisione === 'attesa') {
+        if (Math.abs(dy) < 4) return;
+        if (Math.abs(tocco.clientX - inizioX) > Math.abs(dy) * 0.9) {
+          decisione = 'browser';
+          return;
+        }
+        // La scelta si fa al primo movimento, non dopo una soglia: quando lo
+        // scroll nativo è già partito il gesto non è più annullabile, ed era
+        // il motivo per cui "scorrere dentro per aprire" funzionava a metà.
+        const apre = dy < 0 && iniziale > 1;
+        const chiude = dy > 0 && corpo.scrollTop <= 0 && iniziale < massimo - 1;
+        if (!apre && !chiude) {
+          decisione = 'browser';
+          return;
+        }
+        decisione = 'pannello';
         attivo = true;
         trascinando = true;
         sheet.classList.add('trascinando');
         sheet.style.transition = 'none';
+        iniziale = traslazioneAttuale();
       }
       if (evento.cancelable) evento.preventDefault();
       const ora = performance.now();
@@ -2742,17 +2817,9 @@
       ultimoY = tocco.clientY;
       ultimoT = ora;
       let pixel = iniziale + dy;
-      const massimo = Math.max(0, sheet.offsetHeight - 120);
       if (pixel < 0) pixel = 0;
-      else if (pixel > massimo) pixel = massimo + Math.min(36, (pixel - massimo) * 0.35);
+      else if (pixel > massimo) pixel = massimo + Math.min(28, (pixel - massimo) * 0.3);
       applicaTrasformazione(pixel, false, true);
-    };
-
-    const fine = () => {
-      if (!attivo) return;
-      attivo = false;
-      if (performance.now() - ultimoT > 140) velocita = 0;
-      concludiTrascinamento(velocita);
     };
 
     corpo.addEventListener('touchstart', (evento) => {
@@ -2761,13 +2828,16 @@
       inizioY = ultimoY = tocco.clientY;
       inizioX = tocco.clientX;
       iniziale = traslazioneAttuale();
+      const punti = puntiSheet();
+      massimo = punti[punti.length - 1].valore;
       ultimoT = performance.now();
       velocita = 0;
       attivo = false;
+      decisione = 'attesa';
     }, { passive: true });
     corpo.addEventListener('touchmove', muovi, { passive: false });
-    corpo.addEventListener('touchend', fine);
-    corpo.addEventListener('touchcancel', fine);
+    corpo.addEventListener('touchend', rilascia);
+    corpo.addEventListener('touchcancel', rilascia);
   }
 
   /* ------------------------------------------------------------------ *

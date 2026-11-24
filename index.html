@@ -131,7 +131,7 @@
   .tab{display:flex;gap:4px;margin:12px 16px 0;padding:4px;background:var(--sabbia);border-radius:12px;flex:0 0 auto;}
   .tab button{position:relative;flex:1;border:0;background:transparent;padding:8px 6px;font-size:13px;font-weight:500;color:var(--testo-2);cursor:pointer;border-radius:9px;transition:background .15s,color .15s,box-shadow .15s;letter-spacing:-.1px;}
   .tab button.attivo{background:var(--sup);color:var(--testo);font-weight:600;box-shadow:0 1px 2px rgba(23,23,23,.08);}
-  .sheet-corpo{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(24px + env(safe-area-inset-bottom,0px));overscroll-behavior:contain;}
+  .sheet-corpo{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(24px + env(safe-area-inset-bottom,0px));overscroll-behavior:contain;touch-action:pan-y;}
   .pannello{display:flex;flex-direction:column;gap:16px;}
 
   .sezione-titolo{margin:0;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--testo-3);}
