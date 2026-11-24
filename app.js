@@ -7,7 +7,6 @@
   // Le logiche pure vivono in moduli separati, così sono testabili a parte.
   const Tariffe = window.Tariffe;
   const Piedi = window.Piedi;
-  const Tracciato = window.Tracciato;
 
   /* ------------------------------------------------------------------ *
    * Configurazione
@@ -621,28 +620,6 @@
     return proiezione;
   }
 
-  /* --- Aggancio alla rete stradale (OSRM) ------------------------------ *
-   * Le shapes TPER sono generalizzate: tra due punti il bus segue le strade,
-   * quindi il tracciato ufficiale viene agganciato con un map matching. Le
-   * geometrie agganciate restano in localStorage; se il servizio non risponde
-   * si disegna il tracciato ufficiale, e se manca anche quello la linea dritta.
-   * ------------------------------------------------------------------- */
-  const URL_SNAP = 'https://router.project-osrm.org/match/v1/driving/';
-  // v5: le forme hanno i punti di proiezione delle fermate e il treno usa i
-  // binari OSM, quindi le geometrie agganciate precedenti non valgono più.
-  const K_SNAP = 'tperzc_snap_v5';
-  const SNAP_MAX_PUNTI = 9;   // limite del servizio pubblico
-  const SNAP_MAX_RICHIESTE = 40;
-  let snapCache = null;
-  let snapGenerazione = 0;
-  let snapRichieste = 0;
-  // Geometrie già agganciate per il percorso mostrato: senza questa memoria
-  // ogni ridisegno (orologio, tab, arrivo di un tratto a piedi) rifaceva il
-  // map matching da capo e consumava il budget delle richieste.
-  let snapPercorso = null;
-  let snapInCorso = null;
-  let snapAgganciate = null;
-
   // Percorsi pedonali: OSRM pubblico FOSSGIS, profilo foot. Le coordinate
   // vengono inviate solo per calcolare il tratto a piedi; il risultato resta
   // in cache locale e, se il servizio non risponde, si usa il segmento diritto.
@@ -726,99 +703,12 @@
     return segmento('piedi', geometria || [da, a]);
   }
 
-  function snapCaricate() {
-    if (snapCache) return snapCache;
-    snapCache = new Map();
-    const salvate = leggiJSON(K_SNAP);
-    if (Array.isArray(salvate)) salvate.forEach((voce) => { if (voce && voce[0] && voce[1]) snapCache.set(voce[0], voce[1]); });
-    return snapCache;
-  }
-
-  function snapSalvate() {
-    if (!snapCache) return;
-    const voci = Array.from(snapCache.entries()).slice(-80);
-    const testo = JSON.stringify(voci);
-    if (testo.length < 1200000) scrivi(K_SNAP, testo);
-  }
-
-  // Chianghe legata alle fermate servite dal tratto: se cambia il percorso,
-  // cambia anche la geometria stradale attesa.
-  function chiaveSnap(tappa, coordinate) {
-    const primo = coordinate[0];
-    const ultimo = coordinate[coordinate.length - 1];
-    return tappa.forma + '|' + coordinate.length + '|' +
-      primo[0].toFixed(4) + ',' + primo[1].toFixed(4) + '|' +
-      ultimo[0].toFixed(4) + ',' + ultimo[1].toFixed(4);
-  }
-
-  function lunghezzaLinea(linea) {
-    let totale = 0;
-    for (let i = 1; i < linea.length; i += 1) {
-      const coseno = Math.cos(((linea[i][1] + linea[i - 1][1]) / 2) * Math.PI / 180);
-      const dx = (linea[i][0] - linea[i - 1][0]) * 111000 * coseno;
-      const dy = (linea[i][1] - linea[i - 1][1]) * 111000;
-      totale += Math.sqrt(dx * dx + dy * dy);
-    }
-    return totale;
-  }
-
-  function agganciaPezzo(punti, segnale) {
-    const percorso = punti.map((punto) => punto[0].toFixed(5) + ',' + punto[1].toFixed(5)).join(';');
-    const raggi = punti.map(() => 25).join(';');
-    return fetch(URL_SNAP + percorso + '?geometries=geojson&overview=full&radiuses=' + raggi, {
-      signal: segnale
-    }).then((risposta) => (risposta.ok ? risposta.json() : null)).then((dati) => {
-      if (!dati || dati.code !== 'Ok' || !dati.matchings || !dati.matchings.length) return null;
-      const agganciata = dati.matchings[0].geometry && dati.matchings[0].geometry.coordinates;
-      return agganciata && agganciata.length > 1 ? agganciata : null;
-    }).catch(() => null);
-  }
-
-  // Aggancia il tracciato ufficiale alla rete stradale, a pezzi di pochi punti
-  // (limite del servizio) e ricucendo il risultato. La forma resta quella del
-  // bus: il matching la porta sulle strade senza inventare percorsi.
-  // I treni non passano da OSRM: la loro shape GTFS è già la geometria dei
-  // binari e il profilo driving la sposterebbe sulle strade.
-  async function agganciaTratta(tappa, geometria) {
-    if (!tappa || tappa.tipo === 1 || tappa.tipo === 2) return null;
-    if (geometria.length < 3) return null;
-    const chiave = chiaveSnap(tappa, geometria);
-    const cache = snapCaricate();
-    if (cache.has(chiave)) return cache.get(chiave);
-    if (!navigator.onLine || snapRichieste >= SNAP_MAX_RICHIESTE) return null;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
-    try {
-      let agganciata = [];
-      for (let inizio = 0; inizio < geometria.length - 1; inizio += SNAP_MAX_PUNTI - 1) {
-        if (snapRichieste >= SNAP_MAX_RICHIESTE) return null;
-        snapRichieste += 1;
-        const pezzo = geometria.slice(inizio, inizio + SNAP_MAX_PUNTI);
-        const risultatoPezzo = await agganciaPezzo(pezzo, controller.signal);
-        if (!risultatoPezzo) return null;
-        agganciata = agganciata.length ? agganciata.concat(risultatoPezzo.slice(1)) : risultatoPezzo;
-        if (inizio + SNAP_MAX_PUNTI >= geometria.length) break;
-      }
-      if (agganciata.length < 2) return null;
-      // Un risultato molto più lungo del tracciato ufficiale è un giro
-      // sbagliato: meglio restare sulla forma originale.
-      if (lunghezzaLinea(agganciata) > lunghezzaLinea(geometria) * 2 + 300) return null;
-      cache.set(chiave, agganciata);
-      snapSalvate();
-      return agganciata;
-    } catch (errore) {
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
   function distanzaTra(a, b) {
     return Math.hypot((a[0] - b[0]) * 83000, (a[1] - b[1]) * 111000);
   }
 
-  // La linea deve toccare le fermate di salita e discesa, anche quando il
-  // tracciato (ufficiale o agganciato) si ferma qualche metro prima.
+  // La linea deve toccare le fermate di salita e discesa, anche quando la
+  // geometria GTFS si ferma qualche metro prima.
   const ESTENSIONE_MAX = 60;   // metri: oltre, il raccordo diritto taglierebbe la strada
 
   function estendiAgliEstremi(linea, da, a) {
@@ -842,18 +732,9 @@
     });
   }
 
-  // Disegna il percorso. `agganciate` contiene le geometrie stradali già
-  // arrivate: al primo giro si disegna l'ufficiale e si chiede il resto.
-  function firmaTracciato(esito) {
-    if (!esito || !esito.tappe || !esito.tappe.length) return null;
-    const da = sel.partenza ? sel.partenza.id : '';
-    const a = sel.destinazione ? sel.destinazione.id : '';
-    return da + '|' + a + '|' + esito.tappe.map((tappa) =>
-      [tappa.linea, tappa.tipo, tappa.da, tappa.a, tappa.forma, tappa.partenza].join(',')
-    ).join(';');
-  }
-
-  function disegnaTracciato(agganciate) {
+  // Disegna il percorso con le geometrie ufficiali GTFS: niente map matching
+  // stradale, la linea sulla mappa è quella che fa davvero il bus.
+  function disegnaTracciato() {
     if (!mappa) return;
     // Lo stile può finire di caricarsi dopo il primo disegno: i livelli si
     // aggiungono qui appena è pronto, senza dipendere da un solo evento.
@@ -863,22 +744,6 @@
     const sorgenteFermate = mappa.getSource('percorso-fermate');
 
     const esito = routing.stato === 'ok' ? routing.esito : null;
-    const firma = esito
-      ? firmaTracciato(esito)
-      : (routing.stato === 'piedi' && routing.piedi ? 'piedi|' + routing.piedi.chiave : null);
-    // Un nuovo percorso azzera il budget e le geometrie del precedente; lo
-    // stesso percorso riusa quelle già arrivate, senza rifare OSRM.
-    if (!agganciate) {
-      if (firma !== snapPercorso) {
-        snapPercorso = firma;
-        snapAgganciate = null;
-        snapInCorso = null;
-        snapRichieste = 0;
-        snapGenerazione += 1;
-      }
-      agganciate = snapAgganciate;
-    }
-
     const features = [];
     const fermate = [];
     const nodi = [];
@@ -906,9 +771,9 @@
       }
       tappe.forEach((tappa, indice) => {
         const voce = ufficiali[indice];
-        const agganciata = agganciate && agganciate[indice];
-        const geometria = agganciata || (voce && voce.punti);
-        const ufficiale = agganciata ? true : !!(voce && voce.ufficiale);
+        // Forma GTFS così com'è: è il percorso reale della linea.
+        const geometria = voce && voce.punti;
+        const ufficiale = !!(voce && voce.ufficiale);
         if (tappa.camminoPrima) {
           const da = coordinateFermata(tappa.camminoPrima.da);
           const a = coordinateFermata(tappa.da);
@@ -960,24 +825,6 @@
       });
       if (arrivo && !uguali(arrivo, primo)) nodi.push(nodo('arrivo', arrivo));
 
-      // Un solo giro di aggancio per percorso: poi si ridisegna con le strade.
-      if (!agganciate && firma && snapInCorso !== firma) {
-        snapInCorso = firma;
-        const generazione = ++snapGenerazione;
-        // Quali tratte passare a OSRM lo decide tracciato.js: i binari non
-        // sono strade e non devono mai finire nel map matching.
-        const richieste = Tracciato.richiesteSnap(tappe, ufficiali).map((punti, indice) =>
-          punti ? agganciaTratta(tappe[indice], punti) : Promise.resolve(null)
-        );
-        Promise.all(richieste).then((risultati) => {
-          if (generazione !== snapGenerazione || firma !== snapPercorso || routing.stato !== 'ok') return;
-          snapAgganciate = risultati;
-          if (!risultati.some((voce) => voce)) return;
-          disegnaTracciato(risultati);
-        }).catch(() => { /* resta il tracciato ufficiale */ }).finally(() => {
-          if (snapInCorso === firma) snapInCorso = null;
-        });
-      }
     }
     ultimeFeatures = features;
     sorgente.setData({ type: 'FeatureCollection', features: features });
@@ -987,10 +834,6 @@
     // Il pannello dichiara quando un tratto non ha il tracciato ufficiale.
     const nota = $('nota-tracciato');
     if (nota) nota.hidden = senzaTracciato === 0;
-    // Con le geometrie stradali il percorso può uscire dall'inquadratura
-    // calcolata sulla forma ufficiale: si riadatta una volta.
-    if (agganciate) inquadraPercorso(500);
-
     if (!features.length || !sel.partenza || !sel.destinazione) {
       inquadratoPerFermate = null;
       return;
