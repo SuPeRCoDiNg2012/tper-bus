@@ -63,6 +63,19 @@ test('cambio a piedi tra paline vicine non consuma un cambio', async () => {
   assert.equal(esito.arrivo, 30600);
 });
 
+test('la soglia a piedi limita i cambi a piedi', async () => {
+  const routing = await caricaRouting(dati([
+    [0, 0, 0, 28800, 1, 600],       // A → B
+    [2, 0, 3, 30000, 1, 600]        // D → E
+  ]));
+  routing.impostaCammini([['B', 'D', 120]]);
+
+  // Con 2 minuti concessi il cambio a piedi è possibile.
+  assert.ok(routing.calcola('A', 'E', GIORNO, { maxCambi: 1, camminoMax: 120 }));
+  // Con 3 minuti di soglia… anche; con 1 minuto no.
+  assert.equal(routing.calcola('A', 'E', GIORNO, { maxCambi: 1, camminoMax: 60 }), null);
+});
+
 test('il cambio con il treno vuole più margine di uno tra bus', async () => {
   // Bus in arrivo a B alle 08:10 e coincidenza alle 08:12. Tra due bus due
   // minuti bastano; se la coincidenza è un treno servono banchina e scale,

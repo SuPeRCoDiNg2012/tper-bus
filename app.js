@@ -21,6 +21,7 @@
   const K_RECENTI = 'tperzc_recenti_v2';
   const K_TRATTA = 'tperzc_tratta_v2';
   const K_QUANDO = 'tperzc_quando_v1';
+  const K_CAMMINATA = 'tperzc_camminata_v1';
   const K_PROXY = 'tperzc_proxy';
   const K_RELAY = 'tperzc_relay';
   const URL_UFFICIALE = 'https://solweb.tper.it/web/tools/zone-calculator.aspx';
@@ -53,6 +54,24 @@
   let aggiornato = null;
   const sel = { partenza: null, destinazione: null };
   let abbonamento = false;
+  // Quanto è disposto a camminare l'utente: da 3 a 25 minuti. È il tetto per i
+  // tratti a piedi che il pianificatore può proporre (fermate vicine e cambi).
+  const CAMMINATA_MIN = 3;
+  const CAMMINATA_MAX = 25;
+  const CAMMINATA_DEFAULT = 10;
+  const PASSO_METRI_SECONDO = 1.25;   // passo medio, lo stesso della navigazione
+
+  function leggiCamminata() {
+    const salvato = parseInt(leggiJSON(K_CAMMINATA), 10);
+    if (!isFinite(salvato)) return CAMMINATA_DEFAULT;
+    return Math.min(CAMMINATA_MAX, Math.max(CAMMINATA_MIN, salvato));
+  }
+
+  let camminata = leggiCamminata();
+
+  function raggioCamminata() {
+    return Math.round(camminata * 60 * PASSO_METRI_SECONDO);
+  }
   let mappa = null;
   const marker = { partenza: null, destinazione: null };
   let statoSheet = 'meta';
@@ -1795,7 +1814,11 @@
     let errore = null;
 
     function calcola(quando, vietate) {
-      return TPERRouting.calcola(da, a, quando, { maxCambi: 3, vietate: vietate || [] });
+      return TPERRouting.calcola(da, a, quando, {
+        maxCambi: 3,
+        vietate: vietate || [],
+        camminoMax: camminata * 60
+      });
     }
 
     function aggiungi(esito, quando) {
@@ -1845,7 +1868,10 @@
       da.forEach((origine) => {
         a.forEach((destinazione) => {
           if (origine.id === destinazione.id) return;
-          aggiungi(TPERRouting.calcola([origine], [destinazione], quando, { maxCambi: 3 }), quando);
+          aggiungi(TPERRouting.calcola([origine], [destinazione], quando, {
+            maxCambi: 3,
+            camminoMax: camminata * 60
+          }), quando);
         });
       });
     }
@@ -1905,7 +1931,7 @@
     const vicini = fermateVicine(fermata.lat, fermata.lon, 40, fermata.id)
       .filter((vicina) => disponibili.has(vicina.id))
       .map((vicina) => ({ fermata: vicina, distanza: distanzaMetri(fermata, vicina) }))
-      .filter((voce) => voce.distanza <= 500)
+      .filter((voce) => voce.distanza <= raggioCamminata())
       .sort((a, b) => {
         const trenoA = a.fermata.tipo === 'treno' || a.fermata.tipo === 'entrambi' ? 0 : 1;
         const trenoB = b.fermata.tipo === 'treno' || b.fermata.tipo === 'entrambi' ? 0 : 1;
@@ -1922,48 +1948,84 @@
     return elenco;
   }
 
-  // Cambio a piedi tra fermate vicine: le paline opposte o le fermate della
-  // stessa piazza stanno a 50–150 m. Senza questo la pianificazione le tratta
-  // come luoghi scollegati e fa fare giri assurdi in autobus.
-  let camminiPronti = false;
-  const CAMMINO_CAMBIO = 150;   // metri
+  // Cambio a piedi tra fermate vicine: le paline opposte stanno a 50–150 m, ma
+  // se l'utente è disposto a camminare si può cambiare anche tra fermate più
+  // lontane (fino al raggio scelto). Oltre 12 fermate per fermata non serve.
+  const CAMMINO_CAMBIO = 150;   // metri minimi garantiti
+  const CAMMINI_PER_FERMATA = 12;
+  let camminiRaggio = 0;
 
-  function preparaCammini() {
-    if (camminiPronti || typeof TPERRouting === 'undefined' || !TPERRouting.impostaCammini) return;
+  function preparaCammini(forza) {
+    if (typeof TPERRouting === 'undefined' || !TPERRouting.impostaCammini) return;
     if (fermate.length < 100) return;   // elenco ridotto offline: si riproverà
-    camminiPronti = true;
-    const celle = new Map();
-    fermate.forEach((f) => {
-      if (f.lat == null || f.lon == null) return;
-      const chiave = Math.round(f.lat * 1000) + ':' + Math.round(f.lon * 1000);
-      if (!celle.has(chiave)) celle.set(chiave, []);
-      celle.get(chiave).push(f);
-    });
+    const raggio = Math.max(CAMMINO_CAMBIO, raggioCamminata());
+    if (!forza && camminiRaggio === raggio) return;
+    camminiRaggio = raggio;
     const coppie = [];
+    const viste = new Set();
+    const albero = alberoFermate(fermate.filter((f) => f.lat != null && f.lon != null));
     fermate.forEach((f) => {
       if (f.lat == null || f.lon == null) return;
-      const cx = Math.round(f.lat * 1000);
-      const cy = Math.round(f.lon * 1000);
-      for (let dx = -2; dx <= 2; dx += 1) {
-        for (let dy = -2; dy <= 2; dy += 1) {
-          const gruppo = celle.get((cx + dx) + ':' + (cy + dy));
-          if (!gruppo) continue;
-          gruppo.forEach((v) => {
-            if (v.id <= f.id) return;   // ogni coppia una volta sola
-            const d = distanzaMetri(f, v);
-            if (d <= CAMMINO_CAMBIO) coppie.push([f.id, v.id, Math.round(d * 1.15)]);
-          });
-        }
-      }
+      const vicine = [];
+      piuVicine(albero, f, raggio, vicine, CAMMINI_PER_FERMATA);
+      vicine.sort((a, b) => a.metri - b.metri);
+      vicine.slice(0, CAMMINI_PER_FERMATA).forEach((voce) => {
+        const chiave = f.id < voce.id ? f.id + '|' + voce.id : voce.id + '|' + f.id;
+        if (viste.has(chiave)) return;
+        viste.add(chiave);
+        // Distanza pedonale stimata: la strada è ~15% più lunga della linea d'aria.
+        coppie.push([f.id, voce.id, Math.round((voce.metri * 1.15) / PASSO_METRI_SECONDO)]);
+      });
     });
     TPERRouting.impostaCammini(coppie);
+  }
+
+  // Indice spaziale minimale (k-d tree) sulle fermate: senza, con 25 minuti di
+  // cammino ogni fermata andava confrontata con tutte quelle nel raggio e il
+  // ricalcolo durava secondi. Qui si visitano solo i rami che possono contenere
+  // fermate entro il raggio.
+  function alberoFermate(elenco) {
+    function costruisci(punti, profondita) {
+      if (!punti.length) return null;
+      const asse = profondita % 2 === 0 ? 'lat' : 'lon';
+      punti.sort((a, b) => a[asse] - b[asse]);
+      const mezzo = punti.length >> 1;
+      return {
+        punto: punti[mezzo],
+        asse: asse,
+        sinistra: costruisci(punti.slice(0, mezzo), profondita + 1),
+        destra: costruisci(punti.slice(mezzo + 1), profondita + 1)
+      };
+    }
+    return costruisci(elenco.slice(), 0);
+  }
+
+  function piuVicine(nodo, f, raggio, migliore, quante) {
+    if (!nodo) return;
+    const d = distanzaMetri(f, nodo.punto);
+    if (d > 0 && d <= raggio) {
+      migliore.push({ id: nodo.punto.id, metri: d });
+      if (migliore.length > quante * 2) {
+        migliore.sort((a, b) => a.metri - b.metri);
+        migliore.length = quante;
+      }
+    }
+    const delta = nodo.asse === 'lat' ? f.lat - nodo.punto.lat : f.lon - nodo.punto.lon;
+    const verso = delta < 0 ? nodo.sinistra : nodo.destra;
+    const opposto = delta < 0 ? nodo.destra : nodo.sinistra;
+    piuVicine(verso, f, raggio, migliore, quante);
+    // 1 grado di latitudine vale ~111 km: sotto questa soglia anche l'altro
+    // ramo può avere fermate utili.
+    if (Math.abs(delta) * 111000 <= raggio) piuVicine(opposto, f, raggio, migliore, quante);
   }
 
   function disegnaPercorso() {
     const blocco = $('blocco-percorso');
     if (!blocco) return;
     assicuraQuando();
-    blocco.innerHTML = VistaPercorso.controlli(routing.giorno, routing.orario, routing.modo) +
+    // La scheda legge da qui quanti minuti a piedi sono concessi.
+    routing.camminata = camminata;
+    blocco.innerHTML = VistaPercorso.controlli(routing.giorno, routing.orario, routing.modo, camminata) +
       VistaPercorso.esito(routing, etichettaFermata);
     aggiornaScrim();
     // I campi vengono ricreati a ogni render: un change di un campo già
@@ -1982,6 +2044,24 @@
       inputData.addEventListener('change', () => {
         if (!inputData.isConnected) return;
         aggiornaQuando(inputData.value, routing.orario, false);
+      });
+    }
+    // Quanto si è disposti a camminare: si salva e si ricalcola il viaggio.
+    const inputCamminata = $('input-camminata');
+    if (inputCamminata) {
+      const valore = $('valore-camminata');
+      inputCamminata.addEventListener('input', () => {
+        if (valore) valore.textContent = inputCamminata.value + ' min';
+      });
+      inputCamminata.addEventListener('change', () => {
+        if (!inputCamminata.isConnected) return;
+        const scelto = parseInt(inputCamminata.value, 10);
+        camminata = Math.min(CAMMINATA_MAX, Math.max(CAMMINATA_MIN, isFinite(scelto) ? scelto : CAMMINATA_DEFAULT));
+        scrivi(K_CAMMINATA, String(camminata));
+        // Il raggio dei cambi a piedi cambia con la soglia: si ricostruisce.
+        preparaCammini(true);
+        routing.chiave = null;
+        calcolaPercorso();
       });
     }
     // Le opzioni sono <details>: si aprono al clic. Aperta una, la mappa mostra

@@ -28,9 +28,10 @@
     return n === 0 ? 'diretto' : (n === 1 ? '1 cambio' : n + ' cambi');
   }
 
-  /** Comandi data/ora sopra il percorso. */
-  function controlli(giorno, orario, modo) {
+  /** Comandi data/ora sopra il percorso, più la soglia a piedi. */
+  function controlli(giorno, orario, modo, camminata) {
     const arrivo = modo === 'arrivo';
+    const minutiCammino = Math.min(25, Math.max(3, parseInt(camminata, 10) || 10));
     return '<div class="modo-quando" role="group" aria-label="Tipo di orario">' +
       '<button type="button" data-azione="modo-partenza" class="' + (arrivo ? '' : 'attivo') + '" aria-pressed="' + (arrivo ? 'false' : 'true') + '">Parti alle</button>' +
       '<button type="button" data-azione="modo-arrivo" class="' + (arrivo ? 'attivo' : '') + '" aria-pressed="' + (arrivo ? 'true' : 'false') + '">Arriva entro</button>' +
@@ -42,6 +43,14 @@
       (arrivo
         ? '<button type="button" class="adesso" data-azione="tra-un-ora">Tra 1 ora</button>'
         : '<button type="button" class="adesso" data-azione="ora-adesso">Adesso</button>') +
+      '</div>' +
+      // Quanto si è disposti a camminare: il pianificatore usa questa soglia per
+      // le fermate raggiungibili a piedi e per i cambi a piedi.
+      '<div class="camminata">' +
+      '<label for="input-camminata">' + Icone.svg('footprints', 14) + '<span>A piedi</span></label>' +
+      '<input id="input-camminata" type="range" min="3" max="25" step="1" value="' + minutiCammino +
+      '" aria-label="Minuti disposti a camminare" aria-valuetext="' + minutiCammino + ' minuti">' +
+      '<output id="valore-camminata" for="input-camminata">' + minutiCammino + ' min</output>' +
       '</div>';
   }
 
@@ -162,7 +171,7 @@
     if (vista.stato === 'messaggio') {
       const codice = vista.esito && vista.esito.errore;
       let testo = 'Percorso non disponibile per queste fermate.';
-      if (codice === 'senza-orari') testo = 'Nessuna fermata con orari nel raggio di 500 m: questa stazione non ha corse disponibili (per alcune linee ferroviarie locali non esiste un GTFS aperto). Scegli una fermata bus vicina.';
+      if (codice === 'senza-orari') testo = 'Nessuna fermata con orari entro ' + (vista.camminata || 10) + ' minuti a piedi: questa stazione non ha corse disponibili (per alcune linee ferroviarie locali non esiste un GTFS aperto). Scegli una fermata bus vicina o aumenta i minuti a piedi.';
       return '<div class="box-messaggio">' + esc(testo) + '</div>';
     }
     if (vista.stato === 'nessuno') {

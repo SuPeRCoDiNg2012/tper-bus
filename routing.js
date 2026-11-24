@@ -207,7 +207,8 @@
    * in quel giro. Le tratte stanno per giro (e non per fermata), così la
    * ricostruzione non può entrare in loop quando una fermata migliora due volte.
    */
-  function pianifica(chiave, origini, destinazioni, oraPartenza, maxCambi, vietate) {
+  function pianifica(chiave, origini, destinazioni, oraPartenza, maxCambi, vietate, camminoMax) {
+    const limitePiedi = camminoMax != null ? camminoMax : CAMMINO_CAMBIO_MASSIMO;
     const rete = costruisciRete(chiave);
     const numeroFermate = dati.fermate.length;
     let orario = new Int32Array(numeroFermate).fill(INF);
@@ -256,7 +257,7 @@
           for (let v = 0; v < vicini.length; v += 1) {
             const altra = vicini[v][0];
             const secondi = vicini[v][1];
-            if (piediTotali[fermata] + secondi > CAMMINO_CAMBIO_MASSIMO) continue;
+            if (piediTotali[fermata] + secondi > limitePiedi) continue;
             const arrivo = orario[fermata] + secondi;
             if (arrivo >= orario[altra]) continue;
             orario[altra] = arrivo;
@@ -465,6 +466,9 @@
     // Linee da evitare: si usa per chiedere un'alternativa davvero diversa.
     const vietate = opzioni && Array.isArray(opzioni.vietate) && opzioni.vietate.length
       ? new Set(opzioni.vietate.map((nome) => String(nome).toUpperCase())) : null;
+    // Quanto si è disposti a camminare (secondi) per un cambio a piedi tra
+    // fermate: lo decide l'utente dalla scheda (3–25 minuti).
+    const camminoMax = opzioni && opzioni.camminoMax != null ? Number(opzioni.camminoMax) : null;
     const origini = normalizzaElenco(daId);
     const destinazioni = normalizzaElenco(aId);
     if (!origini.length || !destinazioni.length) return { errore: 'senza-orari' };
@@ -481,14 +485,14 @@
     // presto sullo stesso asse temporale (mezzanotte del giorno prima).
     if (data.getHours() < 4) {
       const ieri = new Date(data.getTime() - 86400000);
-      const diIeri = pianifica(chiaveDi(ieri), origini, destinazioni, ora + 86400, maxCambi, vietate);
-      const diOggi = pianifica(chiaveDi(data), origini, destinazioni, ora, maxCambi, vietate);
+      const diIeri = pianifica(chiaveDi(ieri), origini, destinazioni, ora + 86400, maxCambi, vietate, camminoMax);
+      const diOggi = pianifica(chiaveDi(data), origini, destinazioni, ora, maxCambi, vietate, camminoMax);
       if (!diIeri) return diOggi || null;
       if (!diOggi) return diIeri;
       return diIeri.arrivo <= diOggi.arrivo + 86400 ? diIeri : diOggi;
     }
 
-    return pianifica(chiaveDi(data), origini, destinazioni, ora, maxCambi, vietate) || null;
+    return pianifica(chiaveDi(data), origini, destinazioni, ora, maxCambi, vietate, camminoMax) || null;
   }
 
   /* --- Geometria delle corse ------------------------------------------ */

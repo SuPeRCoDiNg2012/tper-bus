@@ -160,3 +160,18 @@ test('il percorso riserva un riquadro all’orario reale e dichiara i treni', ()
   assert.match(html, /id="live-percorso" hidden/);
   assert.match(html, /Per i treni vale l'orario programmato/);
 });
+
+test('la scheda espone quanto si è disposti a camminare, da 3 a 25 minuti', () => {
+  const html = Vista.controlli('2026-11-24', '08:00', 'partenza', 15);
+  assert.match(html, /id="input-camminata"/);
+  assert.match(html, /type="range"/);
+  assert.match(html, /min="3"/);
+  assert.match(html, /max="25"/);
+  assert.match(html, /value="15"/);
+  assert.match(html, /15 min/);
+
+  // Fuori scala si riporta nei limiti consentiti.
+  assert.match(Vista.controlli('2026-11-24', '08:00', 'partenza', 99), /value="25"/);
+  assert.match(Vista.controlli('2026-11-24', '08:00', 'partenza', 1), /value="3"/);
+  assert.match(Vista.controlli('2026-11-24', '08:00', 'partenza', undefined), /value="10"/);
+});
