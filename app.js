@@ -496,11 +496,66 @@
     if (!mappa || mappa.getSource('percorso')) return;
     try {
       creaLivelliPercorso();
-    } catch (errore) { /* stile non pronto: si riproverà */ }
+    } catch (errore) { return; /* stile non pronto: si riproverà */ }
+    aggiornaFermateMappa();
+  }
+
+  // Tutte le fermate del dataset su un solo GeoJSON: punti piccoli da vicino,
+  // nome solo ad alta zoom. Sono 9.600, quindi niente simboli pesanti.
+  function aggiornaFermateMappa() {
+    if (!mappa) return;
+    const sorgente = mappa.getSource('fermate-mappa');
+    if (!sorgente || !fermate.length) return;
+    const features = fermate
+      .filter((f) => f.lat != null && f.lon != null)
+      .map((f) => ({
+        type: 'Feature',
+        properties: {
+          id: f.id,
+          nome: nomeBreve(f.nome),
+          treno: f.tipo === 'treno' || f.tipo === 'entrambi' ? 1 : 0
+        },
+        geometry: { type: 'Point', coordinates: [f.lon, f.lat] }
+      }));
+    sorgente.setData({ type: 'FeatureCollection', features: features });
   }
 
   function creaLivelliPercorso() {
     const vuoto = { type: 'FeatureCollection', features: [] };
+    // Fermate: sotto i livelli del percorso, così il tracciato resta sopra.
+    mappa.addSource('fermate-mappa', { type: 'geojson', data: vuoto });
+    mappa.addLayer({
+      id: 'fermate-punti',
+      type: 'circle',
+      source: 'fermate-mappa',
+      minzoom: 12.5,
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 12.5, 2.4, 16, 5],
+        'circle-color': ['case', ['==', ['get', 'treno'], 1], '#1A1A1A', '#FFFFFF'],
+        'circle-stroke-color': ['case', ['==', ['get', 'treno'], 1], '#FFFFFF', '#1A1A1A'],
+        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 12.5, 1, 16, 1.6]
+      }
+    });
+    mappa.addLayer({
+      id: 'fermate-nomi',
+      type: 'symbol',
+      source: 'fermate-mappa',
+      minzoom: 15.5,
+      layout: {
+        'text-field': ['get', 'nome'],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 11,
+        'text-offset': [0, 1.1],
+        'text-anchor': 'top',
+        'text-optional': true,
+        'text-padding': 4
+      },
+      paint: {
+        'text-color': '#1A1A1A',
+        'text-halo-color': '#FFFFFF',
+        'text-halo-width': 1.2
+      }
+    });
     mappa.addSource('percorso', { type: 'geojson', data: vuoto });
     mappa.addSource('percorso-fermate', { type: 'geojson', data: vuoto });
     mappa.addSource('percorso-nodi', { type: 'geojson', data: vuoto });
@@ -1825,6 +1880,14 @@
     live.ts = 0;
     live.stato = 'idle';
     live.avviso = '';
+    // Gli orari programmati arrivano dal GTFS: se non sono ancora in memoria
+    // si caricano adesso e la vista si ridisegna da sola.
+    if (typeof TPERRouting !== 'undefined' && TPERRouting.carica &&
+        !(typeof TPERRouting.disponibile === 'function' && TPERRouting.disponibile())) {
+      TPERRouting.carica(URL_ORARI_GZ, URL_ORARI).then(() => {
+        if (vistaAttiva === 'orari' && fermataLive() === f) renderLive();
+      }).catch(() => { /* resta il tempo reale */ });
+    }
     mostraVista('orari');
     impostaSheet('piena');
     caricaLive(true);
@@ -2947,6 +3010,69 @@
     }).join('') + '</ul>';
   }
 
+  /* ------------------------------------------------------------------ *
+   * Orari programmati della giornata (GTFS)
+   * ------------------------------------------------------------------ */
+  const orariGiorno = { chiave: null, elenco: [] };
+
+  function partenzeDelGiorno(f) {
+    if (!f || eIndirizzo(f)) return [];
+    if (typeof TPERRouting === 'undefined' || !TPERRouting.partenzeFermata) return [];
+    const chiave = f.id + '|' + routing.giorno;
+    if (orariGiorno.chiave === chiave) return orariGiorno.elenco;
+    let elenco = [];
+    try {
+      elenco = TPERRouting.partenzeFermata(f.id, dataDaGiornoEOra(routing.giorno, '12:00')) || [];
+    } catch (errore) { elenco = []; }
+    orariGiorno.chiave = chiave;
+    orariGiorno.elenco = elenco;
+    return elenco;
+  }
+
+  // Tutte le corse della giornata, non solo il prossimo passaggio: il tempo
+  // reale resta sopra, qui sotto c'è il quadro completo.
+  function orariGiornoHTML(f) {
+    if (!f || eIndirizzo(f)) return '';
+    if (typeof TPERRouting === 'undefined' || !TPERRouting.partenzeFermata) return '';
+    const pronti = typeof TPERRouting.disponibile === 'function' && TPERRouting.disponibile();
+    if (!pronti) {
+      return '<section class="orari-giorno"><h3 class="orari-titolo">Orari programmati</h3>' +
+        '<p class="micro">Gli orari della giornata si caricano con la rete.</p></section>';
+    }
+    const elenco = partenzeDelGiorno(f);
+    const oggi = routing.giorno === oggiISO();
+    const adesso = secondiDelGiorno(new Date());
+    const riga = (p, passato) => {
+      const voce = coloreLinea(p.linea);
+      const colore = voce
+        ? ' style="background:' + esc(voce[0]) + ';color:' + esc(voce[1] || '#FFFFFF') + '"'
+        : '';
+      // Il motore conosce solo gli id delle fermate: il nome del capolinea
+      // arriva dall'elenco fermate dell'app.
+      const capolinea = fermataPerId(p.capolineaId);
+      const destinazione = capolinea ? capolinea.nome : (p.capolinea || '');
+      return '<div class="ora-riga' + (passato ? ' passato' : '') + '">' +
+        '<span class="ora">' + hhmm(p.orario) + '</span>' +
+        '<span class="badge-linea"' + colore + '>' + esc(p.linea) + '</span>' +
+        '<span class="ora-dest">' + esc(nomeBreve(destinazione)) + '</span></div>';
+    };
+    const passate = [];
+    const future = [];
+    elenco.forEach((p) => (oggi && p.orario < adesso ? passate : future).push(p));
+    // Le corse già partite restano disponibili ma non rubano lo spazio a
+    // quelle che devono ancora passare: la vista si apre su quelle di adesso.
+    const archivio = passate.length && future.length
+      ? '<details class="orari-passate"><summary>' + passate.length + ' corse già passate</summary>' +
+        '<div class="ora-lista">' + passate.map((p) => riga(p, true)).join('') + '</div></details>'
+      : passate.map((p) => riga(p, true)).join('');
+    return '<section class="orari-giorno">' +
+      '<h3 class="orari-titolo">Orari programmati · ' + elenco.length + '</h3>' +
+      (elenco.length
+        ? archivio + '<div class="ora-lista">' + future.map((p) => riga(p, false)).join('') + '</div>'
+        : '<p class="micro">Nessun orario programmato per questo giorno.</p>') +
+      '</section>';
+  }
+
   // Vista orari: arrivi della fermata scelta, aggiornati ogni 30 secondi.
   function renderLive() {
     const box = $('vista-orari');
@@ -2985,6 +3111,7 @@
       }
       html += '<p class="micro">LIVE = posizione reale del bus. ORARIO = orario programmato.</p>';
     }
+    html += orariGiornoHTML(fermata);
     box.innerHTML = html;
     aggiornaScrim();
   }
@@ -3738,10 +3865,20 @@
 
     // ---- Mappa: un tap chiude il pannello espanso e la mini-card ----
     if (mappa) {
-      mappa.on('click', () => {
+      // Una fermata toccata apre la sua mini-card; un tocco sul vuoto chiude.
+      mappa.on('click', (evento) => {
+        const colpi = mappa.getLayer('fermate-punti')
+          ? mappa.queryRenderedFeatures(evento.point, { layers: ['fermate-punti'] })
+          : null;
+        if (colpi && colpi.length) {
+          const fermata = fermataPerId(colpi[0].properties.id);
+          if (fermata) { apriMini(fermata); return; }
+        }
         chiudiMini();
         if (statoSheet === 'piena' && !navigazione.attiva) impostaSheet('meta');
       });
+      mappa.on('mouseenter', 'fermate-punti', () => { mappa.getCanvas().style.cursor = 'pointer'; });
+      mappa.on('mouseleave', 'fermate-punti', () => { mappa.getCanvas().style.cursor = ''; });
     }
 
     $('nav-fondo').addEventListener('click', (evento) => {
@@ -3777,7 +3914,7 @@
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible') return;
       if (vistaAttiva === 'orari' && Date.now() - live.ts > INTERVALLO_LIVE) caricaLive(true);
-      else if (vistaAttiva === 'percorso' && ultimiOrari > 0) disegnaPercorso();
+      else if (vistaAttiva === 'percorso' && routing.stato !== 'idle') disegnaPercorso();
     });
 
     window.addEventListener('offline', () => { $('pill-offline').hidden = false; });
@@ -3797,6 +3934,7 @@
     disposizioneIniziale();
     await caricaDati();
     ripristinaTratta();
+    aggiornaFermateMappa();
     aggiornaMarker();
     mostraVista('percorso');
     renderPercorso();

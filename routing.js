@@ -516,6 +516,41 @@
   }
 
   /**
+   * Tutte le partenze di una fermata in una giornata, in ordine di orario.
+   * È il quadro completo che affianca il tempo reale: la rete del giorno è già
+   * indicizzata per fermata, quindi non si scorre tutto il dataset.
+   */
+  function partenzeFermata(id, quando) {
+    if (!dati) return [];
+    const indice = indiceFermate.get(id);
+    if (indice === undefined) return [];
+    const data = quando || new Date();
+    const rete = costruisciRete(chiaveDi(data));
+    const elenco = [];
+    for (let k = rete.offset[indice]; k < rete.offset[indice + 1]; k += 1) {
+      const corsa = rete.corse[rete.perCorsa[k]];
+      const posizione = rete.perPosizione[k];
+      // All'ultima fermata il bus non parte: non è un orario utile.
+      if (posizione >= corsa.fermate.length - 1) continue;
+      const info = nomeLinea(corsa.linea);
+      const ferroviario = info.tipo === 1 || info.tipo === 2;
+      const ultima = dati.fermate[corsa.fermate[corsa.fermate.length - 1]];
+      const oggetto = ultima && typeof ultima === 'object';
+      elenco.push({
+        linea: ferroviario ? etichettaTreno(info.linea) : info.linea,
+        tipo: info.tipo,
+        fer: ferroviario && /^s\d/i.test(String(info.linea)),
+        orario: corsa.orari[posizione],
+        capolinea: oggetto ? ultima.nome : (ultima || ''),
+        capolineaId: oggetto ? ultima.id : (ultima || null),
+        forma: corsa.forma
+      });
+    }
+    elenco.sort((a, b) => a.orario - b.orario || String(a.linea).localeCompare(String(b.linea)));
+    return elenco;
+  }
+
+  /**
    * I due criteri in un colpo solo: una ricerca, un pool, due scelte. Evita di
    * ripetere la ricerca quando la scheda deve mostrare entrambe le proposte.
    */
@@ -853,6 +888,7 @@
     tratta: tratta,
     calcola: calcola,
     calcolaConfronto: calcolaConfronto,
+    partenzeFermata: partenzeFermata,
     punteggio: punteggio,
     confronta: confronta,
     valuta: valuta,

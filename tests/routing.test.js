@@ -368,3 +368,23 @@ test('il criterio assente vale veloce (retrocompatibilità)', async () => {
   assert.equal(senzaCriterio.arrivo, esplicito.arrivo);
   assert.equal(senzaCriterio.punteggio.costoVeloce, esplicito.punteggio.costoVeloce);
 });
+
+test('partenzeFermata elenca tutte le corse del giorno, senza i capolinea', async () => {
+  const routing = await caricaRouting(dati([
+    [0, 0, 0, 28800, 1, 600, 1, 600],   // L1 A 08:00 → B → C 08:20
+    [0, 0, 0, 32400, 1, 600, 1, 600],   // L1 A 09:00 → B → C 09:20
+    [1, 0, 1, 29100, 1, 300]            // L2 B 08:05 → C
+  ]));
+
+  const partenze = routing.partenzeFermata('A', GIORNO);
+  assert.deepEqual(partenze.map((p) => p.orario), [28800, 32400]);
+  assert.deepEqual(partenze.map((p) => p.linea), ['L1', 'L1']);
+  assert.equal(partenze[0].capolinea, 'C');
+  // A C il bus arriva e non riparte: non è una partenza.
+  assert.deepEqual(routing.partenzeFermata('C', GIORNO), []);
+  // A B compaiono anche le corse che proseguono verso C, in ordine di orario.
+  const aB = routing.partenzeFermata('B', GIORNO);
+  assert.deepEqual(aB.map((p) => p.linea), ['L2', 'L1', 'L1']);
+  assert.deepEqual(aB.map((p) => p.orario), [29100, 29400, 33000]);
+  assert.deepEqual(routing.partenzeFermata('Z', GIORNO), []);
+});
