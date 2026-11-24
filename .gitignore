@@ -1,3 +1,7 @@
 # Artefatti degli script di preprocessing
 __pycache__/
 *.pyc
+
+# Download temporanei degli script (rete ferroviaria OSM, GTFS)
+.tmp-binari/
+.tmp-treni/

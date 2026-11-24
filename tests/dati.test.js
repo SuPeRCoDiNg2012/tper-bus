@@ -103,6 +103,61 @@ test('tracciati: corse allineate, forme e posizioni valide', () => {
   });
 });
 
+test('tracciati: fermate vicine alla linea e treni sulla rete ferroviaria', () => {
+  const coordinate = new Map(fermate.fermate.map((f) => [f.id, [f.lon, f.lat]]));
+  const distanza = (a, b) => Math.hypot(
+    (a[0] - b[0]) * 111320 * Math.cos((a[1] * Math.PI) / 180),
+    (a[1] - b[1]) * 111320
+  );
+  const decodifica = (testo) => {
+    const punti = [];
+    let indice = 0;
+    let lat = 0;
+    let lon = 0;
+    const numero = () => {
+      let risultato = 0;
+      let shift = 0;
+      let byte;
+      do {
+        byte = testo.charCodeAt(indice++) - 63;
+        risultato |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      return (risultato & 1) ? ~(risultato >> 1) : (risultato >> 1);
+    };
+    while (indice < testo.length) {
+      lat += numero();
+      lon += numero();
+      punti.push([lon / 1e5, lat / 1e5]);
+    }
+    return punti;
+  };
+
+  let scartoMassimo = 0;
+  tracciati.posizioni.forEach((tabella, indice) => {
+    const punti = decodifica(tracciati.forme[indice]);
+    for (let k = 0; k < tabella.length; k += 2) {
+      const fermata = coordinate.get(orari.fermate[tabella[k]]);
+      const vertice = punti[tabella[k + 1]];
+      if (!fermata || !vertice) continue;
+      scartoMassimo = Math.max(scartoMassimo, distanza(fermata, vertice));
+    }
+  });
+  assert.ok(scartoMassimo <= 300, 'fermata troppo lontana dalla linea: ' + Math.round(scartoMassimo) + ' m');
+
+  const formeTreno = new Set();
+  orari.corse.forEach((corsa, indice) => {
+    if (orari.linee[corsa[0]][1] === 2) formeTreno.add(tracciati.corse[indice]);
+  });
+  formeTreno.forEach((forma) => {
+    const punti = decodifica(tracciati.forme[forma]);
+    assert.ok(punti.length >= 50, 'forma treno troppo rada: ' + forma + ' (' + punti.length + ' punti)');
+    let saltoMassimo = 0;
+    for (let i = 1; i < punti.length; i += 1) saltoMassimo = Math.max(saltoMassimo, distanza(punti[i - 1], punti[i]));
+    assert.ok(saltoMassimo <= 3000, 'salto ferroviario assurdo nella forma ' + forma + ': ' + Math.round(saltoMassimo) + ' m');
+  });
+});
+
 test('treni: stazioni, linee e corse con geometria', () => {
   const stazioni = orari.fermate.filter((id) => id.startsWith('TRN'));
   assert.deepEqual(stazioni.sort(), [

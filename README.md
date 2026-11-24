@@ -17,6 +17,7 @@ Web app mobile-first (PWA) per calcolare zone tariffarie, costo del biglietto e 
 | Percorsi a piedi | OSRM pedonale pubblico FOSSGIS (`routing.openstreetmap.de`) | 0 € — nessuna API key | Solo online: se il servizio non risponde o manca la rete si usa il segmento diritto. La richiesta contiene solo le coordinate del tratto | https://routing.openstreetmap.de |
 | Coordinate stazioni | OpenStreetMap / FER, con integrazione manuale | 0 € — ODbL | Solo per le stazioni ferroviarie; nessun dato personale | https://www.openstreetmap.org |
 | Orari dei treni | GTFS nazionale Trenitalia via NAP (CC BY 4.0), conversione `deryclem/trenitalia-gtfs` | 0 € — licenza aperta | Copre Bologna C.le, Imola e l'intero ramo Bologna–Pianoro (San Vitale, Mazzini, San Ruffillo, Rastignano, Musiano). Per Vignola e Porretta le fermate sono presenti, ma non esiste un GTFS aperto con gli orari intermedi | https://github.com/deryclem/trenitalia-gtfs |
+| Geometria dei binari | OpenStreetMap (`railway=rail`) via Overpass, usata solo per rigenerare `data/tracciati.json` | 0 € — ODbL | Le shapes del GTFS nazionale hanno solo 5–8 punti e tagliavano fuori dai binari; la geometria viene ricostruita una volta e salvata nel dataset, non interrogata a runtime | https://www.openstreetmap.org |
 | Mappa | MapLibre GL + OpenFreeMap (stile Liberty) | 0 € — nessuna API key, nessun limite | Richiede connessione per stile e tile vettoriali; ricerca fermate, zone e prezzi restano offline | https://openfreemap.org |
 | Ricerca luoghi e indirizzi | Nominatim (OpenStreetMap) | 0 € — nessuna API key | Solo online e con limite di 1 richiesta al secondo; il testo cercato viene inviato a OpenStreetMap. Cerca sia per nome di luogo sia per indirizzo. Senza connessione restano le fermate | https://nominatim.org |
 | PWA (installabilità + offline) | `manifest.json` completo + icone PNG/maskable + Service Worker nativo del browser | 0 € — standard web nativo | Nessuno | https://developer.mozilla.org/docs/Web/Progressive_web_apps |
@@ -53,13 +54,14 @@ tper-zone-calc/
 │   ├── linee-colori.json           # Colore ufficiale di ogni linea (GTFS route_color) per scheda e mappa
 │   ├── orari.json                  # Orari di tutte le corse bus + 110 corse treno (~5,9 MB)
 │   ├── orari.json.gz               # Stessa cosa in gzip (~271 KB): è questo che l'app scarica
-│   ├── tracciati.json              # Geometrie reali di bus e treni (1.637 forme, ~1,6 MB)
-│   └── tracciati.json.gz           # Stessa cosa in gzip (~370 KB): scaricata solo quando serve il percorso
+│   ├── tracciati.json              # Geometrie reali di bus e treni (1.637 forme, ~1,8 MB)
+│   └── tracciati.json.gz           # Stessa cosa in gzip (~400 KB): scaricata solo quando serve il percorso
 ├── scripts/
 │   ├── converti-fermate-autobus.py # Converte il dataset ufficiale TPER (bus) nei due file dati sopra
 │   ├── estrai-colori-linee.py      # Estrae i colori ufficiali delle linee da routes.txt del GTFS
 │   ├── preprocess-orari.js         # Dal GTFS TPER genera data/orari.json e data/tracciati.json per i bus
 │   ├── aggiungi-treni.js           # Unisce le corse del GTFS nazionale Trenitalia al dataset bus
+│   ├── ricostruisci-tracciati.js   # Riproietta le fermate sulle forme e ricostruisce i binari da OSM
 │   └── preprocess-gtfs.js          # (opzionale) elabora il GTFS completo, utile solo per dati extra
 ├── tests/
 │   ├── dati.test.js                # Invarianti dei JSON (fermate, corse, forme, treni)
@@ -126,6 +128,14 @@ node scripts/aggiungi-treni.js gtfs-trenitalia data/orari.json data/tracciati.js
 
 Lo script rifiuta di girare due volte sullo stesso dataset, così non duplica le corse. Se in futuro il GTFS nazionale includerà altre stazioni, aggiungile all'elenco `STAZIONI` in cima a `scripts/aggiungi-treni.js` (codice `stop_code` NAP e id `TRN…` usato in `data/fermate.json`).
 
+Dopo l'unione ferroviaria esegui la riparazione delle geometrie:
+
+```bash
+node scripts/ricostruisci-tracciati.js --scrivi
+```
+
+Lo script ricalcola la proiezione di ogni fermata sulla propria forma (monotona e sul segmento, non sul solo vertice), inserisce il punto di proiezione nella polilinea e sostituisce le forme ferroviarie troppo rade con il percorso reale sulla rete `railway=rail` di OpenStreetMap. La prima volta scarica i binari da Overpass e li mette in `.tmp-binari/` (ignorato da Git); senza `--scrivi` esegue solo le verifiche. Non è necessario a runtime: il risultato resta in `data/tracciati.json`.
+
 ### Calcolo del percorso (bus e treni)
 
 Il blocco **Percorso** nel tab Viaggio calcola quali bus prendere, a che ora e con quanti cambi, come un pianificatore di viaggio. Non usa nessun servizio esterno: `routing.js` legge `data/orari.json.gz` (tutti i passaggi di tutte le corse TPER) e applica un algoritmo RAPTOR lato browser.
@@ -154,7 +164,7 @@ python3 scripts/estrai-colori-linee.py gtfs-tper/routes.txt data/linee-colori.js
 
 Nel tab Viaggio la mappa mostra la linea del bus: la geometria ufficiale viene agganciata alla rete stradale con OSRM (map matching a pezzi, cache in `localStorage`, fallback automatico sul tracciato ufficiale se il servizio non risponde o il risultato non è coerente). Senza rete si vedono comunque fermate, orari e prezzo.
 
-Lo stesso script legge anche `shapes.txt` e produce `data/tracciati.json`: la geometria reale di ogni linea (semplificata a 8 m di tolleranza e codificata come polilinea), allineata corsa per corsa a `orari.json`. È così che il tab Viaggio disegna sulla mappa il percorso del bus invece di una linea dritta tra le due fermate; i tratti a piedi restano tratteggiati. Anche le corse ferroviarie hanno la loro geometria, presa dalle shapes del GTFS nazionale e riusata per tutte le corse con la stessa sequenza di stazioni.
+Lo stesso script legge anche `shapes.txt` e produce `data/tracciati.json`: la geometria reale di ogni linea (semplificata a 8 m di tolleranza e codificata come polilinea), allineata corsa per corsa a `orari.json`. È così che il tab Viaggio disegna sulla mappa il percorso del bus invece di una linea dritta tra le due fermate; i tratti a piedi restano tratteggiati. Per le corse ferroviarie le shapes del GTFS nazionale sono troppo rade (5–8 punti, con salti anche di 17 km): `scripts/ricostruisci-tracciati.js` le sostituisce con il percorso sulla rete ferroviaria OpenStreetMap, stazione per stazione, e riproietta le fermate sui binari. La geometria resta nel dataset, quindi l'app non contatta Overpass.
 
 I **tratti a piedi** seguono le strade: l'app chiede la geometria a OSRM pedonale FOSSGIS (`routing.openstreetmap.de`), la salva in `localStorage` (massimo 100 tratti) e la riusa. Se il servizio non risponde, il tratto resta un segmento diritto tratteggiato: il calcolo del percorso non si blocca mai per il routing pedonale. Sulla linea partenza, cambi e arrivo hanno nodi distinti (rosso, anello bianco con corona, nero), mentre i pallini delle fermate intermedie sono proiettati sul tracciato disegnato e prendono il colore della linea su cui si trovano: restano la fermata reale, ma appoggiati alla linea invece di fluttuarle accanto (oltre 60 m di scarto la geometria è considerata inaffidabile e il pallino resta sulla fermata). Se una tratta non ha la geometria GTFS viene disegnata come linea diritta tratteggiata e la scheda del percorso lo dichiara.
 
@@ -206,7 +216,7 @@ Una volta pubblicata su GitHub Pages/Netlify/Vercel/Cloudflare Pages (vedi sopra
 
 ## Test automatici
 
-La logica critica è coperta da test Node.js senza dipendenze esterne (42 test): dati e invarianti dei JSON, RAPTOR (diretto, cambi, cammini, calendari, dopo mezzanotte), tariffe, coordinate e risposta OSRM pedonale, icone Lucide, scheda percorso e un percorso reale Bologna C.le–Imola in treno con la sua geometria.
+La logica critica è coperta da test Node.js senza dipendenze esterne (43 test): dati e invarianti dei JSON, RAPTOR (diretto, cambi, cammini, calendari, dopo mezzanotte), tariffe, coordinate e risposta OSRM pedonale, icone Lucide, scheda percorso e un percorso reale Bologna C.le–Imola in treno con la sua geometria.
 
 ```bash
 node --test tests

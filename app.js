@@ -609,13 +609,20 @@
    * si disegna il tracciato ufficiale, e se manca anche quello la linea dritta.
    * ------------------------------------------------------------------- */
   const URL_SNAP = 'https://router.project-osrm.org/match/v1/driving/';
-  // v4: le geometrie ferroviarie non vengono più agganciate alle strade.
-  const K_SNAP = 'tperzc_snap_v4';
+  // v5: le forme hanno i punti di proiezione delle fermate e il treno usa i
+  // binari OSM, quindi le geometrie agganciate precedenti non valgono più.
+  const K_SNAP = 'tperzc_snap_v5';
   const SNAP_MAX_PUNTI = 9;   // limite del servizio pubblico
   const SNAP_MAX_RICHIESTE = 40;
   let snapCache = null;
   let snapGenerazione = 0;
   let snapRichieste = 0;
+  // Geometrie già agganciate per il percorso mostrato: senza questa memoria
+  // ogni ridisegno (orologio, tab, arrivo di un tratto a piedi) rifaceva il
+  // map matching da capo e consumava il budget delle richieste.
+  let snapPercorso = null;
+  let snapInCorso = null;
+  let snapAgganciate = null;
 
   // Percorsi pedonali: OSRM pubblico FOSSGIS, profilo foot. Le coordinate
   // vengono inviate solo per calcolare il tratto a piedi; il risultato resta
@@ -728,7 +735,8 @@
   function lunghezzaLinea(linea) {
     let totale = 0;
     for (let i = 1; i < linea.length; i += 1) {
-      const dx = (linea[i][0] - linea[i - 1][0]) * 83000;
+      const coseno = Math.cos(((linea[i][1] + linea[i - 1][1]) / 2) * Math.PI / 180);
+      const dx = (linea[i][0] - linea[i - 1][0]) * 111000 * coseno;
       const dy = (linea[i][1] - linea[i - 1][1]) * 111000;
       totale += Math.sqrt(dx * dx + dy * dy);
     }
@@ -792,10 +800,12 @@
 
   // La linea deve toccare le fermate di salita e discesa, anche quando il
   // tracciato (ufficiale o agganciato) si ferma qualche metro prima.
+  const ESTENSIONE_MAX = 60;   // metri: oltre, il raccordo diritto taglierebbe la strada
+
   function estendiAgliEstremi(linea, da, a) {
     const copia = linea.slice();
-    if (da && distanzaTra(copia[0], da) > 15) copia.unshift(da);
-    if (a && distanzaTra(copia[copia.length - 1], a) > 15) copia.push(a);
+    if (da && distanzaTra(copia[0], da) <= ESTENSIONE_MAX) copia.unshift(da);
+    if (a && distanzaTra(copia[copia.length - 1], a) <= ESTENSIONE_MAX) copia.push(a);
     return copia;
   }
 
@@ -815,6 +825,15 @@
 
   // Disegna il percorso. `agganciate` contiene le geometrie stradali già
   // arrivate: al primo giro si disegna l'ufficiale e si chiede il resto.
+  function firmaTracciato(esito) {
+    if (!esito || !esito.tappe || !esito.tappe.length) return null;
+    const da = sel.partenza ? sel.partenza.id : '';
+    const a = sel.destinazione ? sel.destinazione.id : '';
+    return da + '|' + a + '|' + esito.tappe.map((tappa) =>
+      [tappa.linea, tappa.tipo, tappa.da, tappa.a, tappa.forma, tappa.partenza].join(',')
+    ).join(';');
+  }
+
   function disegnaTracciato(agganciate) {
     if (!mappa) return;
     // Lo stile può finire di caricarsi dopo il primo disegno: i livelli si
@@ -823,6 +842,23 @@
     const sorgente = mappa.getSource('percorso');
     if (!sorgente) return;
     const sorgenteFermate = mappa.getSource('percorso-fermate');
+
+    const esito = routing.stato === 'ok' ? routing.esito : null;
+    const firma = esito
+      ? firmaTracciato(esito)
+      : (routing.stato === 'piedi' && routing.piedi ? 'piedi|' + routing.piedi.chiave : null);
+    // Un nuovo percorso azzera il budget e le geometrie del precedente; lo
+    // stesso percorso riusa quelle già arrivate, senza rifare OSRM.
+    if (!agganciate) {
+      if (firma !== snapPercorso) {
+        snapPercorso = firma;
+        snapAgganciate = null;
+        snapInCorso = null;
+        snapRichieste = 0;
+        snapGenerazione += 1;
+      }
+      agganciate = snapAgganciate;
+    }
 
     const features = [];
     const fermate = [];
@@ -841,7 +877,6 @@
       nodi.push(nodo('partenza', da));
       nodi.push(nodo('arrivo', a));
     }
-    const esito = routing.stato === 'ok' ? routing.esito : null;
     if (esito && esito.tappe && esito.tappe.length) {
       const tappe = esito.tappe;
       const ufficiali = geometrieUfficiali(tappe);
@@ -862,10 +897,12 @@
           if (tratto) features.push(tratto);
         }
         let disegnata = null;
+        // Treno e bus hanno colori distinti anche nei pallini intermedi:
+        // altrimenti una fermata del treno sembrava una fermata del bus.
+        const coloreLinea = (tappa.tipo === 1 || tappa.tipo === 2) ? '#5B5B5B' : coloreTracciato(tappa.linea);
         if (geometria && geometria.length > 1) {
           disegnata = estendiAgliEstremi(geometria, coordinateFermata(tappa.da), coordinateFermata(tappa.a));
-          const colore = (tappa.tipo === 1 || tappa.tipo === 2) ? '#5B5B5B' : coloreTracciato(tappa.linea);
-          features.push(segmento('bus', disegnata, ufficiale, colore));
+          features.push(segmento('bus', disegnata, ufficiale, coloreLinea));
           if (!ufficiale) senzaTracciato += 1;
         } else {
           senzaTracciato += 1;
@@ -878,7 +915,7 @@
             fermate.push({
               type: 'Feature',
               // Il pallino della fermata intermedia prende il colore della linea.
-              properties: { colore: coloreTracciato(tappa.linea) },
+              properties: { colore: coloreLinea },
               geometry: { type: 'Point', coordinates: proiettaSuLinea(punto, disegnata) }
             });
           }
@@ -905,7 +942,8 @@
       if (arrivo && !uguali(arrivo, primo)) nodi.push(nodo('arrivo', arrivo));
 
       // Un solo giro di aggancio per percorso: poi si ridisegna con le strade.
-      if (!agganciate) {
+      if (!agganciate && firma && snapInCorso !== firma) {
+        snapInCorso = firma;
         const generazione = ++snapGenerazione;
         const richieste = ufficiali.map((voce, indice) => {
           const tappa = tappe[indice];
@@ -914,10 +952,13 @@
           return agganciaTratta(tappa, voce.punti);
         });
         Promise.all(richieste).then((risultati) => {
-          if (generazione !== snapGenerazione || routing.stato !== 'ok') return;
+          if (generazione !== snapGenerazione || firma !== snapPercorso || routing.stato !== 'ok') return;
+          snapAgganciate = risultati;
           if (!risultati.some((voce) => voce)) return;
           disegnaTracciato(risultati);
-        }).catch(() => { /* resta il tracciato ufficiale */ });
+        }).catch(() => { /* resta il tracciato ufficiale */ }).finally(() => {
+          if (snapInCorso === firma) snapInCorso = null;
+        });
       }
     }
     ultimeFeatures = features;

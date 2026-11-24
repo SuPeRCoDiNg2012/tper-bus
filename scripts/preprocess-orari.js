@@ -147,18 +147,82 @@ function polilinea(punti) {
   return uscita;
 }
 
-// Punto della forma più vicino a una fermata, avanzando lungo il tracciato:
-// una linea ad anello passa due volte dallo stesso posto e l'ordine conta.
-function proietta(punti, coord, da) {
-  let migliore = da;
-  let minima = Infinity;
-  for (let i = da; i < punti.length; i += 1) {
-    const dLat = punti[i][0] - coord[0];
-    const dLon = punti[i][1] - coord[1];
-    const distanza = dLat * dLat + dLon * dLon;
-    if (distanza < minima) { minima = distanza; migliore = i; }
+// Posizioni delle fermate lungo la forma, monotone e scelte sul segmento più
+// vicino (non solo sul vertice). La vecchia ricerca "solo in avanti" faceva
+// finire molte fermate di una linea ad anello sullo stesso vertice, anche a
+// chilometri di distanza. Il DP impone l'ordine e, per le fermate ripetute,
+// un secondo passaggio sempre più avanti.
+function posizioniMonotone(punti, indici, elencoFermate, coordFermate) {
+  const n = punti.length;
+  const m = indici.length;
+  if (n < 2 || m < 1) return [];
+
+  function distanzaSegmento(coord, a, b) {
+    const coseno = Math.cos((coord[0] * Math.PI) / 180);
+    const ax = a[1] * coseno;
+    const ay = a[0];
+    const dx = b[1] * coseno - ax;
+    const dy = b[0] - ay;
+    const l2 = dx * dx + dy * dy;
+    let t = l2 ? ((coord[1] * coseno - ax) * dx + (coord[0] - ay) * dy) / l2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(ax + t * dx - coord[1] * coseno, ay + t * dy - coord[0]);
   }
-  return migliore;
+
+  const costi = indici.map((indiceFermata) => {
+    const c = coordFermate.get(elencoFermate[indiceFermata]);
+    const riga = new Float64Array(n).fill(Infinity);
+    if (!c) return riga;
+    for (let j = 0; j < n; j += 1) {
+      let minima = Infinity;
+      if (j > 0) minima = Math.min(minima, distanzaSegmento(c, punti[j - 1], punti[j]));
+      if (j < n - 1) minima = Math.min(minima, distanzaSegmento(c, punti[j], punti[j + 1]));
+      riga[j] = minima;
+    }
+    return riga;
+  });
+
+  let precedente = Float64Array.from(costi[0]);
+  const scelte = [new Int32Array(n)];
+  for (let i = 1; i < m; i += 1) {
+    const corrente = new Float64Array(n);
+    const arg = new Int32Array(n);
+    let minimo = Infinity;
+    let indiceMinimo = 0;
+    for (let j = 0; j < n; j += 1) {
+      if (precedente[j] < minimo) { minimo = precedente[j]; indiceMinimo = j; }
+      corrente[j] = costi[i][j] + minimo;
+      arg[j] = indiceMinimo;
+    }
+    scelte.push(arg);
+    precedente = corrente;
+  }
+
+  let fine = 0;
+  for (let j = 1; j < n; j += 1) if (precedente[j] < precedente[fine]) fine = j;
+  const posizioni = new Array(m);
+  let j = fine;
+  for (let i = m - 1; i >= 0; i -= 1) {
+    posizioni[i] = j;
+    if (i > 0) j = scelte[i][j];
+  }
+
+  const ultima = new Map();
+  for (let i = 0; i < m; i += 1) {
+    const id = elencoFermate[indici[i]];
+    let minimo = i > 0 ? posizioni[i - 1] : 0;
+    if (ultima.has(id)) minimo = Math.max(minimo, ultima.get(id) + 1);
+    if (posizioni[i] < minimo) {
+      let migliore = -1;
+      let distanzaMinima = Infinity;
+      for (let k = minimo; k < n; k += 1) {
+        if (costi[i][k] < distanzaMinima) { distanzaMinima = costi[i][k]; migliore = k; }
+      }
+      posizioni[i] = migliore >= 0 ? migliore : n - 1;
+    }
+    ultima.set(id, posizioni[i]);
+  }
+  return posizioni;
 }
 
 function leggiForme(file) {
@@ -320,13 +384,12 @@ function main() {
     // tracciato senza proiezioni approssimate.
     const posizioni = [];
     for (let i = 0; i < idForme.length; i += 1) {
+      const sequenza = sequenzaForme[i] || [];
+      const scelte = posizioniMonotone(ordine[i], sequenza, elencoFermate, coordFermate);
       const vettore = [];
-      let precedente = 0;
-      (sequenzaForme[i] || []).forEach((indiceFermata) => {
-        const coord = coordFermate.get(elencoFermate[indiceFermata]);
-        if (!coord) return;
-        precedente = proietta(ordine[i], coord, precedente);
-        vettore.push(indiceFermata, precedente);
+      sequenza.forEach((indiceFermata, k) => {
+        if (scelte[k] === undefined) return;
+        vettore.push(indiceFermata, scelte[k]);
       });
       posizioni.push(vettore);
     }
