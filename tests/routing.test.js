@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { caricaRouting, polilinea } = require('./helpers');
+const TPERRouting = require('../routing');
 
 const GIORNO = new Date(2026, 10, 23, 8, 0, 0); // lunedì 23 novembre 2026
 const DOMENICA = new Date(2026, 10, 22, 8, 0, 0);
@@ -81,6 +82,15 @@ test('il cambio con il treno vuole più margine di uno tra bus', async () => {
   assert.equal(busTreno.calcola('A', 'C', GIORNO, { maxCambi: 3 }), null);
 });
 
+test('i treni si chiamano REG o RV, mai con il nome GTFS', () => {
+  assert.equal(TPERRouting.etichettaTreno('RV'), 'RV');
+  assert.equal(TPERRouting.etichettaTreno('Regionale Veloce'), 'RV');
+  assert.equal(TPERRouting.etichettaTreno('REG'), 'REG');
+  // I suburbani S1A/S2A sono regionali a tutti gli effetti.
+  assert.equal(TPERRouting.etichettaTreno('S2A'), 'REG');
+  assert.equal(TPERRouting.etichettaTreno(null), 'REG');
+});
+
 test('vietando la linea diretta emerge un percorso alternativo', async () => {
   const routing = await caricaRouting(dati([
     [0, 0, 0, 28800, 1, 480, 1, 420],   // L1 A 08:00 → B 08:08 → C 08:15, diretto
@@ -94,7 +104,8 @@ test('vietando la linea diretta emerge un percorso alternativo', async () => {
 
   const alternativa = routing.calcola('A', 'C', GIORNO, { maxCambi: 3, vietate: ['L1'] });
   assert.ok(alternativa);
-  assert.deepEqual(alternativa.tappe.map((t) => t.linea), ['L2', 'T1']);
+  // La linea T1 è un treno (tipo 2): in scheda si chiama REG, non col nome GTFS.
+  assert.deepEqual(alternativa.tappe.map((t) => t.linea), ['L2', 'REG']);
   assert.equal(alternativa.cambi, 1);
   assert.equal(alternativa.arrivo, 30000);
 });

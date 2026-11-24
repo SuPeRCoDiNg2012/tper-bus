@@ -194,6 +194,12 @@
     return { linea: linea[0], tipo: linea[1] };
   }
 
+  // I treni si chiamano per categoria, non per linea: RV per i regionali
+  // veloci, REG per tutti gli altri (S1A/S2A compresi, che sono regionali).
+  function etichettaTreno(nome) {
+    return /rv|veloce/i.test(String(nome == null ? '' : nome)) ? 'RV' : 'REG';
+  }
+
   /**
    * RAPTOR: ad ogni round si può salire su una corsa in più.
    * orario[fermata] = prima ora di arrivo conosciuta; giri[fermata] = con
@@ -389,8 +395,12 @@
       }
       const info = nomeLinea(passo.corsa.linea);
       const precedente = tappe.length ? tappe[tappe.length - 1] : null;
+      const ferroviario = info.tipo === 1 || info.tipo === 2;
       tappe.push({
-        linea: info.linea,
+        linea: ferroviario ? etichettaTreno(info.linea) : info.linea,
+        // Le linee FER (suburbani S1A/S2A: Bologna–Vignola, –Portomaggiore)
+        // viaggiano con i titoli a zone, non con la tariffa a km.
+        fer: ferroviario && /^s\d/i.test(String(info.linea)),
         tipo: info.tipo,
         da: dati.fermate[passo.da],
         a: dati.fermate[passo.a],
@@ -609,7 +619,8 @@
     tratta: tratta,
     calcola: calcola,
     disponibile: function () { return !!dati; },
-    fermateDisponibili: function () { return indiceFermate ? Array.from(indiceFermate.keys()) : []; }
+    fermateDisponibili: function () { return indiceFermate ? Array.from(indiceFermate.keys()) : []; },
+    etichettaTreno: etichettaTreno
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

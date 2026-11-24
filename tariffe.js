@@ -5,11 +5,43 @@
   'use strict';
 
   const ZONE_URBANE = new Set(['500', '501', '502', '503', '504', '505', '506', '507', '508', '509']);
-  const TARIFFE_BUS = { 1: 2.30, 2: 2.90, 3: 3.70, 4: 4.50 };
-  const TARIFFE_TRENO = { 1: 2.30, 2: 3.10, 3: 3.90 };
+  const TARIFFE_BUS = { 1: 2.30, 2: 2.90, 3: 3.70, 4: 4.50, 5: 5.40 };
+
+  /* Tariffa regionale Trenitalia Tper, 2ª classe: il prezzo dipende dai km, a
+   * scaglioni (tariffa ordinaria regionale valida dal 17/10/2026). Bologna–Imola
+   * sono 34 km e costano 4,90 €, non i 3,10 € "a due zone" usati prima.
+   * Le linee FER (Bologna–Portomaggiore, Bologna–Vignola) fanno eccezione: lì
+   * valgono i titoli a zone, come i bus. */
+  const SCAGLIONI_TRENO = [
+    [10, 2.90], [20, 3.40], [30, 4.00], [40, 4.90], [50, 5.40], [60, 5.70],
+    [70, 6.40], [80, 7.20], [90, 7.70], [100, 8.20], [125, 10.00],
+    [150, 11.50], [175, 13.00], [200, 14.70]
+  ];
 
   function isZonaUrbana(zona) {
     return ZONE_URBANE.has(String(zona));
+  }
+
+  /** Distanza in linea d'aria fra due punti; null se manca una coordinata. */
+  function distanzaKm(a, b) {
+    if (!a || !b) return null;
+    if (a.lat == null || a.lon == null || b.lat == null || b.lon == null) return null;
+    const raggio = 6371;
+    const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+    const dLon = ((b.lon - a.lon) * Math.PI) / 180;
+    const seno = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * raggio * Math.asin(Math.min(1, Math.sqrt(seno)));
+  }
+
+  /** Prezzo del biglietto regionale per una distanza in km (null oltre 200 km). */
+  function prezzoTreno(km) {
+    if (km == null || !isFinite(km) || km <= 0) return null;
+    for (let i = 0; i < SCAGLIONI_TRENO.length; i += 1) {
+      if (km <= SCAGLIONI_TRENO[i][0]) return SCAGLIONI_TRENO[i][1];
+    }
+    return null;
   }
 
   function avvisoConfine(fermataExtraurbana) {
@@ -23,7 +55,10 @@
     return 'L\'abbonamento urbano copre la zona 500 e le zone neutre (501–509). Per raggiungere ' + fermataExtraurbana.nome + ' (zona ' + zona + ') serve un\'integrazione extraurbana.';
   }
 
-  function calcola(partenza, destinazione, conAbbonamento) {
+  /**
+   * @param opzioni { treno } — true se l'itinerario scelto usa un treno.
+   */
+  function calcola(partenza, destinazione, conAbbonamento, opzioni) {
     const pUrbana = isZonaUrbana(partenza.zona);
     const dUrbana = isZonaUrbana(destinazione.zona);
 
@@ -47,17 +82,34 @@
       };
     }
 
+    // Treno: il prezzo segue i km, non le zone. È il caso più frequente per
+    // Bologna ↔ Imola, Pianoro, Porretta, dove la tariffa a zone sbagliava di
+    // parecchio (Imola: 3,10 € a zone contro 4,90 € reali).
+    // Sui suburbani FER (fer) valgono i titoli a zone, come sui bus.
+    const conTreno = !!(opzioni && opzioni.treno && !opzioni.fer);
+    const km = conTreno ? distanzaKm(partenza, destinazione) : null;
+    const prezzoTrenoKm = prezzoTreno(km);
+    if (prezzoTrenoKm != null) {
+      const nota = Math.round(km) + ' km · tariffa regionale 2ª classe';
+      return {
+        badge: 'arancio',
+        titolo: 'Biglietto regionale necessario',
+        prezzo: prezzoTrenoKm,
+        prezzoNota: nota,
+        avviso: conAbbonamento
+          ? 'L\'abbonamento urbano vale tra le stazioni dell\'area urbana di Bologna: per uscire serve il biglietto regionale fino a destinazione.'
+          : null
+      };
+    }
+
     const extraurbana = pUrbana ? destinazione : partenza;
-    const urbana = pUrbana ? partenza : destinazione;
-    const trattaTreno = extraurbana.tipo === 'treno' || urbana.tipo === 'treno';
-    const tariffe = trattaTreno ? TARIFFE_TRENO : TARIFFE_BUS;
 
     if (conAbbonamento) {
       return {
         badge: 'arancio',
         titolo: 'Integrazione extraurbana necessaria',
-        prezzo: tariffe[1],
-        prezzoNota: '1 zona extraurbana oltre all\'abbonamento' + (trattaTreno ? ' · stima treno' : ''),
+        prezzo: TARIFFE_BUS[1],
+        prezzoNota: '1 zona extraurbana oltre all\'abbonamento',
         avviso: avvisoConfine(extraurbana)
       };
     }
@@ -65,8 +117,8 @@
     return {
       badge: 'rosso',
       titolo: 'Biglietto a 2 zone necessario',
-      prezzo: tariffe[2],
-      prezzoNota: '2 zone' + (trattaTreno ? ' · stima treno, dipende dai km' : ''),
+      prezzo: TARIFFE_BUS[2],
+      prezzoNota: '2 zone',
       avviso: null
     };
   }
@@ -74,8 +126,10 @@
   const API = {
     ZONE_URBANE: ZONE_URBANE,
     TARIFFE_BUS: TARIFFE_BUS,
-    TARIFFE_TRENO: TARIFFE_TRENO,
+    SCAGLIONI_TRENO: SCAGLIONI_TRENO,
     isZonaUrbana: isZonaUrbana,
+    distanzaKm: distanzaKm,
+    prezzoTreno: prezzoTreno,
     avvisoConfine: avvisoConfine,
     calcola: calcola
   };

@@ -783,7 +783,9 @@
         let disegnata = null;
         // Treno e bus hanno colori distinti anche nei pallini intermedi:
         // altrimenti una fermata del treno sembrava una fermata del bus.
-        const coloreLinea = (tappa.tipo === 1 || tappa.tipo === 2) ? '#5B5B5B' : coloreTracciato(tappa.linea);
+        // I treni sono rossi come i badge: prima erano grigi e sulla mappa
+        // sembravano un tratto senza linea.
+        const coloreLinea = (tappa.tipo === 1 || tappa.tipo === 2) ? '#C1121F' : coloreTracciato(tappa.linea);
         if (geometria && geometria.length > 1) {
           disegnata = estendiAgliEstremi(geometria, coordinateFermata(tappa.da), coordinateFermata(tappa.a));
           features.push(segmento('bus', disegnata, ufficiale, coloreLinea));
@@ -1456,7 +1458,7 @@
       // Il prezzo sta anche qui, sotto il titolo: l'intestazione resta visibile
       // in ogni scheda e anche a pannello ridotto, quindi il costo non va cercato
       // scorrendo fino in fondo al viaggio.
-      const tariffa = trattaAPiedi() ? null : Tariffe.calcola(p, d, abbonamento);
+      const tariffa = trattaAPiedi() ? null : tariffaCorrente();
       // Stessa zona: "Zona 500 → Zona 500" era solo rumore. Il prezzo sta
       // davanti alle zone così, se la riga si accorcia, non viene tagliato lui.
       const zone = zp === zd ? zp : zp + ' → ' + zd;
@@ -1488,11 +1490,37 @@
       distanzaMetri(sel.partenza, sel.destinazione) < 400);
   }
 
+  // Il prezzo dipende dal mezzo: se l'itinerario usa un treno vale la tariffa
+  // regionale a km, altrimenti quella a zone. Prima del calcolo si guarda il
+  // tipo delle fermate scelte.
+  function trenoNellItinerario() {
+    const scelta = (routing.opzioni && routing.opzioni.length)
+      ? (routing.opzioni[routing.aperto >= 0 ? routing.aperto : 0] || routing.esito)
+      : routing.esito;
+    if (scelta && Array.isArray(scelta.tappe) && scelta.tappe.length) {
+      const tappaTreno = scelta.tappe.filter((tappa) => tappa.tipo === 1 || tappa.tipo === 2)[0];
+      return tappaTreno ? { treno: true, fer: !!tappaTreno.fer } : { treno: false, fer: false };
+    }
+    const fermate = [sel.partenza, sel.destinazione].filter(Boolean);
+    return { treno: fermate.some((f) => f.tipo === 'treno'), fer: false };
+  }
+
+  function tariffaCorrente() {
+    if (!sel.partenza || !sel.destinazione) return null;
+    return Tariffe.calcola(sel.partenza, sel.destinazione, abbonamento, trenoNellItinerario());
+  }
+
+  function firmaBiglietto(r) {
+    return r ? [r.badge, r.titolo, r.prezzo, r.prezzoNota, r.avviso || ''].join('|') : '';
+  }
+
   function htmlRisultato(r) {
     const soloPiedi = trattaAPiedi();
     // Prima il costo, poi il viaggio: la scheda biglietto stava sotto tutte le
     // opzioni e per vederla bisognava scorrere il pannello fino in fondo.
-    let html = (soloPiedi ? '' : '<div class="blocco-biglietto">' + htmlBiglietto(r) + htmlInterruttore() + '</div>') +
+    let html = (soloPiedi ? '' :
+      '<div class="blocco-biglietto" data-firma="' + esc(firmaBiglietto(r)) + '">' +
+      htmlBiglietto(r) + htmlInterruttore() + '</div>') +
       '<div id="blocco-percorso" class="blocco-percorso"></div>';
     if (r.avviso) {
       html += '<div class="avviso">' + ICONA_INFO + '<span>' + esc(r.avviso) + '</span></div>';
@@ -1519,19 +1547,37 @@
 
   // Unico punto in cui il tab Viaggio viene montato: evita di ripetere il
   // binding dell'interruttore abbonamento in ogni percorso di rendering.
+  function collegaInterruttore() {
+    const check = $('check-abbonamento');
+    if (!check) return;
+    check.addEventListener('change', () => {
+      abbonamento = check.checked;
+      renderViaggio();
+    });
+  }
+
   function montaPannelloViaggio(html) {
     $('pane-viaggio').innerHTML = html;
-    const check = $('check-abbonamento');
-    if (check) {
-      check.addEventListener('change', () => {
-        abbonamento = check.checked;
-        renderViaggio();
-      });
-    }
+    collegaInterruttore();
+  }
+
+  // Il prezzo viene rifatto quando il percorso è pronto: solo allora si sa se
+  // il viaggio usa un treno (tariffa a km) o qualche bus (tariffa a zone).
+  function aggiornaCardBiglietto() {
+    const card = document.querySelector('.blocco-biglietto');
+    if (!card || trattaAPiedi()) return;
+    const r = tariffaCorrente();
+    if (!r) return;
+    const firma = firmaBiglietto(r);
+    if (card.dataset.firma === firma) return;
+    card.dataset.firma = firma;
+    card.innerHTML = htmlBiglietto(r) + htmlInterruttore();
+    collegaInterruttore();
+    aggiornaTestata();
   }
 
   function renderViaggio() {
-    const risultato = (sel.partenza && sel.destinazione) ? Tariffe.calcola(sel.partenza, sel.destinazione, abbonamento) : null;
+    const risultato = tariffaCorrente();
     aggiornaTestata();
     aggiornaChipAbbonamento();
 
@@ -1959,6 +2005,7 @@
         if (routing.opzioni && routing.opzioni[indice]) {
           routing.esito = routing.opzioni[indice];
           disegnaTracciato();
+          aggiornaCardBiglietto();
         }
       });
     });
@@ -1968,6 +2015,7 @@
     caricaLivePercorso();
     avviaTimerPercorso();
     disegnaTracciato();
+    aggiornaCardBiglietto();
   }
 
   function calcolaPercorso() {

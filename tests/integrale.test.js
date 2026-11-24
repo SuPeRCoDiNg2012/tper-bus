@@ -37,7 +37,8 @@ test('rete reale: Bologna C.le → Vignola in treno S2A', async () => {
   assert.ok(feriale, 'nessun percorso S2A feriale');
   assert.equal(feriale.cambi, 0);
   assert.equal(feriale.tappe.length, 1);
-  assert.equal(feriale.tappe[0].linea, 'S2A');
+  // La linea S2A è un regionale: in scheda prende l'etichetta REG.
+  assert.equal(feriale.tappe[0].linea, 'REG');
   assert.equal(feriale.tappe[0].da, 'TRN001');
   assert.equal(feriale.tappe[0].a, 'TRN009');
   assert.equal(feriale.tappe[0].partenza, 8 * 3600 + 32 * 60);
@@ -46,7 +47,7 @@ test('rete reale: Bologna C.le → Vignola in treno S2A', async () => {
 
   const festivo = routing.calcola('TRN001', 'TRN009', new Date(2026, 10, 22, 9, 0, 0), { maxCambi: 0 });
   assert.ok(festivo, 'nessun percorso S2A festivo');
-  assert.equal(festivo.tappe[0].linea, 'S2A');
+  assert.equal(festivo.tappe[0].linea, 'REG');
   assert.equal(festivo.tappe[0].partenza, 9 * 3600 + 32 * 60);
 
   const punti = routing.tratta(
@@ -64,7 +65,7 @@ test('rete reale: Bologna C.le → Vignola usa il servizio festivo l’8 dicembr
   const esito = routing.calcola('TRN001', 'TRN009', new Date(2026, 11, 8, 8, 0, 0), { maxCambi: 0 });
 
   assert.ok(esito, 'nessun percorso S2A nell’8 dicembre');
-  assert.equal(esito.tappe[0].linea, 'S2A');
+  assert.equal(esito.tappe[0].linea, 'REG');
   assert.equal(esito.tappe[0].partenza, 9 * 3600 + 32 * 60, 'l’8 dicembre non usa l’orario festivo');
 });
 
