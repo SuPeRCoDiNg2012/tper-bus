@@ -7,7 +7,9 @@
   'use strict';
 
   const Icone = typeof require === 'function' ? require('./icone') : globale.Icone;
-  const ICONA_PEDANA = Icone.svg('footprints', 16);
+  // Le impronte a 16px si leggono come due puntini: una figura intera è
+  // riconoscibile anche a questa dimensione.
+  const ICONA_PEDANA = Icone.svg('person-standing', 18);
 
   function esc(valore) {
     return String(valore == null ? '' : valore)
@@ -47,7 +49,7 @@
       // Quanto si è disposti a camminare: il pianificatore usa questa soglia per
       // le fermate raggiungibili a piedi e per i cambi a piedi.
       '<div class="camminata">' +
-      '<label for="input-camminata">' + Icone.svg('footprints', 14) + '<span>A piedi</span></label>' +
+      '<label for="input-camminata">' + Icone.svg('person-standing', 16) + '<span>A piedi</span></label>' +
       '<input id="input-camminata" type="range" min="3" max="25" step="1" value="' + minutiCammino +
       '" aria-label="Minuti disposti a camminare" aria-valuetext="' + minutiCammino + ' minuti">' +
       '<output id="valore-camminata" for="input-camminata">' + minutiCammino + ' min</output>' +

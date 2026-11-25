@@ -9,7 +9,7 @@ test('tutte le icone UI sono Lucide inline e non Material', () => {
     'x', 'arrow-up-down', 'credit-card', 'crosshair', 'locate-fixed', 'maximize',
     'bus-front', 'train-front', 'navigation', 'map-pin', 'map-pin-pieno', 'footprints',
     'accessibility', 'refresh-cw', 'info', 'chevron-down', 'chevron-right',
-    'triangle-alert', 'clock', 'plus'
+    'triangle-alert', 'clock', 'plus', 'person-standing'
   ];
   assert.deepEqual(richieste.sort(), Icone.nomi.slice().sort());
   richieste.forEach((nome) => {

@@ -160,7 +160,7 @@
   // Una voce di ricerca si sceglie e chiude la lista: il segno giusto è un più.
   // Il chevron prometteva una schermata successiva che non esiste.
   const ICONA_PIU = Icone.svg('plus', 18, 'voce-piu');
-  const ICONA_PIEDANA = Icone.svg('footprints', 20);
+  const ICONA_PIEDANA = Icone.svg('person-standing', 20);
   const ICONA_OROLOGIO = Icone.svg('clock', 16);
   const ICONA_SCAMBIA = Icone.svg('arrow-up-down', 18);
   const ICONA_GIU = Icone.svg('chevron-down', 16);
