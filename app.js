@@ -708,6 +708,9 @@
    * ------------------------------------------------------------------ */
   let formeLinee = null;
   let formeInCorso = null;
+  // Quante corsie parallele si usano per le linee che condividono la strada.
+  const CORSIE = 7;
+  const PASSO_CORSIA = 1.6;           // px tra una corsia e la successiva
 
   // Il file è compresso e si scarica solo quando l'interruttore si accende:
   // chi non lo usa non paga il download.
@@ -731,10 +734,78 @@
         testo = await semplice.text();
       }
       const dati = JSON.parse(testo);
+      // Per colorare serve sapere quale linea percorre ogni forma: gli orari
+      // sono già in memoria per il calcolo dei percorsi (o arrivano adesso).
+      let orari = null;
+      try {
+        if (typeof TPERRouting !== 'undefined' && TPERRouting.carica) {
+          orari = await TPERRouting.carica(URL_ORARI_GZ, URL_ORARI);
+        }
+      } catch (errore) {
+        orari = null;
+      }
+      if (!Object.keys(coloriLinee).length) {
+        try {
+          const rispostaColori = await fetchConTimeout(URL_COLORI, TIMEOUT_FETCH);
+          if (rispostaColori.ok) {
+            const datiColori = await rispostaColori.json();
+            if (datiColori && datiColori.linee) coloriLinee = datiColori.linee;
+          }
+        } catch (errore) { /* si resta sul colore di riserva */ }
+      }
+
+      // Forma → linea che la usa di più: una forma può servire due linee, la
+      // prevalente dà il colore.
+      const lineaPerForma = new Map();
+      const lineeTreno = new Set();
+      if (orari && Array.isArray(orari.corse) && Array.isArray(orari.linee) && Array.isArray(dati.corse)) {
+        orari.linee.forEach((linea) => { if (linea && linea[1] === 2) lineeTreno.add(String(linea[0])); });
+        const conteggi = new Map();
+        dati.corse.forEach((forma, indice) => {
+          const corsa = orari.corse[indice];
+          if (forma < 0 || !corsa) return;
+          const linea = orari.linee[corsa[0]];
+          if (!linea) return;
+          if (!conteggi.has(forma)) conteggi.set(forma, new Map());
+          const mappa = conteggi.get(forma);
+          mappa.set(linea[0], (mappa.get(linea[0]) || 0) + 1);
+        });
+        conteggi.forEach((mappa, forma) => {
+          let nome = null;
+          let massimo = -1;
+          mappa.forEach((quante, linea) => {
+            if (quante > massimo) { massimo = quante; nome = linea; }
+          });
+          if (nome != null) lineaPerForma.set(forma, nome);
+        });
+      }
+
+      // Ogni linea ha una corsia fissa: dove due linee percorrono la stessa
+      // strada si disegnano affiancate invece che una sopra l'altra. L'ordine
+      // è alfabetico e stabile, così la mappa non cambia da un avvio all'altro.
+      const nomiLinee = Array.from(new Set(lineaPerForma.values()))
+        .sort((a, b) => String(a).localeCompare(String(b), 'it', { numeric: true }));
+      const corsiaDi = new Map();
+      nomiLinee.forEach((nome, indice) => {
+        corsiaDi.set(nome, (indice % CORSIE) - Math.floor(CORSIE / 2));
+      });
+
       const features = (dati.forme || [])
-        .map((forma) => decodificaPolilinea(forma))
-        .filter((punti) => punti.length > 1)
-        .map((punti) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: punti } }));
+        .map((forma, indice) => {
+          const punti = decodificaPolilinea(forma);
+          if (punti.length < 2) return null;
+          const nome = lineaPerForma.get(indice);
+          const treno = nome != null && lineeTreno.has(String(nome));
+          // I treni restano neri come nel percorso scelto: il colore della
+          // linea serve a distinguere le linee di bus.
+          const colore = treno ? '#1A1A1A' : (coloreTracciato(nome) || '#C1121F');
+          return {
+            type: 'Feature',
+            properties: { colore: colore, corsia: corsiaDi.has(nome) ? corsiaDi.get(nome) : 0 },
+            geometry: { type: 'LineString', coordinates: punti }
+          };
+        })
+        .filter(Boolean);
       formeLinee = { type: 'FeatureCollection', features: features };
       return formeLinee;
     })();
@@ -788,7 +859,14 @@
         type: 'line',
         source: 'linee-tutte',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#1A1A1A', 'line-width': 1.1, 'line-opacity': 0.35 }
+        paint: {
+          'line-color': ['coalesce', ['get', 'colore'], '#C1121F'],
+          'line-width': 2,
+          'line-opacity': 0.85,
+          // Corsia in pixel, non legata allo zoom: le linee parallele restano
+          // separate anche allontanandosi.
+          'line-offset': ['*', ['get', 'corsia'], PASSO_CORSIA]
+        }
       }, mappa.getLayer('fermate-cluster') ? 'fermate-cluster' : undefined);
     } catch (errore) {
       mostraToast('Tracciati delle linee non disponibili offline');
