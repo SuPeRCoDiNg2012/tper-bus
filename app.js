@@ -3067,6 +3067,31 @@
       '</div></div>';
   }
 
+  // Un tratto a piedi è "stimato" quando OSRM non ha ancora dato la geometria:
+  // il tempo viene dalla distanza in linea d'aria e va dichiarato, non spacciato
+  // per un dato di strada. La geometria può arrivare dopo, e l'etichetta sparisce.
+  function fermataDi(valore) {
+    if (!valore) return null;
+    return typeof valore === 'string' ? fermataPerId(valore) : valore;
+  }
+
+  function piediStimati(e) {
+    if (!e) return false;
+    const senzaGeometria = (da, a) => {
+      const p = fermataDi(da);
+      const q = fermataDi(a);
+      if (!p || !q || p.lat == null || p.lon == null || q.lat == null || q.lon == null) return false;
+      // La cache pedonale è per direzione, ma la lunghezza non cambia: un tratto
+      // chiesto da destinazione a candidata vale anche al contrario.
+      return !geometriaPiedi([p.lon, p.lat], [q.lon, q.lat]) &&
+        !geometriaPiedi([q.lon, q.lat], [p.lon, p.lat]);
+    };
+    if ((e.camminoIniziale || 0) > 0 && senzaGeometria(sel.partenza, e.da)) return true;
+    if ((e.camminoFinale || 0) > 0 && senzaGeometria(e.a, sel.destinazione)) return true;
+    return (e.tappe || []).some((t) => t.camminoPrima && (t.camminoPrima.secondi || 0) > 0 &&
+      senzaGeometria(t.camminoPrima.da, t.da));
+  }
+
   function htmlAlternative() {
     const opzioni = routing.opzioni || [];
     if (opzioni.length < 2 && !routing.opzionePiedi) return '';
@@ -3078,9 +3103,19 @@
       const meta = totaleMinuti(e) + ' min · ' +
         (e.cambi === 0 ? 'diretto' : e.cambi === 1 ? '1 cambio' : e.cambi + ' cambi') +
         (piedi ? ' · a piedi ' + piedi + ' min' : '');
+      // Il margine è già calcolato dalla ricerca: qui si mostra, e sotto i due
+      // minuti si dice che è poco invece di lasciarlo scoprire a destinazione.
+      const margine = routing.modo === 'arrivo' && e.margine != null
+        ? Math.round(e.margine / 60) : null;
+      const note =
+        (margine != null && margine >= 0
+          ? ' · ' + margine + ' min di margine' +
+            (e.margine < MARGINE_POCO ? ' <span class="margine-poco">poco margine</span>' : '')
+          : '') +
+        (piediStimati(e) ? ' · <span class="piedi-stimati">tempi a piedi stimati</span>' : '');
       return '<button type="button" class="opzione-riga" data-opzione="' + indice + '" aria-current="' + (indice === scelto ? 'true' : 'false') + '">' +
         '<span class="testo"><span class="orari">' + hhmm(uscita) + ' → ' + hhmm(arrivo) + '</span>' +
-        '<span class="meta">' + esc(meta) + '</span></span>' +
+        '<span class="meta">' + esc(meta) + note + '</span></span>' +
         '<span class="linee">' + lineeBadge(e) + '</span></button>';
     }).join('');
     const aperte = alternativeAperte || statoSheet === 'piena';
@@ -3199,7 +3234,8 @@
     }
     if (routing.stato === 'nessuno') {
       const testo = routing.modo === 'arrivo'
-        ? 'Nessun viaggio arriva entro le ' + esc(routing.orario) + '.'
+        ? 'Nessun viaggio arriva entro le ' + esc(routing.orario) + ' con ' +
+          Math.round(MARGINE_ARRIVO / 60) + ' minuti di margine.'
         : 'Nessun viaggio a quest\'ora.';
       return '<div class="box">' + esc(testo) +
         '<div style="margin-top:10px"><button type="button" class="btn btn-tenue" data-azione="prova-domani">Prova domani alle 08:00</button></div></div>';
@@ -3527,6 +3563,13 @@
     return scelti.slice(0, 6);
   }
 
+  // "Arriva entro" non accetta l'ultimo minuto utile: un viaggio che arriva
+  // alle 14:31 per una scadenza alle 14:32 è valido sulla carta e
+  // irraggiungibile nella pratica. Si cerca con 5 minuti di margine e sotto i 2
+  // il margine viene segnalato come "poco".
+  const MARGINE_ARRIVO = 5 * 60;      // secondi di margine richiesti sulla scadenza
+  const MARGINE_POCO = 2 * 60;        // secondi sotto i quali il margine è poco
+
   // Finestra continua: si cerca ogni minuto su un'ora e mezza, non solo in
   // quattro istanti. Con gli offset fissi una corsa che parte al minuto 7 non
   // veniva mai vista e il percorso “migliore” era solo il primo trovato.
@@ -3566,7 +3609,11 @@
     // La scadenza si confronta come istante assoluto: dopo mezzanotte i
     // secondi del giorno ripartono da zero, mentre le corse serali hanno
     // orari oltre 86400 (es. 00:39 = 88740).
-    const limite = arrivo ? base.getTime() : null;
+    // La scadenza vera resta quella scelta: il margine si toglie solo alla
+    // soglia di accettazione, così "margine" continua a significare il tempo
+    // che avanza davvero rispetto all'ora richiesta.
+    const limiteReale = arrivo ? base.getTime() : null;
+    const limite = arrivo ? base.getTime() - MARGINE_ARRIVO * 1000 : null;
     routing.scadenza = arrivo ? secondiDelGiorno(base) : null;
     const esiti = [];
     let errore = null;
@@ -3631,7 +3678,7 @@
           misure.costoOttimizzato += rimandato;
         }
       }
-      esito.margine = arrivo ? Math.round((limite - arrivoDestinazione) / 1000) : null;
+      esito.margine = arrivo ? Math.round((limiteReale - arrivoDestinazione) / 1000) : null;
       esito.arrivoDestinazione = arrivoDestinazione;
       esito.quandoRichiesta = quando;
       esiti.push(esito);

@@ -13,7 +13,8 @@
   // alla prima porta chiusa in anticipo.
   const BUFFER_MINIMO = 180;        // cambio tra linee diverse: 3 minuti
   const BUFFER_STESSA_LINEA = 30;   // stessa linea alla stessa fermata: è attesa
-  const CAMBIO_TRENO = 240;
+  const CAMBIO_TRENO = 240;         // bus ↔ treno: banchina e scale
+  const CAMBIO_TRENO_TRENO = 360;   // treno ↔ treno: coincidenza fragile, un ritardo non si recupera
   const CAMMINO_CAMBIO_MASSIMO = 300;   // secondi di cammino per un cambio a piedi
   const INF = 0x7fffffff;
 
@@ -245,7 +246,12 @@
     const lineaArrivo = new Int16Array(numeroFermate).fill(-1);
     const tempoDiCambio = (fermata, corsa) => {
       if (lineaArrivo[fermata] === corsa.linea) return BUFFER_STESSA_LINEA;
-      return (tipoArrivo[fermata] === 2 || corsa.tipo === 2) ? CAMBIO_TRENO : BUFFER_MINIMO;
+      // Due treni di fila sono il cambio più fragile: banchina, scale e un
+      // ritardo del primo che non si recupera con la coincidenza dopo.
+      const trenoPrima = tipoArrivo[fermata] === 2;
+      const trenoDopo = corsa.tipo === 2;
+      if (trenoPrima && trenoDopo) return CAMBIO_TRENO_TRENO;
+      return (trenoPrima || trenoDopo) ? CAMBIO_TRENO : BUFFER_MINIMO;
     };
     const predecessori = [];
     const camminoOrigine = new Map();
