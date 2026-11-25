@@ -22,6 +22,7 @@
   const K_TRATTA = 'tperzc_tratta_v2';
   const K_QUANDO = 'tperzc_quando_v1';
   const K_CAMMINATA = 'tperzc_camminata_v1';
+  const K_ABBONAMENTO = 'tperzc_abbonamento_v1';
   const K_CRITERIO = 'tperzc_criterio_v1';
   const K_CRITERIO_DEFAULT = 'tperzc_criterio_default_v1';
   const K_CRITERIO_SCELTE = 'tperzc_criterio_scelte_v1';
@@ -58,7 +59,16 @@
   let coloriLinee = {};
   let aggiornato = null;
   const sel = { partenza: null, destinazione: null };
-  let abbonamento = false;
+  // L'abbonamento urbano è una preferenza che vale per tutti i viaggi, non una
+  // scelta del singolo percorso: come i minuti a piedi sopravvive al ricarico.
+  let abbonamento = leggi(K_ABBONAMENTO) === '1';
+
+  // Una sola porta per la preferenza: stato e localStorage restano allineati
+  // anche quando si arriva dalla scheda del biglietto o dal menu.
+  function impostaAbbonamento(valore) {
+    abbonamento = valore === true;
+    scrivi(K_ABBONAMENTO, abbonamento ? '1' : '0');
+  }
   // Quanto è disposto a camminare l'utente: da 3 a 25 minuti. È il tetto per i
   // tratti a piedi che il pianificatore può proporre (fermate vicine e cambi).
   const CAMMINATA_MIN = 3;
@@ -1875,7 +1885,7 @@
     const check = $('check-abbonamento');
     if (check) {
       check.addEventListener('change', () => {
-        abbonamento = check.checked;
+        impostaAbbonamento(check.checked);
         sincronizzaMenu();
         renderPercorso();
       });
@@ -3727,7 +3737,7 @@
 
     // ---- Menu laterale ----
     $('menu-abbonamento').addEventListener('change', (evento) => {
-      abbonamento = evento.target.checked;
+      impostaAbbonamento(evento.target.checked);
       renderPercorso();
     });
     $('menu-posizione').addEventListener('click', () => { chiudiMenu(); vaiVicino(); });
