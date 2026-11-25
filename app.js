@@ -509,6 +509,18 @@
       creaLivelliPercorso();
     } catch (errore) { return; /* stile non pronto: si riproverà */ }
     aggiornaFermateMappa();
+    aggiornaVisibilitaFermate();
+  }
+
+  // Le fermate sulla mappa servono a cercare: quando un percorso è scelto o la
+  // navigazione è in corso coprirebbero solo il viaggio appena disegnato.
+  function aggiornaVisibilitaFermate() {
+    if (!mappa) return;
+    const visibili = !navigazione.attiva && !(sel.partenza && sel.destinazione);
+    const valore = visibili ? 'visible' : 'none';
+    ['fermate-punti', 'fermate-nomi'].forEach((id) => {
+      if (mappa.getLayer(id)) mappa.setLayoutProperty(id, 'visibility', valore);
+    });
   }
 
   // Tutte le fermate del dataset su un solo GeoJSON: punti piccoli da vicino,
@@ -531,11 +543,73 @@
     sorgente.setData({ type: 'FeatureCollection', features: features });
   }
 
+  // Il pin delle fermate è un'immagine disegnata una volta su canvas: sui
+  // display retina resta nitida grazie al pixelRatio 2x.
+  const ICONA_PIN_FERMATA = 'pin-fermata';
+
+  function immaginePinFermata() {
+    const scala = 2;
+    const larghezza = 22;
+    const altezza = 28;
+    const tela = document.createElement('canvas');
+    tela.width = larghezza * scala;
+    tela.height = altezza * scala;
+    const ctx = tela.getContext('2d');
+    if (!ctx) return null;
+    ctx.scale(scala, scala);
+    const centro = larghezza / 2;
+    const raggio = 8.4;
+    const capo = raggio + 1.8;   // centro della testa tonda, sotto il bordo alto
+    // Punta del pin: due lati che scendono dalla testa fino alla fermata.
+    ctx.beginPath();
+    ctx.moveTo(centro, altezza - 1);
+    ctx.lineTo(centro - raggio * 0.66, capo + raggio * 0.8);
+    ctx.lineTo(centro + raggio * 0.66, capo + raggio * 0.8);
+    ctx.closePath();
+    ctx.fillStyle = '#C1121F';
+    ctx.fill();
+    // Testa tonda rossa con bordo bianco: si stacca da qualunque sfondo.
+    ctx.beginPath();
+    ctx.arc(centro, capo, raggio, 0, Math.PI * 2);
+    ctx.fillStyle = '#C1121F';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.stroke();
+    // Foro bianco al centro, come il pallino che c'era prima.
+    ctx.beginPath();
+    ctx.arc(centro, capo, 2.9, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fill();
+    return { immagine: ctx.getImageData(0, 0, tela.width, tela.height), scala: scala };
+  }
+
   function creaLivelliPercorso() {
     const vuoto = { type: 'FeatureCollection', features: [] };
     // Fermate: sotto i livelli del percorso, così il tracciato resta sopra.
     mappa.addSource('fermate-mappa', { type: 'geojson', data: vuoto });
-    mappa.addLayer({
+    if (!mappa.hasImage(ICONA_PIN_FERMATA)) {
+      const pin = immaginePinFermata();
+      if (pin) {
+        try {
+          mappa.addImage(ICONA_PIN_FERMATA, pin.immagine, { pixelRatio: pin.scala });
+        } catch (errore) { /* immagine non accettata: resta il pallino */ }
+      }
+    }
+    mappa.addLayer(mappa.hasImage(ICONA_PIN_FERMATA) ? {
+      id: 'fermate-punti',
+      type: 'symbol',
+      source: 'fermate-mappa',
+      minzoom: 12.5,
+      layout: {
+        'icon-image': ICONA_PIN_FERMATA,
+        'icon-anchor': 'bottom',
+        // Piccoli da lontano ma mai nascosti: sono anche il bersaglio del tocco.
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 12.5, 0.34, 14, 0.5, 16, 0.72]
+      }
+    } : {
       id: 'fermate-punti',
       type: 'circle',
       source: 'fermate-mappa',
@@ -1229,6 +1303,7 @@
     $('nav-fondo').hidden = false;
     aggiornaNavFollow();
     disegnaNavigazione();
+    aggiornaVisibilitaFermate();
     navigazione.watchId = navigator.geolocation.watchPosition(aggiornaNavigazione, erroreNavigazione, {
       enableHighAccuracy: true, timeout: 15000, maximumAge: 2000
     });
@@ -1249,6 +1324,7 @@
     $('nav').hidden = true;
     $('nav-fondo').hidden = true;
     impostaSheet(statoSheet);
+    aggiornaVisibilitaFermate();
     if (!silenzioso) mostraToast('Navigazione terminata');
   }
 
@@ -1907,6 +1983,7 @@
     document.title = attivo
       ? nomeBreve(sel.partenza.nome) + ' → ' + nomeBreve(sel.destinazione.nome) + ' · Muovi Bologna'
       : 'Muovi Bologna';
+    aggiornaVisibilitaFermate();
   }
 
   /* Mini-card della fermata: orari e impostazione come partenza o arrivo. */
