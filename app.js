@@ -114,6 +114,10 @@
     passi: [], indice: 0, follow: true, inquadrato: false, ultimoVolo: 0, arrivo: null
   };
   let markerUtente = null;
+  let markerUtenteAggiunto = false;
+  let gpsWatch = null;
+  let popupPunto = null;
+  let sopprimiTapMappa = false;
   let eventoInstallazione = null;
   let liveAbort = null;
   let timerLive = null;
@@ -122,9 +126,9 @@
   const indirizziCache = new Map();
   let indirizziAbort = null;
   let ultimaRichiestaIndirizzi = 0;
-  const suggerimenti = { token: 0, campo: null, query: '', gruppi: [], indirizzi: [], caricamento: false, errore: false };
+  const suggerimenti = { token: 0, campo: null, query: '', gruppi: [], indirizzi: [], caricamento: false, errore: false, modifica: false };
 
-  const live = { items: [], ts: 0, stato: 'idle', caricamento: false, errore: null, stopId: null, avviso: '', fermata: null };
+  const live = { items: [], ts: 0, stato: 'idle', caricamento: false, errore: null, stopId: null, avviso: '', fermata: null, aperto: -1, avvisa: null };
 
   const $ = (id) => document.getElementById(id);
   // Set unico di icone: Lucide inline, nessuna CDN e nessun font esterno.
@@ -140,6 +144,8 @@
   const ICONA_OROLOGIO = Icone.svg('clock', 16);
   const ICONA_SCAMBIA = Icone.svg('arrow-up-down', 18);
   const ICONA_GIU = Icone.svg('chevron-down', 16);
+  const ICONA_X = Icone.svg('x', 18);
+  const ICONA_MIRINO = Icone.svg('locate-fixed', 18);
 
   /* ------------------------------------------------------------------ *
    * Utility
@@ -436,6 +442,24 @@
       if (statoSheet !== 'peek') impostaSheet('peek');
     });
     mappa.on('click', chiudiOverlay);
+    // Pressione lunga: un punto qualsiasi diventa partenza o destinazione senza
+    // passare dalla ricerca. Il tocco breve resta libero per le fermate.
+    let attesaPressione = null;
+    const fermaPressione = () => { if (attesaPressione) { clearTimeout(attesaPressione); attesaPressione = null; } };
+    const avviaPressione = (punto) => {
+      fermaPressione();
+      attesaPressione = setTimeout(() => {
+        attesaPressione = null;
+        sopprimiTapMappa = true;
+        menuPunto(punto);
+      }, 550);
+    };
+    mappa.on('mousedown', (evento) => avviaPressione(evento.lngLat));
+    mappa.on('touchstart', (evento) => {
+      if (!evento.points || evento.points.length !== 1) { fermaPressione(); return; }
+      avviaPressione(evento.lngLat);
+    });
+    ['mouseup', 'touchend', 'touchcancel', 'dragstart', 'zoomstart', 'movestart'].forEach((nome) => mappa.on(nome, fermaPressione));
     mappa.on('load', () => {
       aggiungiLivelliPercorso();
       aggiornaMarker();
@@ -518,7 +542,7 @@
     if (!mappa) return;
     const visibili = !navigazione.attiva && !(sel.partenza && sel.destinazione);
     const valore = visibili ? 'visible' : 'none';
-    ['fermate-punti', 'fermate-nomi'].forEach((id) => {
+    ['fermate-punti', 'fermate-nomi', 'fermate-cluster', 'fermate-cluster-numero'].forEach((id) => {
       if (mappa.getLayer(id)) mappa.setLayoutProperty(id, 'visibility', valore);
     });
   }
@@ -541,6 +565,100 @@
         geometry: { type: 'Point', coordinates: [f.lon, f.lat] }
       }));
     sorgente.setData({ type: 'FeatureCollection', features: features });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Tutte le linee sulla mappa (spento di default)
+   * ------------------------------------------------------------------ */
+  let formeLinee = null;
+  let formeInCorso = null;
+
+  // Il file è compresso e si scarica solo quando l'interruttore si accende:
+  // chi non lo usa non paga il download.
+  async function caricaFormeLinee() {
+    if (formeLinee) return formeLinee;
+    if (formeInCorso) return formeInCorso;
+    formeInCorso = (async () => {
+      let testo = null;
+      try {
+        const risposta = await fetchConTimeout(URL_TRACC_GZ, TIMEOUT_FETCH * 3);
+        if (!risposta.ok) throw new Error('tracciati ' + risposta.status);
+        if (typeof DecompressionStream === 'function' && risposta.body) {
+          testo = await new Response(risposta.body.pipeThrough(new DecompressionStream('gzip'))).text();
+        }
+      } catch (errore) {
+        testo = null;
+      }
+      if (!testo) {
+        const semplice = await fetchConTimeout(URL_TRACC, TIMEOUT_FETCH * 3);
+        if (!semplice.ok) throw new Error('tracciati ' + semplice.status);
+        testo = await semplice.text();
+      }
+      const dati = JSON.parse(testo);
+      const features = (dati.forme || [])
+        .map((forma) => decodificaPolilinea(forma))
+        .filter((punti) => punti.length > 1)
+        .map((punti) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: punti } }));
+      formeLinee = { type: 'FeatureCollection', features: features };
+      return formeLinee;
+    })();
+    try {
+      return await formeInCorso;
+    } finally {
+      formeInCorso = null;
+    }
+  }
+
+  // Stesso formato di routing.js (delta lat/lon in base 63), qui in [lon, lat]
+  // perché è quello che si aspetta GeoJSON.
+  function decodificaPolilinea(testo) {
+    const punti = [];
+    if (typeof testo !== 'string' || !testo.length) return punti;
+    let indice = 0;
+    let lat = 0;
+    let lon = 0;
+    const numero = () => {
+      let risultato = 0;
+      let shift = 0;
+      let byte;
+      do {
+        byte = testo.charCodeAt(indice++) - 63;
+        risultato |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      return (risultato & 1) ? ~(risultato >> 1) : (risultato >> 1);
+    };
+    while (indice < testo.length) {
+      lat += numero();
+      lon += numero();
+      punti.push([lon / 1e5, lat / 1e5]);
+    }
+    return punti;
+  }
+
+  async function mostraLineeTutte(attivo) {
+    if (!mappa) return;
+    if (mappa.getLayer('linee-tutte')) {
+      mappa.setLayoutProperty('linee-tutte', 'visibility', attivo ? 'visible' : 'none');
+      return;
+    }
+    if (!attivo) return;
+    try {
+      const dati = await caricaFormeLinee();
+      if (!mappa || mappa.getLayer('linee-tutte')) return;
+      mappa.addSource('linee-tutte', { type: 'geojson', data: dati });
+      mappa.addLayer({
+        id: 'linee-tutte',
+        type: 'line',
+        source: 'linee-tutte',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#1A1A1A', 'line-width': 1.1, 'line-opacity': 0.35 }
+      }, mappa.getLayer('fermate-cluster') ? 'fermate-cluster' : undefined);
+    } catch (errore) {
+      mostraToast('Tracciati delle linee non disponibili offline');
+      const voce = $('menu-linee');
+      if (voce) voce.checked = false;
+    }
   }
 
   // Il pin delle fermate è un'immagine disegnata una volta su canvas: sui
@@ -586,8 +704,49 @@
 
   function creaLivelliPercorso() {
     const vuoto = { type: 'FeatureCollection', features: [] };
+    // Precisione del GPS: sta sotto tutto, è solo un alone.
+    mappa.addSource('utente', { type: 'geojson', data: vuoto });
+    mappa.addLayer({
+      id: 'utente-precisione', type: 'fill', source: 'utente',
+      paint: { 'fill-color': '#C1121F', 'fill-opacity': 0.10 }
+    });
+    mappa.addLayer({
+      id: 'utente-precisione-bordo', type: 'line', source: 'utente',
+      paint: { 'line-color': '#C1121F', 'line-opacity': 0.35, 'line-width': 1 }
+    });
     // Fermate: sotto i livelli del percorso, così il tracciato resta sopra.
-    mappa.addSource('fermate-mappa', { type: 'geojson', data: vuoto });
+    // A zoom basso si raggruppano in un cerchio con il numero di fermate.
+    mappa.addSource('fermate-mappa', {
+      type: 'geojson',
+      data: vuoto,
+      cluster: true,
+      clusterRadius: 44,
+      clusterMaxZoom: 14
+    });
+    mappa.addLayer({
+      id: 'fermate-cluster',
+      type: 'circle',
+      source: 'fermate-mappa',
+      filter: ['has', 'point_count'],
+      paint: {
+        'circle-color': '#C1121F',
+        'circle-radius': ['step', ['get', 'point_count'], 15, 25, 19, 120, 24],
+        'circle-stroke-color': '#FFFFFF',
+        'circle-stroke-width': 2
+      }
+    });
+    mappa.addLayer({
+      id: 'fermate-cluster-numero',
+      type: 'symbol',
+      source: 'fermate-mappa',
+      filter: ['has', 'point_count'],
+      layout: {
+        'text-field': ['get', 'point_count_abbreviated'],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 12
+      },
+      paint: { 'text-color': '#FFFFFF' }
+    });
     if (!mappa.hasImage(ICONA_PIN_FERMATA)) {
       const pin = immaginePinFermata();
       if (pin) {
@@ -601,6 +760,7 @@
       type: 'symbol',
       source: 'fermate-mappa',
       minzoom: 12.5,
+      filter: ['!', ['has', 'point_count']],
       layout: {
         'icon-image': ICONA_PIN_FERMATA,
         'icon-anchor': 'bottom',
@@ -614,6 +774,7 @@
       type: 'circle',
       source: 'fermate-mappa',
       minzoom: 12.5,
+      filter: ['!', ['has', 'point_count']],
       paint: {
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 12.5, 2.4, 16, 5],
         'circle-color': ['case', ['==', ['get', 'treno'], 1], '#1A1A1A', '#FFFFFF'],
@@ -626,6 +787,7 @@
       type: 'symbol',
       source: 'fermate-mappa',
       minzoom: 15.5,
+      filter: ['!', ['has', 'point_count']],
       layout: {
         'text-field': ['get', 'nome'],
         'text-font': ['Noto Sans Regular'],
@@ -741,6 +903,54 @@
         'circle-stroke-color': ['match', ['get', 'ruolo'], 'partenza', '#FFFFFF', 'arrivo', '#FFFFFF', '#C1121F']
       }
     });
+    // Frecce lungo il tracciato: indicano il verso di percorrenza dei bus.
+    if (!mappa.hasImage('freccia-percorso')) {
+      const freccia = immagineFreccia();
+      if (freccia) {
+        try { mappa.addImage('freccia-percorso', freccia, { pixelRatio: 2 }); } catch (errore) { /* niente frecce */ }
+      }
+    }
+    if (mappa.hasImage('freccia-percorso')) {
+      mappa.addLayer({
+        id: 'percorso-frecce',
+        type: 'symbol',
+        source: 'percorso',
+        filter: ['all', ['==', ['get', 'modo'], 'bus'], ['!=', ['get', 'ufficiale'], false]],
+        layout: {
+          'symbol-placement': 'line',
+          'symbol-spacing': 110,
+          'icon-image': 'freccia-percorso',
+          'icon-size': 0.6,
+          'icon-rotation-alignment': 'map',
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true
+        }
+      });
+    }
+  }
+
+  // Freccia disegnata su canvas e ruotata da MapLibre lungo la linea.
+  function immagineFreccia() {
+    const scala = 2;
+    const lato = 16;
+    const tela = document.createElement('canvas');
+    tela.width = lato * scala;
+    tela.height = lato * scala;
+    const ctx = tela.getContext('2d');
+    if (!ctx) return null;
+    ctx.scale(scala, scala);
+    ctx.beginPath();
+    ctx.moveTo(lato / 2, 2);
+    ctx.lineTo(lato - 3.5, lato - 3);
+    ctx.lineTo(lato / 2, lato - 6);
+    ctx.lineTo(3.5, lato - 3);
+    ctx.closePath();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = 'rgba(26,26,26,.55)';
+    ctx.lineWidth = 1;
+    ctx.fill();
+    ctx.stroke();
+    return ctx.getImageData(0, 0, tela.width, tela.height);
   }
 
   function segmento(modo, coordinate, ufficiale, colore) {
@@ -1181,6 +1391,83 @@
     return markerUtente;
   }
 
+  // Cerchio di precisione attorno al punto GPS: 48 vertici bastano e non
+  // pesano sul disegno. Il raggio è quello dichiarato dal fix, entro limiti
+  // sensati (sotto i 20 m è rumore, sopra i 300 m è inutile).
+  function cerchioPrecisione(lat, lon, raggio) {
+    const punti = [];
+    const latRad = (lat * Math.PI) / 180;
+    for (let i = 0; i <= 48; i += 1) {
+      const angolo = (i / 48) * Math.PI * 2;
+      const dLat = (raggio * Math.cos(angolo)) / 111320;
+      const dLon = (raggio * Math.sin(angolo)) / (111320 * Math.cos(latRad) || 1);
+      punti.push([lon + dLon, lat + dLat]);
+    }
+    return { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [punti] } };
+  }
+
+  // Il pallino dell'utente resta sulla mappa finché il GPS è attivo: non solo
+  // durante la navigazione, così ci si orienta anche prima di partire.
+  function mostraPosizioneUtente(posizione) {
+    const coords = posizione && posizione.coords;
+    if (!coords) return;
+    posizioneUtente = { lat: coords.latitude, lon: coords.longitude, precisione: coords.accuracy };
+    if (!mappa) return;
+    const segnaposto = creaMarkerUtente();
+    if (segnaposto) {
+      segnaposto.setLngLat([coords.longitude, coords.latitude]);
+      if (!markerUtenteAggiunto) { segnaposto.addTo(mappa); markerUtenteAggiunto = true; }
+    }
+    const sorgente = mappa.getSource('utente');
+    if (sorgente) {
+      const raggio = Math.max(20, Math.min(coords.accuracy || 30, 300));
+      sorgente.setData({ type: 'FeatureCollection', features: [cerchioPrecisione(coords.latitude, coords.longitude, raggio)] });
+    }
+  }
+
+  function avviaGps() {
+    if (!navigator.geolocation || gpsWatch != null) return;
+    gpsWatch = navigator.geolocation.watchPosition(
+      mostraPosizioneUtente,
+      () => { /* permesso negato: si resta senza pallino */ },
+      { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 }
+    );
+  }
+
+  // Un punto scelto a mano vale come un indirizzo: coordinate esatte per il
+  // percorso, zona della fermata più vicina per il prezzo.
+  function menuPunto(latlng) {
+    if (!mappa || !window.maplibregl || !latlng) return;
+    const lat = latlng.lat;
+    const lon = latlng.lng;
+    const vicina = fermateVicine(lat, lon, 1)[0];
+    const nodo = document.createElement('div');
+    nodo.className = 'punto-menu';
+    nodo.innerHTML = '<button type="button" data-punto="partenza">Imposta come partenza</button>' +
+      '<button type="button" data-punto="destinazione">Imposta come destinazione</button>';
+    nodo.addEventListener('click', (evento) => {
+      const scelta = evento.target.closest('[data-punto]');
+      if (!scelta) return;
+      if (popupPunto) { popupPunto.remove(); popupPunto = null; }
+      selezionaFermata(scelta.getAttribute('data-punto'), {
+        id: 'geo:' + lat.toFixed(5) + ',' + lon.toFixed(5),
+        nome: 'Punto sulla mappa',
+        indirizzo: lat.toFixed(5) + ', ' + lon.toFixed(5),
+        lat: lat,
+        lon: lon,
+        zona: vicina ? vicina.zona : '500',
+        tipo: 'indirizzo',
+        genere: 'indirizzo',
+        categoria: 'Punto sulla mappa'
+      });
+    });
+    if (popupPunto) popupPunto.remove();
+    popupPunto = new maplibregl.Popup({ closeButton: false, closeOnClick: true, offset: 4, className: 'punto-popup' })
+      .setLngLat([lon, lat])
+      .setDOMContent(nodo)
+      .addTo(mappa);
+  }
+
   function aggiornaNavFollow() {
     const centro = $('nav-centra');
     if (centro) centro.hidden = navigazione.follow;
@@ -1245,7 +1532,17 @@
     navigazione.ultima = punto;
     posizioneUtente = punto;
     const marcatore = creaMarkerUtente();
-    if (marcatore && mappa) marcatore.setLngLat([punto.lon, punto.lat]).addTo(mappa);
+    if (marcatore && mappa) {
+      marcatore.setLngLat([punto.lon, punto.lat]).addTo(mappa);
+      markerUtenteAggiunto = true;
+      const sorgente = mappa.getSource('utente');
+      if (sorgente && navigazione.precisione) {
+        sorgente.setData({
+          type: 'FeatureCollection',
+          features: [cerchioPrecisione(punto.lat, punto.lon, Math.max(20, Math.min(navigazione.precisione, 300)))]
+        });
+      }
+    }
     avanzaPassi(punto);
     if (mappa && navigazione.follow) {
       const adesso = Date.now();
@@ -1335,15 +1632,35 @@
   /* ------------------------------------------------------------------ *
    * Ricerca e selettore fermate
    * ------------------------------------------------------------------ */
-  function voceHTML(f, ruolo) {
+  // Il motivo per cui una fermata è suggerita: "a 200 m da te", "ultima
+  // usata". Un suggerimento senza spiegazione è solo una lista più lunga.
+  function motivoVoce(f, titolo, indice) {
+    if (titolo === 'Recenti') return indice === 0 ? 'ultima usata' : 'usata di recente';
+    if (titolo === 'Vicine a te' && posizioneUtente) {
+      return 'a ' + metriTesto(distanzaMetri(posizioneUtente, f)) + ' da te';
+    }
+    if (titolo === 'Vicine alla partenza' && sel.partenza) {
+      return 'a ' + metriTesto(distanzaMetri(sel.partenza, f)) + ' dalla partenza';
+    }
+    return '';
+  }
+
+  function voceHTML(f, ruolo, motivo, rimuovi) {
     const classe = classeTipo(f.tipo);
-    return '<button class="voce" role="option" data-voce="' + esc(f.id) + '" data-ruolo="' + esc(ruolo) + '">' +
+    const bottone = '<button class="voce" role="option" data-voce="' + esc(f.id) + '" data-ruolo="' + esc(ruolo) + '">' +
       '<span class="voce-ico ' + classe + '">' + iconaTipo(f.tipo) + '</span>' +
       '<span class="voce-testo"><span class="voce-nome">' + esc(f.nome) + '</span>' +
       (f.indirizzo ? '<span class="voce-indirizzo">' + esc(f.indirizzo) + '</span>' : '') +
-      '<span class="voce-meta">' + esc(metaFermata(f)) + '</span></span>' +
-      ICONA_CHEVRON +
+      '<span class="voce-meta">' + esc(metaFermata(f)) + '</span>' +
+      (motivo ? '<span class="voce-motivo">' + esc(motivo) + '</span>' : '') +
+      '</span>' +
+      (rimuovi ? '' : ICONA_CHEVRON) +
       '</button>';
+    if (!rimuovi) return bottone;
+    // Niente bottoni dentro bottoni: la X dei recenti è un fratello della voce.
+    return '<div class="voce-con-rimuovi" style="display:flex;align-items:center;gap:4px">' + bottone +
+      '<button type="button" class="voce-rimuovi" data-rimuovi="' + esc(f.id) + '" aria-label="Rimuovi ' +
+      esc(nomeBreve(f.nome)) + ' dai recenti">' + ICONA_X + '</button></div>';
   }
 
   function gruppiSuggerimenti(campo) {
@@ -1429,12 +1746,46 @@
       '</button>';
   }
 
+  function skeletonRighe(quante) {
+    let html = '';
+    for (let i = 0; i < quante; i += 1) {
+      html += '<div class="skeleton-riga" aria-hidden="true"><span></span><span></span><span></span></div>';
+    }
+    return html;
+  }
+
+  function chipSuggerimento(testo) {
+    return '<button type="button" class="chip-suggerimento" data-chip="' + esc(testo) + '">' + esc(testo) + '</button>';
+  }
+
+  // Cose che esistono davvero a Bologna, per quando la ricerca non trova nulla.
+  const CHIP_RICERCA = ['Piazza Maggiore', 'Stazione Centrale', 'via Zamboni', "Ospedale Sant'Orsola"];
+
   function disegnaSuggerimenti() {
     const lista = $('overlay-lista');
+    if (!lista) return;
+    lista.setAttribute('aria-busy', suggerimenti.caricamento ? 'true' : 'false');
     const campo = suggerimenti.campo || 'destinazione';
-    let html = suggerimenti.gruppi.map((gruppo) => {
-      return '<div class="gruppo-titolo">' + esc(gruppo.titolo) + '</div>' +
-        gruppo.items.map((f) => voceHTML(f, campo)).join('');
+    let html = '';
+    // La posizione attuale è la prima voce quando si sceglie da dove partire:
+    // coordinate esatte, non la palina più vicina.
+    if (campo === 'partenza' && posizioneUtente) {
+      html += '<button class="voce" role="option" data-posizione="1" data-ruolo="partenza">' +
+        '<span class="voce-ico geo">' + ICONA_MIRINO + '</span>' +
+        '<span class="voce-testo"><span class="voce-nome">La mia posizione attuale</span>' +
+        '<span class="voce-motivo">GPS · coordinate esatte</span></span>' + ICONA_CHEVRON + '</button>';
+    }
+    html += suggerimenti.gruppi.map((gruppo) => {
+      const recenti = gruppo.titolo === 'Recenti';
+      const modifica = recenti && suggerimenti.modifica;
+      const testa = recenti
+        ? '<div class="gruppo-riga"><div class="gruppo-titolo">Recenti</div>' +
+          '<button type="button" class="link-mini" data-azione="modifica-recenti">' +
+          (modifica ? 'Fine' : 'Modifica') + '</button></div>'
+        : '<div class="gruppo-titolo">' + esc(gruppo.titolo) + '</div>';
+      return testa + gruppo.items.map((f, indice) =>
+        voceHTML(f, campo, motivoVoce(f, gruppo.titolo, indice), modifica)
+      ).join('');
     }).join('');
     const luoghi = suggerimenti.indirizzi.filter((luogo) => luogo.genere === 'luogo');
     const indirizzi = suggerimenti.indirizzi.filter((luogo) => luogo.genere !== 'luogo');
@@ -1450,14 +1801,17 @@
       html += '<p class="testo-intro" style="padding:6px 10px 10px;font-size:11px">Luoghi e indirizzi © OpenStreetMap contributors (ODbL)</p>';
     }
     if (suggerimenti.caricamento) {
-      html += '<div class="gruppo-titolo">Luoghi e indirizzi</div>' +
-        '<p class="testo-intro" style="padding:2px 10px 12px">Cerco su OpenStreetMap…</p>';
+      html += '<div class="gruppo-titolo">Luoghi e indirizzi</div>' + skeletonRighe(3);
     }
     if (suggerimenti.errore) {
       html += '<p class="testo-intro" style="padding:8px 10px 12px">Ricerca di luoghi e indirizzi non disponibile: le fermate qui sopra funzionano lo stesso.</p>';
     }
     if (!html) {
-      html = '<p class="testo-intro" style="padding:16px 8px 12px">Nessuna fermata, luogo o indirizzo trovato. Prova con un altro nome.</p>';
+      // Nessun risultato: si suggerisce cosa cercare, invece di lasciare un
+      // testo fermo. Le chip riempiono il campo e rilanciano la ricerca.
+      html = '<p class="testo-intro" style="padding:12px 4px 6px">Nessun risultato per “' +
+        esc(suggerimenti.query) + '”. Prova con:</p>' +
+        '<div>' + CHIP_RICERCA.map(chipSuggerimento).join('') + '</div>';
     }
     lista.innerHTML = html;
   }
@@ -1838,9 +2192,14 @@
     if (tappa) meta += ' · ' + tappa.fermate + (tappa.fermate === 1 ? ' fermata' : ' fermate');
     if (e.cambi) meta += ' · ' + (e.cambi === 1 ? '1 cambio' : e.cambi + ' cambi');
     const piedi = Math.round(((e.camminoIniziale || 0) + (e.camminoFinale || 0)) / 60);
-    if (piedi >= 1) meta += ' · ' + piedi + ' min a piedi';
+    if (piedi >= 1) meta += ' · a piedi ' + piedi + ' min';
+    // Abbonamento: una spunta accanto al prezzo, non un altro chip in alto.
+    const spunta = prezzo === 'Incluso'
+      ? '<span class="spunta-abb" role="img" aria-label="Coperto dall\'abbonamento urbano">' +
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg></span>'
+      : '';
     return '<div class="riepilogo">' +
-      '<div class="riep-titolo">' + totaleMinuti(e) + ' min' + (prezzo ? ' · ' + esc(prezzo) : '') + htmlBadgePiano() + '</div>' +
+      '<div class="riep-titolo">' + totaleMinuti(e) + ' min' + (prezzo ? ' · ' + esc(prezzo) + spunta : '') + htmlBadgePiano() + '</div>' +
       htmlCriteri() +
       '<div class="riep-meta">' + esc(meta) + '</div>' +
       htmlSpiegazione() +
@@ -1861,7 +2220,7 @@
       const piedi = Math.round(((e.camminoIniziale || 0) + (e.camminoFinale || 0)) / 60);
       const meta = totaleMinuti(e) + ' min · ' +
         (e.cambi === 0 ? 'diretto' : e.cambi === 1 ? '1 cambio' : e.cambi + ' cambi') +
-        (piedi ? ' · ' + piedi + ' min a piedi' : '');
+        (piedi ? ' · a piedi ' + piedi + ' min' : '');
       return '<button type="button" class="opzione-riga" data-opzione="' + indice + '" aria-current="' + (indice === scelto ? 'true' : 'false') + '">' +
         '<span class="testo"><span class="orari">' + hhmm(uscita) + ' → ' + hhmm(arrivo) + '</span>' +
         '<span class="meta">' + esc(meta) + '</span></span>' +
@@ -1870,7 +2229,7 @@
     const aperte = alternativeAperte || statoSheet === 'piena';
     const altre = Math.max(1, opzioni.length - 1 + (routing.opzionePiedi ? 1 : 0));
     return '<button type="button" class="altre" data-azione="altre" aria-expanded="' + (aperte ? 'true' : 'false') + '">' +
-      'Altre soluzioni (' + altre + ')' + ICONA_GIU + '</button>' +
+      '<span>Altre ' + altre + ' soluzioni</span>' + ICONA_GIU + '</button>' +
       '<div class="opzioni"' + (aperte ? '' : ' hidden') + '>' + righe + htmlPiediAlternativa() + '</div>';
   }
 
@@ -1902,18 +2261,45 @@
     disegnaPercorso();
   }
 
+  // Consigli sul biglietto: solo fatti che l'app conosce davvero (zone, mezzo,
+  // listino). Meglio nessun consiglio che un risparmio inventato.
+  function consigliBiglietto(r) {
+    const consigli = [];
+    if (!r || r.prezzo == null || r.prezzo === 0) return consigli;
+    const p = sel.partenza;
+    const d = sel.destinazione;
+    const urbane = !!(p && d && Tariffe.isZonaUrbana(p.zona) && Tariffe.isZonaUrbana(d.zona));
+    if (urbane) {
+      consigli.push('Tratta tutta in area urbana: <b>l\'abbonamento urbano</b> (zone 500–509) la copre.');
+    }
+    if (trenoNellItinerario().treno) {
+      consigli.push('Sul treno il prezzo segue i chilometri (tariffa regionale 2ª classe), non le zone.');
+    } else if (!urbane) {
+      consigli.push('Fuori dalle zone 500–509 il biglietto urbano non basta: serve l\'integrazione.');
+    }
+    return consigli.slice(0, 2);
+  }
+
   function bigliettoHTML(r) {
     if (!r) return '';
     const prezzo = r.prezzo === null ? '—' : (r.prezzo === 0 ? 'Incluso' : euro(r.prezzo));
     const nota = r.prezzo === 0 ? 'Nessun costo aggiuntivo' : r.prezzoNota;
+    const consigli = consigliBiglietto(r);
     return '<details class="biglietto">' +
       '<summary><span class="b-prezzo">' + esc(prezzo) + '</span><span class="b-nota">' + esc(nota) + '</span></summary>' +
       '<div class="b-corpo">' +
       '<span class="b-stato">' + esc(r.titolo) + '</span>' +
       (r.avviso ? '<p>' + esc(r.avviso) + '</p>' : '') +
-      '<div class="riga"><span>Ho l\'abbonamento urbano</span>' +
+      '<div class="riga b-riga"><span class="etichetta">Ho l\'abbonamento urbano' +
+      '<button type="button" class="btn-info" data-azione="spiega-abbonamento" aria-expanded="false"' +
+      ' aria-label="Cosa copre l\'abbonamento urbano">i</button></span>' +
       '<span class="interruttore"><input type="checkbox" id="check-abbonamento"' + (abbonamento ? ' checked' : '') +
       ' aria-label="Ho l\'abbonamento urbano"><span class="binario"></span></span></div>' +
+      '<p class="b-spiega" id="spiega-abbonamento" hidden>L\'abbonamento urbano copre la zona 500 (Bologna città) e le zone neutre 501–509. Per uscire servono le integrazioni extraurbane.</p>' +
+      (consigli.length
+        ? '<div><p class="micro" style="margin:0 0 4px">Forse ti conviene</p>' +
+          consigli.map((testo) => '<p class="b-conviene">' + testo + '</p>').join('') + '</div>'
+        : '') +
       '<a href="' + URL_UFFICIALE + '" target="_blank" rel="noopener">Verifica sul calcolatore TPER</a>' +
       '</div></details>';
   }
@@ -1933,11 +2319,13 @@
 
   function htmlStatoPercorso() {
     if (routing.stato === 'caricamento' || routing.stato === 'idle') {
-      return '<div class="schema"><span></span><span></span></div>';
+      return '<div class="schema" aria-busy="true"><span></span><span></span><span></span></div>';
     }
     if (routing.stato === 'errore') {
-      return '<div class="box">Percorso non calcolato (' + esc(routing.errore || 'errore') + ').' +
-        '<div style="margin-top:10px"><button type="button" class="btn btn-tenue" data-azione="riprova-percorso">Riprova</button></div></div>';
+      // Una riga, non un banner: il percorso non c'è, ma l'app resta usabile.
+      return '<div class="box">Dati non aggiornati · ' +
+        '<button type="button" class="link" data-azione="riprova-percorso" style="min-height:0;padding:0">riprova</button>' +
+        (routing.errore ? '<span class="micro" style="margin:6px 0 0">' + esc(routing.errore) + '</span>' : '') + '</div>';
     }
     if (routing.stato === 'piedi') {
       return '<div class="box">Ci arrivi a piedi: ' + routing.piedi.metri + ' m, circa ' + routing.piedi.minuti + ' min.' +
@@ -2034,12 +2422,17 @@
     $('mini-meta').textContent = (eIndirizzo(f) ? 'Indirizzo' : 'Palina ' + f.id) +
       ' · zona ' + f.zona + (linee.length ? ' · ' + linee.join(' · ') : '');
     box.hidden = false;
+    // La mini-card occupa il bordo inferiore: i comandi mappa si tolgono.
+    const comandi = $('mappa-comandi');
+    if (comandi) comandi.hidden = true;
   }
 
   function chiudiMini() {
     miniFermata = null;
     const box = $('mini-fermata');
     if (box) box.hidden = true;
+    const comandi = $('mappa-comandi');
+    if (comandi) comandi.hidden = false;
   }
 
   function apriOrari(f) {
@@ -2051,6 +2444,8 @@
     live.ts = 0;
     live.stato = 'idle';
     live.avviso = '';
+    live.aperto = -1;
+    live.avvisa = null;
     // Gli orari programmati arrivano dal GTFS: se non sono ancora in memoria
     // si caricano adesso e la vista si ridisegna da sola.
     if (typeof TPERRouting !== 'undefined' && TPERRouting.carica &&
@@ -3425,29 +3820,48 @@
       return '<div class="stato-live"><span class="punto off"></span>In attesa di aggiornamento</div>';
     }
     const liveCount = live.items.filter((a) => a.tipo === 'live').length;
+    const eta = live.ts ? Math.round((Date.now() - live.ts) / 60000) : null;
+    const quando = eta == null || eta <= 0
+      ? 'Aggiornato ora'
+      : eta === 1 ? 'Aggiornato 1 min fa' : 'Aggiornato ' + eta + ' min fa';
     return '<div class="stato-live"><span class="punto' + (liveCount ? '' : ' off') + '"></span>' +
-      'Aggiornato alle ' + esc(orarioCorto(live.ts || Date.now())) +
-      (liveCount ? ' · ' + liveCount + ' bus localizzati via GPS' : ' · solo orario programmato') + '</div>';
+      '<span>' + quando +
+      (liveCount ? ' · ' + liveCount + ' bus localizzati via GPS' : ' · solo orario programmato') + '</span>' +
+      (eta != null && eta >= 2 ? '<button type="button" class="link-mini" data-azione="aggiorna">Aggiorna</button>' : '') +
+      '</div>';
   }
 
+  // Timeline degli arrivi: il tempo in colonna a sinistra, la linea verticale
+  // al centro. Ogni riga si apre con il dettaglio della corsa e l'avviso.
   function arriviHTML() {
-    return '<ul class="lista-arrivi">' + live.items.map((arrivo) => {
+    return '<ul class="lista-arrivi">' + live.items.map((arrivo, indice) => {
       // I minuti si ricalcolano dall'orario: quelli salvati in cache possono
       // essere vecchi di un paio di minuti e mostrare un bus già passato.
       const minuti = minutiA(arrivo.ora);
-      const tempo = minuti <= 0 ? 'In arrivo' : minuti + '<span class="unita">min</span>';
-      const meta = (arrivo.bus ? 'Bus ' + esc(arrivo.bus) : 'Corsa programmata') + ' · ore ' + esc(arrivo.ora);
+      const tempo = Math.max(0, minuti) + '<span class="unita">min</span>';
       const voce = coloreLinea(arrivo.linea);
       const colore = voce
         ? ' style="background:' + esc(voce[0]) + ';color:' + esc(voce[1] || '#FFFFFF') + '"'
         : '';
-      return '<li class="arrivo">' +
-        '<span class="badge-linea"' + colore + '>' + esc(arrivo.linea) + '</span>' +
-        '<div class="arrivo-testo"><div class="arrivo-tempo">' + tempo + '</div>' +
-        '<div class="arrivo-meta">' + meta + '</div></div>' +
+      const aperto = live.aperto === indice;
+      const attivo = !!(live.avvisa && live.avvisa.linea === arrivo.linea && live.avvisa.ora === arrivo.ora);
+      const dettaglio = aperto
+        ? '<div class="arrivo-dettaglio">' +
+          '<div class="riga"><span>' + (arrivo.bus ? 'Bus ' + esc(arrivo.bus) : 'Corsa programmata') + '</span>' +
+          '<span>ore ' + esc(arrivo.ora) + '</span></div>' +
+          '<div class="riga"><span>Avviso a 2 minuti</span>' +
+          '<button type="button" class="link-mini" data-azione="avvisa" data-avvisa-linea="' + esc(arrivo.linea) +
+          '" data-avvisa-ora="' + esc(arrivo.ora) + '">' + (attivo ? 'Togli l\'avviso' : 'Avvisami') + '</button></div>' +
+          '</div>'
+        : '';
+      return '<li class="arrivo-item"><button type="button" class="arrivo" data-arrivo="' + indice +
+        '" aria-expanded="' + (aperto ? 'true' : 'false') + '">' +
+        '<span class="arrivo-tempo">' + tempo + '</span>' +
+        '<span class="arrivo-punto' + (arrivo.tipo === 'live' ? '' : ' off') + '"></span>' +
+        '<span class="arrivo-testo"><span class="badge-linea"' + colore + '>' + esc(arrivo.linea) + '</span>' +
+        '<span class="arrivo-meta">' + (arrivo.bus ? 'Bus ' + esc(arrivo.bus) : 'Orario programmato') + ' · ' + esc(arrivo.ora) + '</span></span>' +
         '<span class="' + (arrivo.tipo === 'live' ? 'tag-live' : 'tag-orario') + '">' + (arrivo.tipo === 'live' ? 'LIVE' : 'ORARIO') + '</span>' +
-        (arrivo.pedana ? '<span class="icona-pedana" title="Accessibile in carrozzina">' + ICONA_ACCESSIBILITA + '</span>' : '') +
-        '</li>';
+        '</button>' + dettaglio + '</li>';
     }).join('') + '</ul>';
   }
 
@@ -3562,6 +3976,8 @@
       live.ts = 0;
       live.stato = 'idle';
       live.avviso = '';
+      live.aperto = -1;
+      live.avvisa = null;
     }
     let html = '<div class="orari-testa"><div>' +
       '<h2 class="orari-nome">' + esc(fermata ? fermata.nome : 'Scegli una fermata') + '</h2>' +
@@ -3576,9 +3992,18 @@
     } else if (live.stato === 'senza-linee') {
       html += '<div class="box">Qui passano solo treni: per loro vale l\'orario programmato, non il tempo reale.</div>';
     } else if (live.stato === 'non-gestita') {
-      html += '<div class="box">HelloBus non gestisce questa fermata. Prova la palina accanto o tper.it.</div>';
+      // Non è un errore: gli orari programmati ci sono comunque, sotto.
+      html += '<div class="box">Per questa linea il tempo reale non è disponibile: mostro gli orari programmati.</div>';
     } else {
       html += statoLiveHTML();
+      // Avviso attivo: una riga sola, senza notifiche di sistema.
+      if (live.avvisa) {
+        const vicino = live.items.filter((a) => a.linea === live.avvisa.linea && a.ora === live.avvisa.ora)[0];
+        const quanti = vicino ? minutiA(vicino.ora) : null;
+        html += '<div class="avviso-attivo">' + (quanti != null && quanti <= 2
+          ? 'Bus ' + esc(live.avvisa.linea) + ' a ' + Math.max(0, quanti) + ' min'
+          : 'Avviso attivo: bus ' + esc(live.avvisa.linea) + ' delle ' + esc(live.avvisa.ora)) + '</div>';
+      }
       if (live.stato === 'errore' && !live.items.length) {
         html += '<div class="box">Dati non aggiornati. ' +
           '<button type="button" class="link" data-azione="aggiorna">Riprova</button></div>';
@@ -4028,6 +4453,7 @@
       mostraToast('Geolocalizzazione non supportata da questo browser');
       return;
     }
+    avviaGps();
     mostraToast('Cerco la tua posizione…');
     // Con il permesso già negato il browser può non richiamare mai il callback
     // d'errore: il messaggio restava su "Cerco la tua posizione…" per sempre.
@@ -4039,9 +4465,9 @@
       }).catch(() => { /* Permissions API assente: vale il timeout */ });
     }
     navigator.geolocation.getCurrentPosition((posizione) => {
-      posizioneUtente = { lat: posizione.coords.latitude, lon: posizione.coords.longitude };
-      const vicine = senzaDoppioni(fermateVicine(posizioneUtente.lat, posizioneUtente.lon, 8)).slice(0, 6);
-      if (mappa) mappa.flyTo({ center: [posizioneUtente.lon, posizioneUtente.lat], zoom: 15, offset: [0, -120] });
+      mostraPosizioneUtente(posizione);
+      const vicine = senzaDoppioni(fermateVicine(posizione.coords.latitude, posizione.coords.longitude, 8)).slice(0, 6);
+      if (mappa) mappa.flyTo({ center: [posizione.coords.longitude, posizione.coords.latitude], zoom: 15, offset: [0, -120] });
       mostraVista('percorso');
       impostaSheet('meta');
       renderPercorso();
@@ -4157,6 +4583,9 @@
       renderPercorso();
     });
     $('menu-posizione').addEventListener('click', () => { chiudiMenu(); vaiVicino(); });
+    $('menu-linee').addEventListener('change', (evento) => {
+      mostraLineeTutte(evento.target.checked);
+    });
     $('menu-recente').addEventListener('click', () => {
       chiudiMenu();
       routing.chiave = null;
@@ -4220,6 +4649,25 @@
       }
     });
     $('cerca-indietro').addEventListener('click', chiudiOverlay);
+    // Focus trap: con la ricerca aperta il Tab gira dentro l'overlay, non
+    // finisce sulla mappa o sul pannello che stanno sotto.
+    $('cerca').addEventListener('keydown', (evento) => {
+      if (evento.key !== 'Tab') return;
+      const elementi = Array.prototype.filter.call(
+        $('cerca').querySelectorAll('button, input, [tabindex]:not([tabindex="-1"])'),
+        (el) => !el.hidden && el.offsetParent !== null
+      );
+      if (!elementi.length) return;
+      const primo = elementi[0];
+      const ultimo = elementi[elementi.length - 1];
+      if (evento.shiftKey && document.activeElement === primo) {
+        evento.preventDefault();
+        ultimo.focus();
+      } else if (!evento.shiftKey && document.activeElement === ultimo) {
+        evento.preventDefault();
+        primo.focus();
+      }
+    });
     $('cerca-pulisci').addEventListener('click', () => {
       inputCerca.value = '';
       aggiornaPulisci();
@@ -4227,6 +4675,47 @@
       inputCerca.focus();
     });
     $('overlay-lista').addEventListener('click', (evento) => {
+      // Recenti modificabili: la X toglie la voce, "Modifica" mostra le X.
+      const rimuovi = evento.target.closest('[data-rimuovi]');
+      if (rimuovi) {
+        const id = rimuovi.getAttribute('data-rimuovi');
+        const ids = (leggiJSON(K_RECENTI) || []).filter((voce) => voce !== id);
+        scrivi(K_RECENTI, JSON.stringify(ids));
+        apriSuggerimenti(campoAttivo, suggerimenti.query);
+        return;
+      }
+      const modifica = evento.target.closest('[data-azione="modifica-recenti"]');
+      if (modifica) {
+        suggerimenti.modifica = !suggerimenti.modifica;
+        disegnaSuggerimenti();
+        return;
+      }
+      const chip = evento.target.closest('[data-chip]');
+      if (chip) {
+        const testo = chip.getAttribute('data-chip') || '';
+        inputCerca.value = testo;
+        aggiornaPulisci();
+        apriSuggerimenti(campoAttivo, testo);
+        inputCerca.focus();
+        return;
+      }
+      const miaPosizione = evento.target.closest('[data-posizione]');
+      if (miaPosizione) {
+        if (!posizioneUtente) return;
+        const vicina = fermateVicine(posizioneUtente.lat, posizioneUtente.lon, 1)[0];
+        selezionaFermata('partenza', {
+          id: 'geo:' + posizioneUtente.lat.toFixed(5) + ',' + posizioneUtente.lon.toFixed(5),
+          nome: 'La mia posizione',
+          indirizzo: '',
+          lat: posizioneUtente.lat,
+          lon: posizioneUtente.lon,
+          zona: vicina ? vicina.zona : '500',
+          tipo: 'indirizzo',
+          genere: 'indirizzo',
+          categoria: 'Posizione attuale'
+        });
+        return;
+      }
       const indirizzo = evento.target.closest('[data-indirizzo]');
       if (indirizzo) {
         const lat = parseFloat(indirizzo.getAttribute('data-lat'));
@@ -4283,9 +4772,31 @@
         }
         return;
       }
+      // Timeline degli arrivi: la riga si apre e mostra il dettaglio della corsa.
+      const arrivo = evento.target.closest('[data-arrivo]');
+      if (arrivo) {
+        const indice = parseInt(arrivo.getAttribute('data-arrivo'), 10);
+        live.aperto = live.aperto === indice ? -1 : indice;
+        renderLive();
+        return;
+      }
       const pulsante = evento.target.closest('[data-azione]');
       if (pulsante) {
         const azione = pulsante.getAttribute('data-azione');
+        if (azione === 'avvisa') {
+          const linea = pulsante.getAttribute('data-avvisa-linea');
+          const ora = pulsante.getAttribute('data-avvisa-ora');
+          live.avvisa = (live.avvisa && live.avvisa.linea === linea && live.avvisa.ora === ora)
+            ? null : { linea: linea, ora: ora };
+          renderLive();
+        }
+        if (azione === 'spiega-abbonamento') {
+          const testo = $('spiega-abbonamento');
+          if (testo) {
+            testo.hidden = !testo.hidden;
+            pulsante.setAttribute('aria-expanded', testo.hidden ? 'false' : 'true');
+          }
+        }
         if (azione === 'cerca') {
           if (!sel.destinazione) apriCerca(sel.partenza ? 'destinazione' : 'partenza');
           else { routing.chiave = null; impostaSheet('meta'); calcolaPercorso(); }
@@ -4348,7 +4859,27 @@
     // ---- Mappa: un tap chiude il pannello espanso e la mini-card ----
     if (mappa) {
       // Una fermata toccata apre la sua mini-card; un tocco sul vuoto chiude.
+      // Un raggruppamento toccato si apre: lo zoom sale al punto in cui le
+      // fermate che contiene si separano.
       mappa.on('click', (evento) => {
+        const gruppi = mappa.getLayer('fermate-cluster')
+          ? mappa.queryRenderedFeatures(evento.point, { layers: ['fermate-cluster'] })
+          : null;
+        if (gruppi && gruppi.length) {
+          const gruppo = gruppi[0];
+          const sorgente = mappa.getSource('fermate-mappa');
+          if (sorgente && sorgente.getClusterExpansionZoom) {
+            sorgente.getClusterExpansionZoom(gruppo.properties.cluster_id).then((zoom) => {
+              mappa.easeTo({
+                center: gruppo.geometry.coordinates,
+                zoom: Math.min(18, zoom + 0.2),
+                duration: 450
+              });
+            }).catch(() => { /* resta lo zoom attuale */ });
+          }
+          return;
+        }
+        if (sopprimiTapMappa) { sopprimiTapMappa = false; return; }
         const colpi = mappa.getLayer('fermate-punti')
           ? mappa.queryRenderedFeatures(evento.point, { layers: ['fermate-punti'] })
           : null;
