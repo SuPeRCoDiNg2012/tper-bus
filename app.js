@@ -1064,6 +1064,10 @@
     routing.opzioniOttimizzato = [];
     routing.confronto = null;
     routing.piedi = null;
+    routing.opzionePiedi = null;
+    routing.candidatiDestinazione = null;
+    routing.suggerimento = null;
+    routing.avvisoRitardo = '';
     routing.aperto = -1;
     livePercorso.chiave = null;
     livePercorso.corsa = null;
@@ -1840,6 +1844,7 @@
       htmlCriteri() +
       '<div class="riep-meta">' + esc(meta) + '</div>' +
       htmlSpiegazione() +
+      htmlSuggerimenti() +
       '<div class="riep-azioni">' +
       '<button type="button" class="btn btn-primario" data-azione="avvia-navigazione">Avvia</button>' +
       '<button type="button" class="link" data-azione="dettagli">Dettagli</button>' +
@@ -1848,7 +1853,7 @@
 
   function htmlAlternative() {
     const opzioni = routing.opzioni || [];
-    if (opzioni.length < 2) return '';
+    if (opzioni.length < 2 && !routing.opzionePiedi) return '';
     const scelto = routing.aperto >= 0 ? routing.aperto : 0;
     const righe = opzioni.map((e, indice) => {
       const uscita = Math.max(0, e.partenza - (e.camminoIniziale || 0));
@@ -1863,9 +1868,38 @@
         '<span class="linee">' + lineeBadge(e) + '</span></button>';
     }).join('');
     const aperte = alternativeAperte || statoSheet === 'piena';
+    const altre = Math.max(1, opzioni.length - 1 + (routing.opzionePiedi ? 1 : 0));
     return '<button type="button" class="altre" data-azione="altre" aria-expanded="' + (aperte ? 'true' : 'false') + '">' +
-      'Altre soluzioni (' + (opzioni.length - 1) + ')' + ICONA_GIU + '</button>' +
-      '<div class="opzioni"' + (aperte ? '' : ' hidden') + '>' + righe + '</div>';
+      'Altre soluzioni (' + altre + ')' + ICONA_GIU + '</button>' +
+      '<div class="opzioni"' + (aperte ? '' : ' hidden') + '>' + righe + htmlPiediAlternativa() + '</div>';
+  }
+
+  // Alternativa a piedi fino a 2 km: una riga nella lista che c'è già, non una
+  // scheda nuova. Si sceglie come le altre proposte.
+  function htmlPiediAlternativa() {
+    const offerta = routing.opzionePiedi;
+    if (!offerta) return '';
+    return '<button type="button" class="opzione-riga" data-opzione="piedi" aria-current="' +
+      (routing.stato === 'piedi' ? 'true' : 'false') + '">' +
+      '<span class="testo"><span class="orari">A piedi · ' + offerta.minuti + ' min</span>' +
+      '<span class="meta">' + offerta.metri + ' m, senza cambi</span></span>' +
+      '<span class="linee"></span></button>';
+  }
+
+  function mostraPiedi() {
+    const offerta = routing.opzionePiedi;
+    if (!offerta || !sel.partenza || !sel.destinazione) return;
+    if (sel.partenza.lat == null || sel.destinazione.lat == null) return;
+    routing.stato = 'piedi';
+    routing.piedi = {
+      metri: offerta.metri,
+      minuti: offerta.minuti,
+      chiave: Piedi.chiave(
+        [sel.partenza.lon, sel.partenza.lat],
+        [sel.destinazione.lon, sel.destinazione.lat]
+      )
+    };
+    disegnaPercorso();
   }
 
   function bigliettoHTML(r) {
@@ -1906,7 +1940,10 @@
         '<div style="margin-top:10px"><button type="button" class="btn btn-tenue" data-azione="riprova-percorso">Riprova</button></div></div>';
     }
     if (routing.stato === 'piedi') {
-      return '<div class="box">Ci arrivi a piedi: ' + routing.piedi.metri + ' m, circa ' + routing.piedi.minuti + ' min.</div>';
+      return '<div class="box">Ci arrivi a piedi: ' + routing.piedi.metri + ' m, circa ' + routing.piedi.minuti + ' min.' +
+        (routing.opzioni && routing.opzioni.length
+          ? '<div style="margin-top:10px"><button type="button" class="btn btn-tenue" data-azione="torna-bus">Mostra il bus</button></div>'
+          : '') + '</div>';
     }
     if (routing.stato === 'messaggio') {
       const codice = routing.esito && routing.esito.errore;
@@ -2168,10 +2205,15 @@
     return d.getHours() * 3600 + d.getMinutes() * 60;
   }
 
-  // Firma del percorso: solo la sequenza delle linee. Due varianti che
-  // differiscono soltanto per dove si cammina non sono alternative.
+  // Firma del percorso: linee usate e orari di partenza. Con i soli modi due
+  // strade diverse risultavano uguali; con le sole linee due corse della stessa
+  // linea a qualche minuto di distanza collassavano in una.
+  function firmaLinee(e) {
+    return (e.tappe || []).map((tappa) => tappa.linea).join('>');
+  }
+
   function firmaPercorso(e) {
-    return e.tappe.map((tappa) => tappa.linea).join('>');
+    return firmaLinee(e) + '#' + (e.tappe || []).map((tappa) => tappa.partenza).join('>');
   }
 
   /**
@@ -2196,18 +2238,70 @@
       }
       if (migliore) perPercorso.set(chiave, esito);
     });
-    const scelti = Array.from(perPercorso.values());
-    scelti.sort((x, y) => (arrivo
+    const ordinati = Array.from(perPercorso.values());
+    ordinati.sort((x, y) => (arrivo
       ? y.arrivoDestinazione - x.arrivoDestinazione
       : x.arrivoDestinazione - y.arrivoDestinazione));
+    // Prima una proposta per ogni sequenza di linee (la diversità che interessa
+    // davvero), poi le varianti di orario della stessa linea.
+    const scelti = [];
+    const perLinee = new Set();
+    ordinati.forEach((esito) => {
+      const linee = firmaLinee(esito);
+      if (perLinee.has(linee)) return;
+      perLinee.add(linee);
+      scelti.push(esito);
+    });
+    // Poi al massimo una variante di orario per sequenza: cinque copie della
+    // stessa linea a dodici minuti di distanza non sono alternative.
+    const perSequenza = new Map();
+    scelti.forEach((esito) => perSequenza.set(firmaLinee(esito), 1));
+    ordinati.forEach((esito) => {
+      if (scelti.length >= 6 || scelti.indexOf(esito) >= 0) return;
+      const linea = firmaLinee(esito);
+      const quante = perSequenza.get(linea) || 0;
+      if (quante >= 2) return;
+      perSequenza.set(linea, quante + 1);
+      scelti.push(esito);
+    });
     return scelti.slice(0, 6);
+  }
+
+  // Finestra continua: si cerca ogni minuto su un'ora e mezza, non solo in
+  // quattro istanti. Con gli offset fissi una corsa che parte al minuto 7 non
+  // veniva mai vista e il percorso “migliore” era solo il primo trovato.
+  const FINESTRA_SECONDI = 90 * 60;
+  const PASSO_SECONDI = 60;
+  const PROPOSTE_PRIMA_DI_FERMARSI = 4;
+  const ATTESA_MAX = 3600;   // secondi: oltre un'ora di attesa la proposta non serve
+
+  // Cedere il controllo al browser solo a pagina visibile: in una scheda in
+  // background i timer sono rallentati a circa un secondo e un ciclo di novanta
+  // giri resterebbe appeso per minuti. Nascosta, la ricerca fila via di seguito.
+  function respira() {
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return null;
+    return new Promise((risolvi) => setTimeout(risolvi, 0));
+  }
+
+  // A piedi fino a 2 km è un'alternativa vera, non solo il caso sotto i 400 m:
+  // si calcola con OSRM quando la geometria è in cache e si confronta col bus.
+  const PIEDI_ALTERNATIVA_MAX = 2000;
+
+  function opzionePiedi() {
+    const p = sel.partenza;
+    const d = sel.destinazione;
+    if (!p || !d || p.lat == null || p.lon == null || d.lat == null || d.lon == null) return null;
+    const aria = distanzaMetri(p, d);
+    if (!(aria >= 400 && aria <= PIEDI_ALTERNATIVA_MAX)) return null;
+    const secondi = camminoReale([p.lon, p.lat], [d.lon, d.lat], aria);
+    return { metri: Math.round(aria), secondi: secondi, minuti: Math.max(1, Math.round(secondi / 60)) };
   }
 
   // Il motore restituisce il viaggio che arriva prima a una data ora. Per avere
   // alternative come su Google Maps non basta spostare la partenza di qualche
   // minuto (uscivano quattro varianti della stessa linea): si ricalcola
   // vietando a turno la linea principale, così compare un'altra strada.
-  function calcolaOpzioni(da, a, base) {
+  async function calcolaOpzioni(da, a, base) {
     const arrivo = routing.modo === 'arrivo';
     // La scadenza si confronta come istante assoluto: dopo mezzanotte i
     // secondi del giorno ripartono da zero, mentre le corse serali hanno
@@ -2221,8 +2315,30 @@
       return TPERRouting.calcola(da, a, quando, {
         maxCambi: 3,
         vietate: vietate || [],
-        camminoMax: camminata * 60
+        camminoMax: camminata * 60,
+        criterio: routing.criterio
       });
+    }
+
+    // Tentativi 0/1/2/3 cambi: il diretto si prova sempre per primo, così non
+    // può risultare “migliore” un tre-cambi solo perché è l'unico cercato. Se
+    // il diretto non c'è si confrontano uno e tre cambi e vince chi arriva
+    // prima: cercare solo il primo cambio trovato vuol dire accettare un
+    // itinerario più lento senza saperlo.
+    function calcolaConCambi(quando) {
+      const comuni = { camminoMax: camminata * 60, criterio: routing.criterio };
+      const prova = (cambi) => {
+        const esito = TPERRouting.calcola(da, a, quando, Object.assign({ maxCambi: cambi }, comuni));
+        if (esito && esito.errore) { errore = errore || esito; return null; }
+        return esito || null;
+      };
+      const diretto = prova(0);
+      if (diretto) return diretto;
+      const uno = prova(1);
+      const tre = prova(3);
+      if (uno && tre) return tre.arrivo < uno.arrivo ? tre : uno;
+      if (uno || tre) return uno || tre;
+      return prova(2);
     }
 
     function aggiungi(esito, quando) {
@@ -2234,19 +2350,54 @@
         (esito.arrivo - esito.richiesta) * 1000 +
         (esito.camminoFinale || 0) * 1000;
       if (arrivo && arrivoDestinazione > limite) return;
+      // L'attesa alla fermata non è viaggio: un bus che parte nove ore dopo
+      // l'ora chiesta non è una soluzione da proporre.
+      const primaCorsa = (esito.tappe[0] || {}).partenza;
+      if (primaCorsa != null) {
+        const attesa = primaCorsa - (esito.camminoIniziale || 0) - esito.richiesta;
+        if (attesa > ATTESA_MAX) return;
+      }
+      // Il tempo passato ad aspettare che arrivi il minuto giusto è tempo perso
+      // dall'utente: senza contarlo, "veloce" premia chi parte mezz'ora dopo
+      // solo perché il bus è già lì.
+      const rimandato = Math.max(0, Math.round((quando.getTime() - base.getTime()) / 1000));
+      if (rimandato) {
+        // confronta() calcola e memorizza esito.punteggio: dopo si può sommare.
+        if (typeof TPERRouting.confronta === 'function') TPERRouting.confronta([esito], routing.criterio);
+        const misure = esito.punteggio;
+        if (misure) {
+          misure.tempoTotale += rimandato;
+          misure.costoVeloce += rimandato;
+          misure.costoOttimizzato += rimandato;
+        }
+      }
       esito.margine = arrivo ? Math.round((limite - arrivoDestinazione) / 1000) : null;
       esito.arrivoDestinazione = arrivoDestinazione;
       esito.quandoRichiesta = quando;
       esiti.push(esito);
     }
 
-    // In modalità arrivo si arretra dalla scadenza; altrimenti si parte
-    // dall'ora scelta e si guarda anche un paio di corse dopo.
-    const scarti = arrivo ? [0, 10, 20, 40, 60, 90, 120, 180] : [0, 15, 35];
-    scarti.forEach((scarto) => {
-      const quando = new Date(base.getTime() + (arrivo ? -scarto : scarto) * 60000);
-      aggiungi(calcola(quando, []), quando);
-    });
+    // In modalità arrivo la finestra si apre all'indietro dalla scadenza.
+    const passo = arrivo ? -PASSO_SECONDI : PASSO_SECONDI;
+    // Tetto di tempo: su un telefono lento la finestra intera non deve poter
+    // tenere in scacco il pannello. Quello che si è trovato resta valido.
+    const scadenzaRicerca = Date.now() + 2500;
+    for (let scarto = 0; Math.abs(scarto) <= FINESTRA_SECONDI; scarto += passo) {
+      if (esiti.length && Date.now() > scadenzaRicerca) break;
+      const quando = new Date(base.getTime() + scarto * 1000);
+      const prima = esiti.length;
+      aggiungi(calcolaConCambi(quando), quando);
+      if (esiti.length > prima) {
+        const lineeDistinte = new Set(esiti.map(firmaLinee)).size;
+        if (lineeDistinte >= PROPOSTE_PRIMA_DI_FERMARSI) break;
+      }
+      // Il ciclo è sincrono: ogni cinque minuti si restituisce il controllo al
+      // browser, altrimenti novanta giri di RAPTOR bloccano il pannello.
+      if ((Math.abs(scarto) / PASSO_SECONDI) % 5 === 0) {
+        const pausa = respira();
+        if (pausa) await pausa;
+      }
+    }
 
     let migliore = null;
     esiti.forEach((esito) => {
@@ -2281,21 +2432,37 @@
 
     // Le combinazioni treno + bus non sono per forza le più veloci: si provano
     // anche le coppie singole di fermate vicine, ma solo se c'è una stazione.
+    // Anche qui finestra continua, con un cambio solo (per un treno + bus non
+    // serve esplorare tre cambi) e passo di cinque minuti: le coppie sono poche
+    // e il minuto esatto non sposta nulla.
     const conTreno = da.concat(a).some((fermata) => fermata.tipo === 'treno' || fermata.tipo === 'entrambi');
     if (conTreno) {
-      const quando = migliore ? migliore.quandoRichiesta : base;
+      const coppie = [];
       da.forEach((origine) => {
         a.forEach((destinazione) => {
           if (origine.id === destinazione.id) return;
-          aggiungi(TPERRouting.calcola([origine], [destinazione], quando, {
-            maxCambi: 3,
-            camminoMax: camminata * 60
-          }), quando);
+          if (origine.tipo === 'treno' || destinazione.tipo === 'treno' ||
+              origine.tipo === 'entrambi' || destinazione.tipo === 'entrambi') {
+            coppie.push([origine, destinazione]);
+          }
         });
       });
+      for (const coppia of coppie.slice(0, 6)) {
+        for (let scarto = 0; scarto <= FINESTRA_SECONDI; scarto += 300) {
+          const quando = new Date(base.getTime() + (arrivo ? -scarto : scarto) * 1000);
+          const esito = TPERRouting.calcola([coppia[0]], [coppia[1]], quando, {
+            maxCambi: 1,
+            camminoMax: camminata * 60,
+            criterio: routing.criterio
+          });
+          if (esito && !esito.errore) { aggiungi(esito, quando); break; }
+          const pausa = respira();
+          if (pausa) await pausa;
+        }
+      }
     }
 
-    return { esiti: selezionaEsiti(esiti, arrivo), errore: errore };
+    return { esiti: selezionaEsiti(esiti, arrivo), errore: errore, piedi: opzionePiedi() };
   }
 
   // Ordine del pool per il criterio scelto: il costo sale, l'arrivo fa da
@@ -2396,6 +2563,21 @@
     return testo ? '<p class="criterio-spiega">' + esc(testo) + '</p>' : '';
   }
 
+  // Due righe di testo, non una scheda: la corsa scartata perché in forte
+  // ritardo e il consiglio di camminare alla fermata dopo.
+  function htmlSuggerimenti() {
+    let html = '';
+    if (routing.avvisoRitardo) {
+      html += '<p class="criterio-spiega">' + esc(routing.avvisoRitardo) + '</p>';
+    }
+    const s = routing.suggerimento;
+    if (s) {
+      html += '<p class="criterio-spiega">Se cammini ' + s.minuti + ' min a ' + esc(s.nome) +
+        ' arrivi ' + s.risparmio + ' min prima.</p>';
+    }
+    return html;
+  }
+
   // Cambio criterio istantaneo: il pool è già in memoria, niente rete e
   // niente skeleton. Un tap, il pannello si ridisegna e il tracciato resta.
   function impostaCriterio(criterio) {
@@ -2476,30 +2658,69 @@
     return fermateOrari || new Set();
   }
 
+  // Cammino reale: la lunghezza della geometria OSRM quando è già in cache,
+  // altrimenti la stima lineare con la maggiorazione della strada. Il tratto
+  // mancante si chiede in background (dove ha senso: chiedere OSRM per ogni
+  // coppia di fermate sarebbe una raffica di richieste) e dal giro dopo i tempi
+  // sono quelli veri. Ritorna secondi, come vuole il motore.
+  function camminoReale(da, a, metriLineari, chiediOsm) {
+    const lineari = metriLineari != null ? metriLineari : (da && a ? distanzaTra(da, a) : 0);
+    if (da && a) {
+      const geometria = geometriaPiedi(da, a);
+      if (geometria) {
+        const metri = Piedi.lunghezza(geometria);
+        if (metri > 1) return Math.round((metri * 1.3) / 1.2);
+      } else if (chiediOsm !== false && lineari > 250) {
+        // Sotto i 250 m il percorso pedonale non cambia la scelta: non si chiede.
+        chiediPiedi(da, a);
+      }
+    }
+    return Math.round((lineari * 1.3) / 1.2);
+  }
+
+  const CANDIDATI_MAX = 10;
+  const CANDIDATI_RAGGIO_MAX = 800;   // metri: oltre non è più "la fermata qui"
+
+  // Due paline con lo stesso nome a pochi passi sono la stessa fermata: senza
+  // questo i candidati si riempivano di gemelle e il motore provava dieci volte
+  // lo stesso punto.
+  function gemelle(a, b) {
+    if (!a || !b || a.id === b.id) return false;
+    if (normalizza(a.nome) !== normalizza(b.nome)) return false;
+    return distanzaMetri(a, b) <= 100;
+  }
+
   // Come fanno i pianificatori veri: si può salire anche alle fermate a pochi
-  // passi da quella scelta (pali diversi della stessa fermata).
+  // passi da quella scelta. Con dieci candidati pesati sulla frequenza una
+  // fermata a 400 m con cinque linee vale più di una a 100 m con una sola.
   function candidatiPercorso(fermata) {
     const disponibili = fermateConOrari();
     const elenco = [];
     if (disponibili.has(fermata.id)) elenco.push({ id: fermata.id, cammino: 0, tipo: fermata.tipo });
     if (fermata.lat == null || fermata.lon == null) return elenco;
-    // Le stazioni ferroviarie non devono sparire solo perché ci sono cinque
-    // paline bus più vicine: senza di loro non può nascere nessuna
-    // combinazione bus + treno.
-    const vicini = fermateVicine(fermata.lat, fermata.lon, 40, fermata.id)
+    const raggio = Math.min(CANDIDATI_RAGGIO_MAX, raggioCamminata());
+    const vicini = fermateVicine(fermata.lat, fermata.lon, 60, fermata.id)
       .filter((vicina) => disponibili.has(vicina.id))
       .map((vicina) => ({ fermata: vicina, distanza: distanzaMetri(fermata, vicina) }))
-      .filter((voce) => voce.distanza <= raggioCamminata())
-      .sort((a, b) => {
-        const trenoA = a.fermata.tipo === 'treno' || a.fermata.tipo === 'entrambi' ? 0 : 1;
-        const trenoB = b.fermata.tipo === 'treno' || b.fermata.tipo === 'entrambi' ? 0 : 1;
-        return trenoA - trenoB || a.distanza - b.distanza;
-      });
+      .filter((voce) => voce.distanza <= raggio)
+      .map((voce) => {
+        // Le stazioni ferroviarie non devono sparire solo perché ci sono cinque
+        // paline bus più vicine: senza di loro non nasce nessun bus + treno.
+        const treno = voce.fermata.tipo === 'treno' || voce.fermata.tipo === 'entrambi';
+        voce.punteggio = (lineaDi(voce.fermata).length + (treno ? 4 : 0) + 1) / (voce.distanza + 100);
+        return voce;
+      })
+      .sort((a, b) => b.punteggio - a.punteggio || a.distanza - b.distanza);
+    const scelti = [];
     vicini.forEach((voce) => {
-      if (elenco.length >= 5) return;
+      if (elenco.length + scelti.length >= CANDIDATI_MAX) return;
+      if (scelti.some((altra) => gemelle(altra.fermata, voce.fermata))) return;
+      scelti.push(voce);
+    });
+    scelti.forEach((voce) => {
       elenco.push({
         id: voce.fermata.id,
-        cammino: Math.round(voce.distanza * 1.15),
+        cammino: camminoReale([fermata.lon, fermata.lat], [voce.fermata.lon, voce.fermata.lat], voce.distanza),
         tipo: voce.fermata.tipo
       });
     });
@@ -2509,7 +2730,7 @@
   // Cambio a piedi tra fermate vicine: le paline opposte stanno a 50–150 m, ma
   // se l'utente è disposto a camminare si può cambiare anche tra fermate più
   // lontane (fino al raggio scelto). Oltre 12 fermate per fermata non serve.
-  const CAMMINO_CAMBIO = 150;   // metri minimi garantiti
+  const CAMMINO_CAMBIO = 300;   // metri minimi garantiti
   const CAMMINI_PER_FERMATA = 12;
   let camminiRaggio = 0;
 
@@ -2521,6 +2742,7 @@
     camminiRaggio = raggio;
     const coppie = [];
     const viste = new Set();
+    const perId = new Map(fermate.map((f) => [f.id, f]));
     const albero = alberoFermate(fermate.filter((f) => f.lat != null && f.lon != null));
     fermate.forEach((f) => {
       if (f.lat == null || f.lon == null) return;
@@ -2531,8 +2753,12 @@
         const chiave = f.id < voce.id ? f.id + '|' + voce.id : voce.id + '|' + f.id;
         if (viste.has(chiave)) return;
         viste.add(chiave);
-        // Distanza pedonale stimata: la strada è ~15% più lunga della linea d'aria.
-        coppie.push([f.id, voce.id, Math.round((voce.metri * 1.15) / PASSO_METRI_SECONDO)]);
+        const altra = perId.get(voce.id);
+        coppie.push([
+          f.id,
+          voce.id,
+          camminoReale([f.lon, f.lat], altra ? [altra.lon, altra.lat] : null, voce.metri, false)
+        ]);
       });
     });
     TPERRouting.impostaCammini(coppie);
@@ -2643,9 +2869,13 @@
     TPERRouting.carica(URL_ORARI_GZ, URL_ORARI).then(() => {
       if (richiesta !== routing.richiesta) return null;
       preparaCammini();
+      // I candidati di destinazione servono anche al suggerimento "cammina alla
+      // fermata dopo": si calcolano una volta sola.
+      const candidatiA = candidatiPercorso(sel.destinazione);
+      routing.candidatiDestinazione = candidatiA;
       return calcolaOpzioni(
         candidatiPercorso(sel.partenza),
-        candidatiPercorso(sel.destinazione),
+        candidatiA,
         dataDaGiornoEOra(routing.giorno, routing.orario)
       );
     }).then((risultato) => {
@@ -2671,6 +2901,9 @@
           ? routing.opzioniOttimizzato : routing.opzioniVeloce;
         routing.esito = (routing.confronto && routing.confronto.scelto) || routing.opzioni[0] || null;
         routing.aperto = routing.esito ? Math.max(0, routing.opzioni.indexOf(routing.esito)) : -1;
+        routing.opzionePiedi = risultato.piedi || null;
+        routing.suggerimento = null;
+        routing.avvisoRitardo = '';
         // Le geometrie arrivano dopo il calcolo: appena pronte il tracciato
         // viene ridisegnato con il percorso reale della linea.
         if (typeof TPERRouting !== 'undefined' && TPERRouting.caricaTracciati) {
@@ -2687,12 +2920,57 @@
         }
       }
       disegnaPercorso();
+      if (routing.stato === 'ok') avviaSuggerimento(richiesta);
     }).catch((errore) => {
       if (richiesta !== routing.richiesta) return;
       routing.stato = 'errore';
       routing.errore = (errore && errore.message) || 'rete non disponibile';
       disegnaPercorso();
     });
+  }
+
+  // "Cammina alla fermata dopo": se partire a piedi da una palina vicina
+  // servita dalla stessa linea fa arrivare prima, conviene dirlo. Una sola
+  // riga, nessuna scheda nuova.
+  async function avviaSuggerimento(richiesta) {
+    const migliore = routing.esito;
+    const partenza = sel.partenza;
+    const destinazione = sel.destinazione;
+    if (!migliore || !migliore.tappe || !migliore.tappe.length) return;
+    if (!partenza || !destinazione || partenza.lat == null) return;
+    const candidatiA = routing.candidatiDestinazione;
+    if (!candidatiA || !candidatiA.length) return;
+    const linea = String(migliore.tappe[0].linea);
+    const base = migliore.quandoRichiesta || dataDaGiornoEOra(routing.giorno, routing.orario);
+    const vicine = fermateVicine(partenza.lat, partenza.lon, 8, partenza.id)
+      .filter((f) => lineaDi(f).map(String).indexOf(linea) >= 0)
+      .slice(0, 3);
+    for (const vicina of vicine) {
+      const cammino = camminoReale([partenza.lon, partenza.lat], [vicina.lon, vicina.lat]);
+      if (cammino > 500) continue;
+      const esito = TPERRouting.calcola(
+        [{ id: vicina.id, cammino: cammino }],
+        candidatiA,
+        base,
+        { maxCambi: 1, camminoMax: camminata * 60, criterio: routing.criterio }
+      );
+      if (richiesta !== routing.richiesta) return;
+      if (!esito || esito.errore) continue;
+      const arrivo = base.getTime() + (esito.arrivo - esito.richiesta) * 1000 +
+        (esito.camminoFinale || 0) * 1000;
+      const risparmio = Math.round((migliore.arrivoDestinazione - arrivo) / 60000);
+      if (risparmio >= 2) {
+        routing.suggerimento = {
+          nome: nomeBreve(vicina.nome),
+          minuti: Math.max(1, Math.round(cammino / 60)),
+          risparmio: risparmio
+        };
+        disegnaPercorso();
+        return;
+      }
+      const pausa = respira();
+      if (pausa) await pausa;
+    }
   }
 
   // "Adesso" non è un'etichetta: ogni 30 secondi l'ora segue il tempo reale e
@@ -2846,7 +3124,31 @@
       livePercorso.corsa = null;
     }
     livePercorso.caricamento = false;
+    if (scartaCorsaInRitardo()) return;
     disegnaLivePercorso();
+  }
+
+  const RITARDO_MAX = 10 * 60;
+
+  // Il GTFS non sa se una corsa è cancellata o venti minuti indietro: quando
+  // HelloBus lo dice, quella proposta non è più la migliore e si passa alla
+  // successiva del pool (una volta sola: niente cicli di scarto).
+  function scartaCorsaInRitardo() {
+    if (routing.avvisoRitardo) return false;
+    if (livePercorso.stato !== 'ok' || !livePercorso.corsa) return false;
+    if (!(livePercorso.ritardo > RITARDO_MAX)) return false;
+    const opzioni = routing.opzioni || [];
+    const indice = opzioni.indexOf(routing.esito);
+    if (indice < 0 || indice + 1 >= opzioni.length) return false;
+    const prossimo = opzioni[indice + 1];
+    if (!prossimo) return false;
+    const scarto = Math.round(livePercorso.ritardo / 60);
+    routing.avvisoRitardo = 'Bus ' + (livePercorso.corsa.linea || '') +
+      ' in ritardo di ' + scarto + ' min: propongo la corsa successiva.';
+    routing.esito = prossimo;
+    routing.aperto = indice + 1;
+    disegnaPercorso();
+    return true;
   }
 
   function avviaTimerPercorso() {
@@ -3971,6 +4273,7 @@
       if (chipLinea) { filtraOrariLinea(chipLinea.getAttribute('data-linea')); return; }
       const opzione = evento.target.closest('[data-opzione]');
       if (opzione) {
+        if (opzione.getAttribute('data-opzione') === 'piedi') { mostraPiedi(); return; }
         const indice = parseInt(opzione.getAttribute('data-opzione'), 10);
         if (routing.opzioni && routing.opzioni[indice]) {
           routing.aperto = indice;
@@ -4028,6 +4331,11 @@
           aggiornaQuando(isoDi(domani), '08:00');
         }
         if (azione === 'aggiorna') caricaLive(true);
+        if (azione === 'torna-bus') {
+          routing.stato = 'ok';
+          routing.piedi = null;
+          disegnaPercorso();
+        }
         return;
       }
       const voce = evento.target.closest('[data-voce]');

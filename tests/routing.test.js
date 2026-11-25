@@ -76,23 +76,38 @@ test('la soglia a piedi limita i cambi a piedi', async () => {
   assert.equal(routing.calcola('A', 'E', GIORNO, { maxCambi: 1, camminoMax: 60 }), null);
 });
 
-test('il cambio con il treno vuole più margine di uno tra bus', async () => {
-  // Bus in arrivo a B alle 08:10 e coincidenza alle 08:12. Tra due bus due
-  // minuti bastano; se la coincidenza è un treno servono banchina e scale,
-  // quindi quel cambio non va proposto.
-  const busBus = await caricaRouting(dati([
+test('il cambio vuole margine: 3 min tra bus, 4 con il treno, 30 s stessa linea', async () => {
+  // Bus in arrivo a B alle 08:10. Due minuti non bastano per un cambio di
+  // linea (buffer 180 s), tre sì; con un treno servono banchina e scale, quindi
+  // quattro minuti.
+  const dueMinuti = await caricaRouting(dati([
     [0, 0, 0, 28800, 1, 600],       // L1 A 08:00 → B 08:10
     [1, 0, 1, 29520, 1, 600]        // L2 B 08:12 → C 08:22
   ]));
-  const esito = busBus.calcola('A', 'C', GIORNO, { maxCambi: 3 });
+  assert.equal(dueMinuti.calcola('A', 'C', GIORNO, { maxCambi: 3 }), null);
+
+  const treMinuti = await caricaRouting(dati([
+    [0, 0, 0, 28800, 1, 600],       // L1 A 08:00 → B 08:10
+    [1, 0, 1, 29580, 1, 600]        // L2 B 08:13 → C 08:23
+  ]));
+  const esito = treMinuti.calcola('A', 'C', GIORNO, { maxCambi: 3 });
   assert.ok(esito);
   assert.deepEqual(esito.tappe.map((t) => t.linea), ['L1', 'L2']);
 
   const busTreno = await caricaRouting(dati([
     [0, 0, 0, 28800, 1, 600],       // L1 A 08:00 → B 08:10
-    [2, 0, 1, 29520, 1, 600]        // T1 B 08:12 → C 08:22
+    [2, 0, 1, 29580, 1, 600]        // T1 B 08:13 → C 08:23
   ]));
   assert.equal(busTreno.calcola('A', 'C', GIORNO, { maxCambi: 3 }), null);
+
+  // Stessa linea alla stessa fermata: è un'attesa, bastano 30 secondi.
+  const stessaLinea = await caricaRouting(dati([
+    [0, 0, 0, 28800, 1, 300],       // L1 A 08:00 → B 08:05
+    [0, 0, 1, 30600, 1, 600]        // L1 B 08:30 → C 08:40
+  ]));
+  const attesa = stessaLinea.calcola('A', 'C', GIORNO, { maxCambi: 1 });
+  assert.ok(attesa);
+  assert.deepEqual(attesa.tappe.map((t) => t.linea), ['L1', 'L1']);
 });
 
 test('i treni si chiamano REG o RV, mai con il nome GTFS', () => {
@@ -203,6 +218,24 @@ test('calendario: giorno attivo, domenica e eccezioni', async () => {
     corse: [[0, 0, 0, 28800, 1, 600]]
   });
   assert.equal(conRimozione.calcola('A', 'B', GIORNO, { maxCambi: 3 }), null);
+});
+
+test('giorni di servizio distinti: feriale e domenica', async () => {
+  // Maschera 31 = lun–ven, 64 = domenica. La corsa del feriale non deve
+  // comparire la domenica, e viceversa.
+  const routing = await caricaRouting({
+    fermate: ['A', 'B'],
+    linee: [['L1', 3], ['L2', 3]],
+    servizi: [[31, 20260101, 20261231], [64, 20260101, 20261231]],
+    eccezioni: {},
+    corse: [
+      [0, 0, 0, 28800, 1, 600],   // L1 08:00, solo feriale
+      [1, 1, 0, 32400, 1, 600]    // L2 09:00, solo domenica
+    ]
+  });
+
+  assert.equal(routing.calcola('A', 'B', GIORNO, { maxCambi: 0 }).tappe[0].linea, 'L1');
+  assert.equal(routing.calcola('A', 'B', DOMENICA, { maxCambi: 0 }).tappe[0].linea, 'L2');
 });
 
 test('tratta taglia la geometria tra le fermate, in [lon, lat]', async () => {

@@ -7,11 +7,12 @@
 (function (globale) {
   'use strict';
 
-  // Il cambio non costa lo stesso tempo per tutti i mezzi: due bus alla stessa
-  // palina si prendono in due minuti, mentre un treno chiede banchina, scale e
-  // a volte il sottopasso. Con un valore unico di 150 s il pianificatore
-  // proponeva cambi treno+bus che nella realtà si perdono.
-  const CAMBIO_BUS = 120;
+  // Il cambio non costa lo stesso tempo per tutti i mezzi, e non costa nemmeno
+  // lo stesso passare da una linea all'altra o aspettare la corsa dopo della
+  // stessa linea: due minuti per un cambio di linea sono un cambio che si perde
+  // alla prima porta chiusa in anticipo.
+  const BUFFER_MINIMO = 180;        // cambio tra linee diverse: 3 minuti
+  const BUFFER_STESSA_LINEA = 30;   // stessa linea alla stessa fermata: è attesa
   const CAMBIO_TRENO = 240;
   const CAMMINO_CAMBIO_MASSIMO = 300;   // secondi di cammino per un cambio a piedi
   const INF = 0x7fffffff;
@@ -239,6 +240,13 @@
     // Tipo di linea con cui si arriva in ogni fermata: serve a decidere se il
     // cambio è tra bus o coinvolge un treno.
     const tipoArrivo = new Int8Array(numeroFermate).fill(3);
+    // Linea con cui si arriva: se è la stessa che si sta per prendere non serve
+    // il buffer di cambio, basta quello di banchina.
+    const lineaArrivo = new Int16Array(numeroFermate).fill(-1);
+    const tempoDiCambio = (fermata, corsa) => {
+      if (lineaArrivo[fermata] === corsa.linea) return BUFFER_STESSA_LINEA;
+      return (tipoArrivo[fermata] === 2 || corsa.tipo === 2) ? CAMBIO_TRENO : BUFFER_MINIMO;
+    };
     const predecessori = [];
     const camminoOrigine = new Map();
 
@@ -287,6 +295,7 @@
             giri[altra] = giri[fermata];
             piediTotali[altra] = piediTotali[fermata] + secondi;
             tipoArrivo[altra] = tipoArrivo[fermata];
+            lineaArrivo[altra] = lineaArrivo[fermata];
             predecessori[round][altra] = { piedi: true, da: fermata, secondi: secondi };
             migliorate.push(altra);
             if (!inCoda.has(altra)) { coda.push(altra); inCoda.add(altra); }
@@ -310,8 +319,7 @@
           // Linea vietata: si sta cercando un'alternativa diversa da quella
           // già trovata, non la stessa corsa con qualche minuto di scarto.
           if (vietate && vietate.has(corsa.nome)) continue;
-          const attesaMinima = round === 0 ? 0
-            : ((tipoArrivo[fermata] === 2 || corsa.tipo === 2) ? CAMBIO_TRENO : CAMBIO_BUS);
+          const attesaMinima = round === 0 ? 0 : tempoDiCambio(fermata, corsa);
           const pronto = orario[fermata] + attesaMinima;
           if (corsa.orari[posizione] < pronto) continue;
           // Se la stessa corsa è già stata presa a una fermata raggiunta prima,
@@ -326,6 +334,7 @@
               nuovo[prossima] = arrivo;
               giri[prossima] = round + 1;
               tipoArrivo[prossima] = corsa.tipo;
+              lineaArrivo[prossima] = corsa.linea;
               predecessoreGiro[prossima] = { corsa: indiceCorsa, salita: posizione, discesa: p, da: fermata };
               cambiate.add(prossima);
             }

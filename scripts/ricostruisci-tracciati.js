@@ -363,6 +363,25 @@ function dijkstra(grafo, da, a) {
   return { metri: dist.get(a), percorso: percorso };
 }
 
+// P2 — forme degeneri: un tracciato più lungo di cinque volte la distanza tra i
+// suoi estremi, o un treno con un salto di oltre 300 m tra due punti, non è una
+// geometria utile. Scartandola, l'app disegna la retta tratteggiata come già fa
+// per le forme mancanti: meglio nessuna linea che una linea sbagliata.
+const FORMA_RAPPORTO_MAX = 5;
+const SALTO_TRENO_MAX = 300;
+
+function formaPlausibile(punti, treno) {
+  if (!Array.isArray(punti) || punti.length < 2) return false;
+  let lunghezza = 0;
+  for (let i = 1; i < punti.length; i += 1) {
+    const d = distanza(punti[i - 1], punti[i]);
+    if (treno && d > SALTO_TRENO_MAX) return false;
+    lunghezza += d;
+  }
+  const aria = distanza(punti[0], punti[punti.length - 1]);
+  return !(aria > 50 && lunghezza / aria > FORMA_RAPPORTO_MAX);
+}
+
 function percorsoStazioni(rete, ids, coordinate) {
   const punti = [];
   const snap = [];
@@ -402,6 +421,7 @@ async function main() {
 
   let formeCambiate = 0;
   let fermateSistemate = 0;
+  let formeScartate = 0;
   const errori = [];
   const dettagli = [];
 
@@ -410,6 +430,13 @@ async function main() {
     const ids = [];
     for (let q = 0; q < vecchiaTab.length; q += 2) ids.push(orari.fermate[vecchiaTab[q]]);
     let punti = decodifica(tracciati.forme[k]);
+
+    if (!formaPlausibile(punti, formeTreno.has(k))) {
+      tracciati.forme[k] = '';
+      tracciati.posizioni[k] = [];
+      formeScartate += 1;
+      continue;
+    }
 
     if (formeTreno.has(k) && ids.length >= 2) {
       const esito = percorsoStazioni(rete, ids, coordinate);
@@ -492,6 +519,7 @@ async function main() {
       ' · fermate max ' + d.scartoFermate + ' m · snap max ' + d.snap + ' m · ' + d.fermate + ' fermate'));
   }
   console.log('fermate riproiettate: ' + fermateSistemate);
+  console.log('forme scartate (rapporto o salto): ' + formeScartate);
   console.log('estremi oltre 80 m: ' + scarti + ' · scarto massimo ' + Math.round(scartoMassimo) + ' m');
   if (errori.length) {
     console.log('errori:');
