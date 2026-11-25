@@ -31,6 +31,7 @@
   const URL_UFFICIALE = 'https://solweb.tper.it/web/tools/zone-calculator.aspx';
   const HELLOBUS = 'https://hellobuswsweb.tper.it/web-services/hellobus.asmx/QueryHellobus';
   const RELAY_PREDEFINITO = 'https://api.allorigins.win/raw?url=';
+  const RELAY_WORKER = 'https://hellobus-proxy.zeno-astolfi12.workers.dev/?url=';
   const INTERVALLO_LIVE = 30000;
   const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
   const NOMINATIM_PAUSA = 1100;      // ms tra due richieste: è la policy d'uso di OSM
@@ -956,6 +957,52 @@
       maxZoom: 16,
       duration: durata == null ? 500 : durata
     });
+  }
+
+  // Tornare alla schermata iniziale azzera la navigazione: la tratta smette di
+  // essere scelta, il percorso sparisce dalla mappa e il pannello si riduce.
+  // Senza questo le linee del vecchio viaggio restavano disegnate sopra la
+  // mappa come se la ricerca fosse ancora aperta.
+  function azzeraNavigazione() {
+    if (navigazione.attiva) fermaNavigazione(true);
+    chiudiMini();
+    sel.destinazione = null;
+    impostaInput('destinazione');
+    aggiornaMarker();
+    salvaTratta();
+    // Una risposta ancora in volo non deve ridisegnare il viaggio appena chiuso.
+    routing.richiesta += 1;
+    routing.chiave = null;
+    routing.stato = 'idle';
+    routing.esito = null;
+    routing.opzioni = [];
+    routing.opzioniVeloce = [];
+    routing.opzioniOttimizzato = [];
+    routing.confronto = null;
+    routing.piedi = null;
+    routing.aperto = -1;
+    livePercorso.chiave = null;
+    livePercorso.corsa = null;
+    livePercorso.stato = 'idle';
+    livePercorso.caricamento = false;
+    if (livePercorsoAbort) {
+      livePercorsoAbort.abort();
+      livePercorsoAbort = null;
+    }
+    ultimeFeatures = [];
+    inquadratoPerFermate = null;
+    if (mappa) {
+      ['percorso', 'percorso-fermate', 'percorso-nodi'].forEach((id) => {
+        const sorgente = mappa.getSource(id);
+        if (sorgente && typeof sorgente.setData === 'function') {
+          sorgente.setData({ type: 'FeatureCollection', features: [] });
+        }
+      });
+    }
+    mostraVista('percorso');
+    renderPercorso();
+    impostaSheet('peek');
+    inquadra();
   }
 
   /* ------------------------------------------------------------------ *
@@ -2729,8 +2776,13 @@
    * Tempo reale (HelloBus)
    * ------------------------------------------------------------------ */
   function relaysOrdinati() {
+    // Il Worker personale è sempre il primo: gestisce solo HelloBus,
+    // è veloce e sotto il nostro controllo. Gli altri restano come fallback.
+    const elenco = [{
+      id: 'worker',
+      build: (url) => RELAY_WORKER + encodeURIComponent(url)
+    }];
     const custom = (leggi(K_PROXY) || '').trim();
-    const elenco = [];
     if (custom) {
       elenco.push({
         id: 'custom',
@@ -3656,13 +3708,9 @@
       if (vistaAttiva === 'orari') { mostraVista('percorso'); impostaSheet('meta'); return; }
       if (statoSheet === 'piena') { impostaSheet('meta'); return; }
       if (statoSheet === 'meta') { impostaSheet('peek'); return; }
-      if (sel.destinazione) {
-        sel.destinazione = null;
-        impostaInput('destinazione');
-        aggiornaMarker();
-        salvaTratta();
-        renderPercorso();
-      }
+      // Dalla posizione ridotta si torna al menu principale: qui la navigazione
+      // si azzera del tutto, non resta solo il campo destinazione svuotato.
+      if (sel.destinazione) azzeraNavigazione();
     });
 
     // ---- Mini-card fermata ----
