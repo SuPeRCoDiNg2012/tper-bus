@@ -2309,7 +2309,9 @@
   /* ------------------------------------------------------------------ *
    * Tasto indietro del browser: chiude un livello invece di uscire
    * ------------------------------------------------------------------ */
-  let statoPercorsoInStoria = false;
+  // Lo stato della storia può sopravvivere a un ricaricamento: il flag parte
+  // da lì invece che sempre da false.
+  let statoPercorsoInStoria = !!(window.history && history.state && history.state.muovi === 'percorso');
 
   function segnalaStoriaPercorso() {
     if (statoPercorsoInStoria || !window.history || !history.pushState) return;
@@ -2319,8 +2321,36 @@
     } catch (errore) { /* Safari vecchio: si resta senza voce */ }
   }
 
-  // Un livello per volta: overlay, menu, dettaglio, metà, poi il percorso.
+  // La voce consumata dall'indietro non esiste più: senza riallineare il flag
+  // il percorso successivo non aggiungeva la sua voce e il tasto indietro
+  // usciva dall'app.
+  function aggiornaVoceStoria() {
+    statoPercorsoInStoria = !!(window.history && history.state && history.state.muovi === 'percorso');
+  }
+
+  // C'è ancora qualcosa che l'indietro può chiudere?
+  function restaUnLivello() {
+    if ($('onboarding') && !$('onboarding').hidden) return true;
+    if (!$('cerca').hidden) return true;
+    if ($('drawer').classList.contains('aperto')) return true;
+    if (statoSheet === 'piena' || statoSheet === 'meta') return true;
+    return !!(sel.destinazione || miniFermata);
+  }
+
   function indietroBrowser() {
+    try {
+      indietroLivelli();
+    } finally {
+      aggiornaVoceStoria();
+      // La voce consumata copriva un solo livello: se ne restano altri si
+      // ricrea subito, così il prossimo indietro chiude un altro livello
+      // invece di far uscire dall'app.
+      if (!statoPercorsoInStoria && restaUnLivello()) segnalaStoriaPercorso();
+    }
+  }
+
+  // Un livello per volta: overlay, menu, dettaglio, metà, poi il percorso.
+  function indietroLivelli() {
     if ($('onboarding') && !$('onboarding').hidden) { chiudiOnboarding(); return; }
     if (!$('cerca').hidden) { chiudiOverlay(); return; }
     if ($('drawer').classList.contains('aperto')) { chiudiMenu(); return; }
