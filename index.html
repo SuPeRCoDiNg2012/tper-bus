@@ -51,7 +51,13 @@
   #mappa{position:fixed;inset:0;background:#EFEFEF;z-index:0;}
   #mappa.senza-mappa{display:flex;align-items:center;justify-content:center;background:#F4F4F4;}
   #mappa.senza-mappa p{font-size:13px;color:var(--testo-2);background:#fff;border:1px solid var(--bordo);padding:12px 16px;border-radius:var(--r-card);max-width:280px;text-align:center;}
-  .maplibregl-ctrl-bottom-left{bottom:calc(var(--h-sheet,168px) + 6px);z-index:900;}
+  /* Attribuzione e comandi stanno appoggiati al bordo del pannello: seguono
+     --h-sheet, che si aggiorna nello stesso frame del pannello. */
+  .maplibregl-ctrl-bottom-left{bottom:calc(var(--h-sheet,168px) + 6px);z-index:900;transition:bottom .34s cubic-bezier(.22,.9,.28,1),opacity .16s ease;}
+  body.pannello-animato .maplibregl-ctrl-bottom-left{transition:bottom .34s cubic-bezier(.22,.9,.28,1),opacity .16s ease;}
+  body:not(.pannello-animato) .maplibregl-ctrl-bottom-left{transition:opacity .16s ease;}
+  body.pannello-alto .maplibregl-ctrl-bottom-left{opacity:0;pointer-events:none;}
+  body.in-navigazione .maplibregl-ctrl-bottom-left{opacity:0;pointer-events:none;}
   /* L'attribuzione è obbligatoria e deve restare leggibile: 12px su una
      superficie bianca, non 10px grigio su una mappa colorata. */
   .maplibregl-ctrl-attrib{font-size:12px !important;line-height:1.35;padding:3px 8px !important;background:rgba(255,255,255,.96) !important;border:1px solid var(--bordo);border-radius:8px;color:var(--testo-2);max-width:calc(100% - 104px);}
@@ -76,7 +82,7 @@
   .pill-offline{font-size:11px;font-weight:600;color:var(--testo-2);background:#F2F2F2;border-radius:999px;padding:4px 10px;}
 
   /* Pulsante mappa: inquadra il percorso */
-  .mappa-btn{position:fixed;right:12px;z-index:900;width:44px;height:44px;border:0;border-radius:12px;background:var(--sup);box-shadow:var(--ombra);display:flex;align-items:center;justify-content:center;color:var(--testo);cursor:pointer;bottom:calc(var(--h-sheet,168px) + 12px);transition:bottom .28s cubic-bezier(.22,.9,.28,1);}
+  .mappa-btn{position:fixed;right:12px;z-index:900;width:44px;height:44px;border:0;border-radius:12px;background:var(--sup);box-shadow:var(--ombra);display:flex;align-items:center;justify-content:center;color:var(--testo);cursor:pointer;bottom:calc(var(--h-sheet,168px) + 12px);}
 
   /* ---------- Mini-card fermata ---------- */
   .mini{position:fixed;left:12px;right:12px;bottom:calc(var(--h-sheet,168px) + 12px);max-width:520px;margin:0 auto;z-index:950;background:var(--sup);border-radius:var(--r-card);box-shadow:var(--ombra);padding:14px 16px;animation:mini-in .18s ease;}
@@ -354,7 +360,10 @@
   /* ================== Rifiniture interfaccia ================== */
   /* Comandi sulla mappa in basso a destra: centra su di me e adatta il
      percorso. Sulla barra superiore restano solo menu, indietro e offline. */
-  .mappa-comandi{position:fixed;right:12px;z-index:900;display:flex;flex-direction:column;background:var(--sup);border-radius:12px;box-shadow:var(--ombra);overflow:hidden;bottom:calc(var(--h-sheet,168px) + 12px);transition:bottom .28s cubic-bezier(.22,.9,.28,1);}
+  .mappa-comandi{position:fixed;right:12px;z-index:900;display:flex;flex-direction:column;background:var(--sup);border-radius:12px;box-shadow:var(--ombra);overflow:hidden;bottom:calc(var(--h-sheet,168px) + 12px);transition:opacity .16s ease;}
+  body.pannello-animato .mappa-comandi{transition:bottom .34s cubic-bezier(.22,.9,.28,1),opacity .16s ease;}
+  body.pannello-alto .mappa-comandi{opacity:0;pointer-events:none;}
+  body.in-navigazione .mappa-comandi{opacity:0;pointer-events:none;}
   .mappa-comandi .mappa-btn{position:static;bottom:auto;border-radius:0;box-shadow:none;background:transparent;}
   .mappa-comandi .mappa-btn + .mappa-btn{border-top:1px solid var(--bordo);}
 

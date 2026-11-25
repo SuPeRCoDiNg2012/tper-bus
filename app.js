@@ -4944,10 +4944,17 @@
   }
   // Quanto pannello si vede davvero: aggiorna --h-sheet e restituisce il valore,
   // così chi lo usa non deve rileggerlo dal DOM.
+  // Il bordo del pannello si calcola dalla sua altezza e dalla traslazione che
+  // gli stiamo dando, non leggendo il rect: durante un'animazione il rect è
+  // ancora quello vecchio e comandi e attribuzione restavano indietro.
   function altezzaVisibile() {
-    const top = $('sheet').getBoundingClientRect().top;
+    const pannello = $('sheet');
+    const altezza = pannello.offsetHeight || 600;
+    const top = window.innerHeight - altezza + traslazionePannello;
     const visibile = Math.max(120, window.innerHeight - top);
     document.documentElement.style.setProperty('--h-sheet', visibile + 'px');
+    // Pannello quasi a tutto schermo: mappa e attribuzione si tolgono di mezzo.
+    document.body.classList.toggle('pannello-alto', visibile > window.innerHeight * 0.62);
     return visibile;
   }
 
@@ -4988,6 +4995,9 @@
   function applicaTrasformazione(pixel, animato, silenzioso) {
     const sheet = $('sheet');
     traslazionePannello = Math.max(0, Math.round(pixel));
+    // Comandi e attribuzione seguono il pannello: durante un'animazione sì,
+    // durante il dito no, altrimenti arrivano dopo la mano.
+    document.body.classList.toggle('pannello-animato', !!animato);
     sheet.style.transition = animato ? 'transform .34s cubic-bezier(.22,.9,.28,1)' : 'none';
     sheet.style.transform = 'translateY(' + traslazionePannello + 'px)';
     // Il pannello tradotto verso il basso lascia il fondo del corpo sotto il
