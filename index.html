@@ -652,6 +652,16 @@
     <p class="menu-sezione" id="menu-recente-vuoto">Nessun percorso ancora.</p>
     <div class="menu-sezione">Preferiti</div>
     <div id="menu-preferiti"></div>
+    <details id="menu-evitate">
+      <summary><span class="spazio">Linee da evitare</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+      <div class="info">
+        <div class="pref-chips" id="menu-evitate-lista"></div>
+        <div class="campo-relay">
+          <input id="input-evita" type="text" inputmode="numeric" maxlength="5" placeholder="Numero di linea" aria-label="Linea da non proporre pi\u00f9">
+          <button type="button" class="btn btn-tenue" data-azione="evita-aggiungi">Aggiungi</button>
+        </div>
+      </div>
+    </details>
     <details id="menu-info">
       <summary><span class="spazio">Informazioni e fonti dati</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
       <div class="info" id="menu-info-corpo"></div>

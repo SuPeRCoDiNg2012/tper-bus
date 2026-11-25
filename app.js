@@ -32,6 +32,7 @@
   const K_CRITERIO_DEFAULT = 'tperzc_criterio_default_v1';
   const K_CRITERIO_SCELTE = 'tperzc_criterio_scelte_v1';
   const K_CRITERIO_PROPOSTO = 'tperzc_criterio_proposto_v1';
+  const K_EVITATE = 'tperzc_linee_evitate_v1';
   const K_PROXY = 'tperzc_proxy';
   const K_RELAY = 'tperzc_relay';
   const K_ONBOARDING = 'tperzc_onboarding_visto_v1';
@@ -110,6 +111,49 @@
 
   function raggioCamminata() {
     return Math.round(camminata * 60 * PASSO_METRI_SECONDO);
+  }
+
+  // Linee che l'utente non vuole più vedere proposte: si passano al motore
+  // come "vietate" in ogni ricerca, alternative comprese. Il motore le salta
+  // in salita, quindi non compaiono nemmeno come cambio intermedio.
+  function lineeEvitate() {
+    const elenco = leggiJSON(K_EVITATE);
+    if (!Array.isArray(elenco)) return [];
+    return elenco.map((voce) => String(voce).toUpperCase()).filter(Boolean);
+  }
+
+  function vietatePer(extra) {
+    const elenco = lineeEvitate();
+    (extra || []).forEach((voce) => {
+      const linea = String(voce).toUpperCase();
+      if (elenco.indexOf(linea) < 0) elenco.push(linea);
+    });
+    return elenco;
+  }
+
+  function renderEvitate() {
+    const box = $('menu-evitate-lista');
+    if (!box) return;
+    const elenco = lineeEvitate();
+    box.innerHTML = elenco.length
+      ? elenco.map((linea) => '<button type="button" class="chip-pref" data-evita-rimuovi="' +
+          esc(linea) + '" aria-label="Torna a proporre la linea ' + esc(linea) + '">' +
+          '<span>' + esc(linea) + '</span>' + Icone.svg('x', 14) + '</button>').join('')
+      : '<p class="nota-piccola" style="margin:0">Nessuna linea esclusa.</p>';
+  }
+
+  // Una sola porta per la preferenza: salva, ridisegna il menu e ricalcola il
+  // percorso già aperto, così l'effetto si vede subito.
+  function impostaLineeEvitate(elenco) {
+    const pulite = [];
+    (elenco || []).forEach((voce) => {
+      const linea = String(voce || '').trim().toUpperCase();
+      if (linea && /^[A-Z0-9]{1,5}$/.test(linea) && pulite.indexOf(linea) < 0) pulite.push(linea);
+    });
+    scrivi(K_EVITATE, JSON.stringify(pulite.slice(0, 20)));
+    routing.chiave = null;
+    renderEvitate();
+    if (sel.partenza && sel.destinazione) calcolaPercorso();
   }
   let mappa = null;
   const marker = { partenza: null, destinazione: null };
@@ -3246,7 +3290,12 @@
         ? 'Nessun viaggio arriva entro le ' + esc(routing.orario) + ' con ' +
           Math.round(MARGINE_ARRIVO / 60) + ' minuti di margine.'
         : 'Nessun viaggio a quest\'ora.';
+      const evitate = lineeEvitate();
       return '<div class="box">' + esc(testo) +
+        (evitate.length
+          ? '<div class="micro" style="margin-top:6px">Stai evitando ' + esc(evitate.join(', ')) +
+            ': toglile dal menu → Linee da evitare per rivederle.</div>'
+          : '') +
         '<div style="margin-top:10px"><button type="button" class="btn btn-tenue" data-azione="prova-domani">Prova domani alle 08:00</button></div></div>';
     }
     if (routing.stato === 'ok') {
@@ -3630,7 +3679,7 @@
     function calcola(quando, vietate) {
       return TPERRouting.calcola(da, a, quando, {
         maxCambi: 3,
-        vietate: vietate || [],
+        vietate: vietatePer(vietate),
         camminoMax: camminata * 60,
         criterio: routing.criterio
       });
@@ -3642,7 +3691,11 @@
     // prima: cercare solo il primo cambio trovato vuol dire accettare un
     // itinerario più lento senza saperlo.
     function calcolaConCambi(quando) {
-      const comuni = { camminoMax: camminata * 60, criterio: routing.criterio };
+      const comuni = {
+        camminoMax: camminata * 60,
+        criterio: routing.criterio,
+        vietate: vietatePer()
+      };
       const prova = (cambi) => {
         const esito = TPERRouting.calcola(da, a, quando, Object.assign({ maxCambi: cambi }, comuni));
         if (esito && esito.errore) { errore = errore || esito; return null; }
@@ -3726,7 +3779,8 @@
     if (migliore && typeof TPERRouting.calcolaConfronto === 'function') {
       const confronto = TPERRouting.calcolaConfronto(da, a, migliore.quandoRichiesta, {
         maxCambi: 3,
-        camminoMax: camminata * 60
+        camminoMax: camminata * 60,
+        vietate: vietatePer()
       });
       const dalMotore = [confronto.veloce, confronto.ottimizzato]
         .concat(confronto.alternative || [])
@@ -3769,7 +3823,8 @@
           const esito = TPERRouting.calcola([coppia[0]], [coppia[1]], quando, {
             maxCambi: 1,
             camminoMax: camminata * 60,
-            criterio: routing.criterio
+            criterio: routing.criterio,
+            vietate: vietatePer()
           });
           if (esito && !esito.errore) { aggiungi(esito, quando); break; }
           const pausa = respira();
@@ -5493,6 +5548,7 @@
 
   function sincronizzaMenu() {
     renderPreferiti();
+    renderEvitate();
     const check = $('menu-abbonamento');
     if (check) check.checked = abbonamento;
     const voceErrori = $('menu-errori');
@@ -5726,6 +5782,12 @@
       calcolaPercorso();
     });
     $('menu-info').addEventListener('toggle', () => { if ($('menu-info').open) renderInfo(); });
+    $('input-evita').addEventListener('keydown', (evento) => {
+      if (evento.key !== 'Enter') return;
+      evento.preventDefault();
+      const aggiungi = $('drawer').querySelector('[data-azione="evita-aggiungi"]');
+      if (aggiungi) aggiungi.click();
+    });
     $('menu-criterio').addEventListener('click', () => {
       scrivi(K_CRITERIO_DEFAULT, 'ottimizzato');
       scrivi(K_CRITERIO_PROPOSTO, '1');
@@ -5734,10 +5796,30 @@
       mostraToast('Criterio predefinito: Ottimizzato');
     });
     $('drawer').addEventListener('click', (evento) => {
+      const togli = evento.target.closest('[data-evita-rimuovi]');
+      if (togli) {
+        const linea = togli.getAttribute('data-evita-rimuovi');
+        impostaLineeEvitate(lineeEvitate().filter((voce) => voce !== linea));
+        mostraToast('Linea ' + linea + ' di nuovo proposta');
+        return;
+      }
       const pulsante = evento.target.closest('[data-azione]');
       if (!pulsante) return;
       const azione = pulsante.getAttribute('data-azione');
       if (azionePreferito(azione, pulsante)) return;
+      if (azione === 'evita-aggiungi') {
+        const campo = $('input-evita');
+        const valore = (campo && campo.value ? campo.value : '').trim().toUpperCase();
+        if (!valore) return;
+        if (!/^[A-Z0-9]{1,5}$/.test(valore)) {
+          mostraToast('Numero di linea non valido');
+          return;
+        }
+        impostaLineeEvitate(lineeEvitate().concat(valore));
+        if (campo) campo.value = '';
+        mostraToast('Linea ' + valore + ' esclusa dai percorsi');
+        return;
+      }
       if (azione === 'salva-proxy') {
         const valore = ($('input-proxy').value || '').trim();
         if (valore) scrivi(K_PROXY, valore); else localStorage.removeItem(K_PROXY);
