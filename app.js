@@ -2461,7 +2461,9 @@
    * ------------------------------------------------------------------ */
   // Quanto pannello resta visibile nella posizione ridotta: due campi, la
   // riga di data/ora e il pulsante di ricerca.
-  const PEEK_VISIBILE = 168;
+  // PEEK mostra i due campi e la riga data/ora interi: con i controlli a 44px
+  // servono 168 + qualche pixel di margine.
+  const PEEK_VISIBILE = 174;
   let quandoAperto = false;
   let alternativeAperte = false;
 
@@ -2469,7 +2471,8 @@
     const d = dataDaGiorno(routing.giorno);
     const oggi = routing.giorno === oggiISO();
     const giorno = oggi ? 'Oggi' : (d ? d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) : routing.giorno);
-    if (routing.adesso) return 'Adesso · ' + giorno + ' ' + routing.orario;
+    // "Adesso" implica già oggi: ripetere "Oggi" allunga l'etichetta senza dire nulla.
+    if (routing.adesso) return routing.orario ? 'Adesso · ' + routing.orario : 'Adesso';
     return (routing.modo === 'arrivo' ? 'Arrivo entro ' : 'Partenza ') + giorno + ' ' + routing.orario;
   }
 
@@ -2662,9 +2665,12 @@
       '</div>' +
       (quandoAperto ? pannelloQuandoHTML() : '') +
       (tratta ? '' : bloccoVuotoHTML()) +
-      invitoInstallazioneHTML() +
-      (tratta ? '' : '<button type="button" class="btn btn-primario" data-azione="cerca">Cerca percorso</button>') +
-      '<div id="vista-risultato"></div>';
+      // Niente pulsante "Cerca percorso" senza destinazione: sarebbe un vicolo
+      // cieco, e copriva le fermate vicine che sono il vero punto di partenza.
+      '<div id="vista-risultato"></div>' +
+      // L'invito a installare sta in fondo: tra orario e riepilogo spingeva
+      // fuori dalla piega i dati del percorso.
+      invitoInstallazioneHTML();
     collegaCampi();
     disegnaPercorso();
   }
@@ -2754,7 +2760,9 @@
     const e = routing.esito;
     const prezzo = r && r.prezzo != null ? (r.prezzo === 0 ? 'Incluso' : euro(r.prezzo)) : '';
     const tappa = e.tappe && e.tappe[0];
-    let meta = tappa ? 'Linea ' + tappa.linea : 'A piedi';
+    // L'orario di arrivo è il dato che si guarda per primo dopo la durata.
+    const arrivo = e.arrivo + (e.camminoFinale || 0);
+    let meta = 'Arrivo ' + hhmm(arrivo) + ' · ' + (tappa ? 'Linea ' + tappa.linea : 'A piedi');
     if (tappa) meta += ' · ' + tappa.fermate + (tappa.fermate === 1 ? ' fermata' : ' fermate');
     if (e.cambi) meta += ' · ' + (e.cambi === 1 ? '1 cambio' : e.cambi + ' cambi');
     const piedi = Math.round(((e.camminoIniziale || 0) + (e.camminoFinale || 0)) / 60);
@@ -2765,14 +2773,16 @@
         '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg></span>'
       : '';
     return '<div class="riepilogo">' +
-      '<div class="riep-titolo">' + totaleMinuti(e) + ' min' + (prezzo ? ' · ' + esc(prezzo) + spunta : '') + htmlBadgePiano() + '</div>' +
+      // Con i chip del criterio già visibili il badge ripeterebbe la stessa
+      // informazione: si mostra solo quando i chip non ci sono.
+      '<div class="riep-titolo">' + totaleMinuti(e) + ' min' + (prezzo ? ' · ' + esc(prezzo) + spunta : '') + (htmlCriteri() ? '' : htmlBadgePiano()) + '</div>' +
       htmlCriteri() +
       '<div class="riep-meta">' + esc(meta) + '</div>' +
       htmlSpiegazione() +
       htmlSuggerimenti() +
       '<div class="riep-azioni">' +
       '<button type="button" class="btn btn-primario" data-azione="avvia-navigazione">Avvia</button>' +
-      '<button type="button" class="link" data-azione="dettagli">Dettagli</button>' +
+      '<button type="button" class="btn btn-tenue" data-azione="dettagli">Dettagli</button>' +
       '</div></div>';
   }
 
@@ -2971,9 +2981,16 @@
     if (menu) menu.hidden = attivo;
     const inquadra = $('btn-inquadra');
     if (inquadra) inquadra.hidden = !(attivo && routing.stato === 'ok');
-    document.title = attivo
+    // Il titolo si compone solo con entrambi i capi scelti: aprendo gli orari
+    // di una fermata senza percorso il vecchio codice leggeva null.nome.
+    document.title = (sel.partenza && sel.destinazione)
       ? nomeBreve(sel.partenza.nome) + ' → ' + nomeBreve(sel.destinazione.nome) + ' · Muovi Bologna'
       : 'Muovi Bologna';
+    const piede = $('drawer-aggiornato');
+    if (piede) {
+      const [anno, mese, giorno] = String(aggiornato || '').split('-');
+      piede.textContent = anno ? 'Dati aggiornati al ' + giorno + '/' + mese + '/' + anno : 'Dati locali';
+    }
     aggiornaVisibilitaFermate();
   }
 
