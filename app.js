@@ -3152,7 +3152,7 @@
   /* ------------------------------------------------------------------ *
    * Orari programmati della giornata (GTFS)
    * ------------------------------------------------------------------ */
-  const orariGiorno = { chiave: null, elenco: [] };
+  const orariGiorno = { chiave: null, elenco: [], linea: null };
 
   function partenzeDelGiorno(f) {
     if (!f || eIndirizzo(f)) return [];
@@ -3165,7 +3165,27 @@
     } catch (errore) { elenco = []; }
     orariGiorno.chiave = chiave;
     orariGiorno.elenco = elenco;
+    // Il filtro vale per la fermata e il giorno che si stanno guardando.
+    orariGiorno.linea = null;
     return elenco;
+  }
+
+  function chipFiltroLinea(valore, testo) {
+    const attivo = (orariGiorno.linea || '') === valore;
+    return '<button type="button" class="chip-filtro' + (attivo ? ' attivo' : '') + '"' +
+      ' data-linea="' + esc(valore) + '" aria-pressed="' + (attivo ? 'true' : 'false') + '">' +
+      esc(testo) + '</button>';
+  }
+
+  // Il filtro ridisegna solo la sezione degli orari: il tempo reale sopra resta
+  // com'è, senza una nuova chiamata a HelloBus.
+  function filtraOrariLinea(valore) {
+    orariGiorno.linea = valore || null;
+    const sezione = document.querySelector('.orari-giorno');
+    const fermata = fermataLive();
+    if (!sezione || !fermata) return;
+    sezione.outerHTML = orariGiornoHTML(fermata);
+    aggiornaScrim();
   }
 
   // Tutte le corse della giornata, non solo il prossimo passaggio: il tempo
@@ -3179,6 +3199,18 @@
         '<p class="micro">Gli orari della giornata si caricano con la rete.</p></section>';
     }
     const elenco = partenzeDelGiorno(f);
+    // Una corsa per riga non basta quando una linea passa ogni pochi minuti:
+    // le chip filtrano senza aggiungere un'altra schermata.
+    const linee = [];
+    elenco.forEach((p) => {
+      const nome = String(p.linea);
+      if (linee.indexOf(nome) < 0) linee.push(nome);
+    });
+    linee.sort((a, b) => a.localeCompare(b, 'it', { numeric: true }));
+    if (orariGiorno.linea && linee.indexOf(orariGiorno.linea) < 0) orariGiorno.linea = null;
+    const scelte = orariGiorno.linea
+      ? elenco.filter((p) => String(p.linea) === orariGiorno.linea)
+      : elenco;
     const oggi = routing.giorno === oggiISO();
     const adesso = secondiDelGiorno(new Date());
     const riga = (p, passato) => {
@@ -3197,15 +3229,20 @@
     };
     const passate = [];
     const future = [];
-    elenco.forEach((p) => (oggi && p.orario < adesso ? passate : future).push(p));
+    scelte.forEach((p) => (oggi && p.orario < adesso ? passate : future).push(p));
     // Le corse già partite restano disponibili ma non rubano lo spazio a
     // quelle che devono ancora passare: la vista si apre su quelle di adesso.
     const archivio = passate.length && future.length
       ? '<details class="orari-passate"><summary>' + passate.length + ' corse già passate</summary>' +
         '<div class="ora-lista">' + passate.map((p) => riga(p, true)).join('') + '</div></details>'
       : passate.map((p) => riga(p, true)).join('');
+    const filtro = linee.length > 1
+      ? '<div class="chips-linea" role="group" aria-label="Filtra per linea">' +
+        chipFiltroLinea('', 'Tutte') + linee.map((l) => chipFiltroLinea(l, l)).join('') + '</div>'
+      : '';
     return '<section class="orari-giorno">' +
-      '<h3 class="orari-titolo">Orari programmati · ' + elenco.length + '</h3>' +
+      '<h3 class="orari-titolo">Orari programmati · ' + scelte.length + '</h3>' +
+      filtro +
       (elenco.length
         ? archivio + '<div class="ora-lista">' + future.map((p) => riga(p, false)).join('') + '</div>'
         : '<p class="micro">Nessun orario programmato per questo giorno.</p>') +
@@ -3930,6 +3967,8 @@
       if (campo) { apriCerca(campo.getAttribute('data-campo')); return; }
       const chip = evento.target.closest('[data-criterio]');
       if (chip) { impostaCriterio(chip.getAttribute('data-criterio')); return; }
+      const chipLinea = evento.target.closest('[data-linea]');
+      if (chipLinea) { filtraOrariLinea(chipLinea.getAttribute('data-linea')); return; }
       const opzione = evento.target.closest('[data-opzione]');
       if (opzione) {
         const indice = parseInt(opzione.getAttribute('data-opzione'), 10);

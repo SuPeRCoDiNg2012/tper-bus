@@ -252,6 +252,11 @@
   .ora{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;min-width:46px;}
   .ora-dest{flex:1;min-width:0;font-size:13px;color:var(--testo-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .ora-riga .badge-linea{min-width:34px;font-size:12px;padding:4px 6px;}
+  /* Filtro per linea: una fila di chip che scorre in orizzontale. */
+  .chips-linea{display:flex;gap:6px;overflow-x:auto;margin:8px 0 4px;padding-bottom:2px;scrollbar-width:none;}
+  .chips-linea::-webkit-scrollbar{display:none;}
+  .chip-filtro{flex:0 0 auto;min-height:32px;padding:0 12px;border:1px solid var(--bordo);border-radius:999px;background:var(--sup);color:var(--testo);font-size:12px;font-weight:600;cursor:pointer;}
+  .chip-filtro.attivo{background:var(--rosso);border-color:var(--rosso);color:#fff;}
 
   /* ---------- Drawer menu ---------- */
   .velo{position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:1200;}
