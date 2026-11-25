@@ -607,6 +607,7 @@
       disegnaTracciato();
     });
     mappa.on('style.load', aggiungiLivelliPercorso);
+    mappa.on('styledata', nascondiPoiTransito);
     mappa.on('idle', aggiungiLivelliPercorso);
   }
 
@@ -667,7 +668,24 @@
 
   // Idempotente e senza dipendere da un singolo evento: lo stile può finire di
   // caricarsi dopo il primo disegno, e isStyleLoaded() non è affidabile qui.
+  // Le icone dei punti d'interesse dello stile affollano la mappa e le fermate
+  // dell'OSM duplicano i nostri pin, che sono anche toccabili: si tengono solo
+  // strade, edifici e nomi. Lo stile può finire di caricarsi dopo il primo
+  // tentativo, quindi si ritenta a ogni cambio di stile.
+  const LIVELLI_POI = ['poi_transit', 'poi_r20', 'poi_r7', 'poi_r1'];
+  function nascondiPoiTransito() {
+    if (!mappa) return;
+    LIVELLI_POI.forEach((id) => {
+      try {
+        if (!mappa.getLayer(id)) return;
+        if (mappa.getLayoutProperty(id, 'visibility') === 'none') return;
+        mappa.setLayoutProperty(id, 'visibility', 'none');
+      } catch (errore) { /* riproverà al prossimo cambio di stile */ }
+    });
+  }
+
   function aggiungiLivelliPercorso() {
+    nascondiPoiTransito();
     if (!mappa || mappa.getSource('percorso')) return;
     try {
       creaLivelliPercorso();
@@ -882,11 +900,15 @@
   // Il pin delle fermate è un'immagine disegnata una volta su canvas: sui
   // display retina resta nitida grazie al pixelRatio 2x.
   const ICONA_PIN_FERMATA = 'pin-fermata';
+  const ICONA_PIN_TRENO = 'pin-fermata-treno';
 
-  function immaginePinFermata() {
+  // Il pin della fermata è lo stesso segno di quello di partenza (goccia piena,
+  // bordo bianco, foro bianco), solo più piccolo: un unico linguaggio sulla
+  // mappa. I treni usano la variante scura.
+  function immaginePinFermata(treno) {
     const scala = 2;
-    const larghezza = 22;
-    const altezza = 28;
+    const larghezza = 24;
+    const altezza = 32;
     const tela = document.createElement('canvas');
     tela.width = larghezza * scala;
     tela.height = altezza * scala;
@@ -894,27 +916,26 @@
     if (!ctx) return null;
     ctx.scale(scala, scala);
     const centro = larghezza / 2;
-    const raggio = 8.4;
-    const capo = raggio + 1.8;   // centro della testa tonda, sotto il bordo alto
-    // Punta del pin: due lati che scendono dalla testa fino alla fermata.
+    const raggio = 8.2;
+    const capo = 10;
+    const punta = altezza - 2;
+    const colore = treno ? '#1A1A1A' : '#C1121F';
+    // Goccia in un solo percorso: punta, fianco sinistro, testa tonda, fianco
+    // destro. Disegnata a pezzi la testa e la punta si vedevano giuntate.
     ctx.beginPath();
-    ctx.moveTo(centro, altezza - 1);
-    ctx.lineTo(centro - raggio * 0.66, capo + raggio * 0.8);
-    ctx.lineTo(centro + raggio * 0.66, capo + raggio * 0.8);
+    ctx.moveTo(centro, punta);
+    ctx.quadraticCurveTo(centro - raggio * 0.62, capo + raggio * 1.15, centro - raggio, capo);
+    ctx.arc(centro, capo, raggio, Math.PI, 0, false);
+    ctx.quadraticCurveTo(centro + raggio * 0.62, capo + raggio * 1.15, centro, punta);
     ctx.closePath();
-    ctx.fillStyle = '#C1121F';
+    ctx.fillStyle = colore;
     ctx.fill();
-    // Testa tonda rossa con bordo bianco: si stacca da qualunque sfondo.
-    ctx.beginPath();
-    ctx.arc(centro, capo, raggio, 0, Math.PI * 2);
-    ctx.fillStyle = '#C1121F';
-    ctx.fill();
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.6;
     ctx.strokeStyle = '#FFFFFF';
     ctx.stroke();
-    // Foro bianco al centro, come il pallino che c'era prima.
+    // Foro bianco, come il pin di partenza.
     ctx.beginPath();
-    ctx.arc(centro, capo, 2.9, 0, Math.PI * 2);
+    ctx.arc(centro, capo, 2.7, 0, Math.PI * 2);
     ctx.fillStyle = '#FFFFFF';
     ctx.fill();
     return { immagine: ctx.getImageData(0, 0, tela.width, tela.height), scala: scala };
@@ -947,9 +968,9 @@
       source: 'fermate-mappa',
       filter: ['has', 'point_count'],
       paint: {
-        'circle-color': '#C1121F',
-        'circle-radius': ['step', ['get', 'point_count'], 17, 25, 21, 120, 26],
-        'circle-stroke-color': '#FFFFFF',
+        'circle-color': '#FFFFFF',
+        'circle-radius': ['step', ['get', 'point_count'], 15, 25, 19, 120, 24],
+        'circle-stroke-color': '#C1121F',
         'circle-stroke-width': 2
       }
     });
@@ -963,31 +984,31 @@
         'text-font': ['Noto Sans Regular'],
         'text-size': 12
       },
-      paint: { 'text-color': '#FFFFFF' }
+      paint: { 'text-color': '#1A1A1A' }
     });
-    if (!mappa.hasImage(ICONA_PIN_FERMATA)) {
-      const pin = immaginePinFermata();
-      if (pin) {
-        try {
-          mappa.addImage(ICONA_PIN_FERMATA, pin.immagine, { pixelRatio: pin.scala });
-        } catch (errore) { /* immagine non accettata: resta il pallino */ }
-      }
-    }
-    mappa.addLayer(mappa.hasImage(ICONA_PIN_FERMATA) ? {
+    [[ICONA_PIN_FERMATA, false], [ICONA_PIN_TRENO, true]].forEach(([nome, treno]) => {
+      if (mappa.hasImage(nome)) return;
+      const pin = immaginePinFermata(treno);
+      if (!pin) return;
+      try {
+        mappa.addImage(nome, pin.immagine, { pixelRatio: pin.scala });
+      } catch (errore) { /* immagine non accettata: resta il pallino */ }
+    });
+    mappa.addLayer(mappa.hasImage(ICONA_PIN_FERMATA) && mappa.hasImage(ICONA_PIN_TRENO) ? {
       id: 'fermate-punti',
       type: 'symbol',
       source: 'fermate-mappa',
       minzoom: 12.5,
       filter: ['!', ['has', 'point_count']],
       layout: {
-        'icon-image': ICONA_PIN_FERMATA,
+        'icon-image': ['case', ['==', ['get', 'treno'], 1], ICONA_PIN_TRENO, ICONA_PIN_FERMATA],
         'icon-anchor': 'bottom',
         // Crescono con lo zoom ma restano leggibili da lontano: sono anche il
         // bersaglio del tocco, quindi il pin è più grande di un simbolo
         // decorativo.
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 12.5, 0.5, 14, 0.78, 16, 1.12]
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 12.5, 0.55, 14, 0.8, 16, 1]
       }
     } : {
       id: 'fermate-punti',
@@ -2864,11 +2885,7 @@
       // scoprire la funzione, non a occupare spazio per sempre.
       html += '<button type="button" class="pref-aggiungi" data-azione="apri-preferiti">Salva casa e lavoro</button>';
     }
-    html += '<p class="vuoto-testo">Dove vuoi andare?</p><div>' +
-      '<button type="button" class="chip-vuoto" data-azione="chip-cerca" data-testo="Piazza Maggiore">Piazza Maggiore</button>' +
-      '<button type="button" class="chip-vuoto" data-azione="chip-cerca" data-testo="Stazione Centrale">Stazione Centrale</button>' +
-      '<button type="button" class="chip-vuoto" data-azione="usa-posizione">La mia posizione</button>' +
-      '</div></div>';
+    html += '</div>';
     return html;
   }
 

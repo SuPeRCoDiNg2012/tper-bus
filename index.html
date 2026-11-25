@@ -30,11 +30,11 @@
     --sup:#FFFFFF;
     --bordo:#EBEBEB;
     --bordo-2:#DADADA;
-    --ombra:0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.08);
-    --ombra-su:0 -8px 28px rgba(0,0,0,.10);
-    --r-sheet:16px;
-    --r-card:12px;
-    --barra:56px;
+    --ombra:0 1px 2px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.09);
+    --ombra-su:0 -6px 24px rgba(0,0,0,.08);
+    --r-sheet:20px;
+    --r-card:14px;
+    --barra:54px;
     --peek:168px;
     --font:'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
     color-scheme:light;
@@ -72,17 +72,17 @@
   .pin-mappa:active svg{transform:scale(.95);}
 
   /* ---------- Top bar ---------- */
-  .barra{position:fixed;top:0;left:0;right:0;height:calc(var(--barra) + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) 8px 0;background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(12px) saturate(1.4);backdrop-filter:blur(12px) saturate(1.4);border-bottom:1px solid rgba(0,0,0,.06);display:flex;align-items:center;gap:4px;z-index:1000;}
-  .marchio{font-size:15px;font-weight:700;letter-spacing:-.35px;white-space:nowrap;padding-left:2px;}
+  .barra{position:fixed;top:0;left:0;right:0;height:calc(var(--barra) + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) 8px 0;background:rgba(255,255,255,.94);-webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);border-bottom:1px solid var(--bordo);display:flex;align-items:center;gap:4px;z-index:1000;}
+  .marchio{font-size:16px;font-weight:700;letter-spacing:-.4px;white-space:nowrap;padding-left:2px;}
   .barra.percorso{height:calc(44px + env(safe-area-inset-top,0px));}
-  .icona{width:44px;height:44px;border:0;background:transparent;border-radius:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--testo);}
+  .icona{width:44px;height:44px;border:0;background:transparent;border-radius:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--testo);}
   .icona:active{background:#F4F4F4;}
   .barra .spazio{flex:1;}
   .barra.percorso .marchio{font-size:14px;}
   .pill-offline{font-size:11px;font-weight:600;color:var(--testo-2);background:#F2F2F2;border-radius:999px;padding:4px 10px;}
 
   /* Pulsante mappa: inquadra il percorso */
-  .mappa-btn{position:fixed;right:12px;z-index:900;width:44px;height:44px;border:0;border-radius:12px;background:var(--sup);box-shadow:var(--ombra);display:flex;align-items:center;justify-content:center;color:var(--testo);cursor:pointer;bottom:calc(var(--h-sheet,168px) + 12px);}
+  .mappa-btn{position:fixed;right:12px;z-index:900;width:44px;height:44px;border:0;border-radius:14px;background:var(--sup);box-shadow:var(--ombra);display:flex;align-items:center;justify-content:center;color:var(--testo);cursor:pointer;bottom:calc(var(--h-sheet,168px) + 12px);}
 
   /* ---------- Mini-card fermata ---------- */
   .mini{position:fixed;left:12px;right:12px;bottom:calc(var(--h-sheet,168px) + 12px);max-width:520px;margin:0 auto;z-index:950;background:var(--sup);border-radius:var(--r-card);box-shadow:var(--ombra);padding:14px 16px;animation:mini-in .18s ease;}
@@ -94,7 +94,7 @@
   .mini-chiudi{position:absolute;top:8px;right:8px;}
 
   /* ---------- Pulsanti ---------- */
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;border-radius:var(--r-card);border:1px solid transparent;padding:0 16px;font-size:14px;font-weight:600;cursor:pointer;background:#F2F2F2;color:var(--testo);transition:background .15s;}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;border-radius:999px;border:1px solid transparent;padding:0 18px;font-size:14px;font-weight:600;letter-spacing:-.1px;cursor:pointer;background:#F2F2F2;color:var(--testo);transition:background .15s;}
   .btn-primario{background:var(--rosso);color:#fff;}
   .btn-primario:active{background:#9E0E19;}
   .btn-tenue{background:#F2F2F2;color:var(--testo);}
@@ -105,24 +105,27 @@
   .sheet{position:fixed;left:0;right:0;bottom:0;height:85dvh;max-width:560px;margin:0 auto;background:var(--sup);border-radius:var(--r-sheet) var(--r-sheet) 0 0;box-shadow:var(--ombra-su);z-index:1100;display:flex;flex-direction:column;will-change:transform;transform:translateY(200px);}
   .grab{position:relative;padding:10px 0 2px;display:flex;justify-content:center;cursor:grab;flex:0 0 auto;touch-action:none;}
   .grab::before{content:"";position:absolute;left:0;right:0;top:-14px;bottom:-14px;}
-  .grab span{width:36px;height:4px;border-radius:2px;background:var(--bordo-2);}
+  .grab span{width:40px;height:5px;border-radius:3px;background:#E2E2E2;}
   .sheet.trascinando{cursor:grabbing;}
   .sheet.trascinando .grab{cursor:grabbing;}
-  .sheet-corpo{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 16px calc(20px + env(safe-area-inset-bottom,0px));overscroll-behavior:contain;touch-action:pan-y;scrollbar-width:none;}
+  .sheet-corpo{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 18px calc(24px + env(safe-area-inset-bottom,0px));overscroll-behavior:contain;touch-action:pan-y;scrollbar-width:none;}
   .sheet-corpo::-webkit-scrollbar{display:none;}
   .vista{display:flex;flex-direction:column;gap:12px;}
   .riga-stato{margin:0;padding:0 16px calc(8px + env(safe-area-inset-bottom,0px));font-size:12px;color:var(--testo-2);flex:0 0 auto;}
   .riga-stato:not([hidden]){padding-top:4px;}
 
   /* ---------- Ricerca (dentro il pannello) ---------- */
-  .campi{display:flex;flex-direction:column;gap:2px;}
-  .campo-riga{display:flex;align-items:center;gap:10px;min-height:44px;}
+  /* Partenza e destinazione sono un blocco unico, come in un'app di mappe:
+     due righe separate da una linea sottile, non due testi sciolti. */
+  .campi{display:flex;flex-direction:column;gap:0;border:1px solid var(--bordo);border-radius:14px;padding:2px 12px;background:var(--sup);}
+  .campo-riga{display:flex;align-items:center;gap:10px;min-height:48px;}
+  .campo-riga + .campo-riga{border-top:1px solid var(--bordo);}
   .pallino{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
   .pallino-p{background:var(--rosso);}
   .pallino-d{background:var(--testo);}
   .campo{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:1px;border:0;background:transparent;text-align:left;padding:6px 0;cursor:pointer;min-height:44px;}
   .campo .eti{font-size:11px;font-weight:500;color:var(--testo-2);line-height:1.2;}
-  .campo .val{font-size:14px;font-weight:500;color:var(--testo);line-height:1.3;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .campo .val{font-size:15px;font-weight:500;letter-spacing:-.1px;color:var(--testo);line-height:1.3;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .campo .val.vuoto{color:var(--testo-2);font-weight:400;}
   .riga-quando{display:flex;align-items:center;gap:8px;}
   .quando-btn{flex:1;min-height:44px;border:0;background:transparent;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--testo);cursor:pointer;padding:0;text-align:left;}
@@ -360,7 +363,7 @@
   /* ================== Rifiniture interfaccia ================== */
   /* Comandi sulla mappa in basso a destra: centra su di me e adatta il
      percorso. Sulla barra superiore restano solo menu, indietro e offline. */
-  .mappa-comandi{position:fixed;right:12px;z-index:900;display:flex;flex-direction:column;background:var(--sup);border-radius:12px;box-shadow:var(--ombra);overflow:hidden;bottom:calc(var(--h-sheet,168px) + 12px);transition:opacity .16s ease;}
+  .mappa-comandi{position:fixed;right:12px;z-index:900;display:flex;flex-direction:column;background:var(--sup);border-radius:14px;box-shadow:var(--ombra);overflow:hidden;bottom:calc(var(--h-sheet,168px) + 12px);transition:opacity .16s ease;}
   body.pannello-animato .mappa-comandi{transition:bottom .34s cubic-bezier(.22,.9,.28,1),opacity .16s ease;}
   body.pannello-alto .mappa-comandi{opacity:0;pointer-events:none;}
   body.in-navigazione .mappa-comandi{opacity:0;pointer-events:none;}
