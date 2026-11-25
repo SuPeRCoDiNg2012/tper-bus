@@ -120,6 +120,11 @@
         ritardoHTML(e, indice) + '</div>' +
         '<div class="corsa-riga"><span class="corsa-ora">' + hhmm(tappa.arrivo) + '</span><span class="corsa-fermata">' + esc(etichetta(tappa.a)) + '</span></div>' +
         '</div></div>';
+      // Segnalazione condivisa: solo per i bus, i treni non hanno controllori.
+      if (!treno) {
+        html += '<button type="button" class="controllore" data-controllore="' + esc(tappa.linea) +
+          '">Ho visto il controllore su questa linea</button>';
+      }
     });
     if (e.camminoFinale > 0) {
       html += piediHTML('A piedi <b>' + minuti(e.camminoFinale) + ' min</b> fino a destinazione');
