@@ -30,7 +30,15 @@ const FILE_ORARI = path.join(RADICE, 'data', 'orari.json');
 const FILE_TRACCIATI = path.join(RADICE, 'data', 'tracciati.json');
 const FILE_FERMATE = path.join(RADICE, 'data', 'fermate.json');
 const FILE_OSM = path.join(RADICE, '.tmp-binari', 'binari.json');
-const URL_OVERPASS = 'https://overpass-api.de/api/interpreter';
+// Più server in ordine di affidabilità osservata: il primo è quello che ha
+// risposto quando gli altri erano in sovraccarico.
+const SERVER_OVERPASS = [
+  'https://overpass.openstreetmap.fr/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.osm.ch/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter'
+];
+const URL_OVERPASS = SERVER_OVERPASS[0];
 const UA = 'MuoviBologna/1.0 (ricostruzione geometrie)';
 
 const args = process.argv.slice(2);
@@ -233,10 +241,14 @@ function inserisciProiezioni(punti, ids, posizioni, coordinate) {
   // Difesa: le posizioni devono restare in ordine crescente.
   for (let i = 1; i < risultato.length; i += 1) {
     if (risultato[i] >= risultato[i - 1]) continue;
+    const coordinata = coordinate.get(ids[i]);
+    // Fermata senza coordinate (o tabella riferita a un indice mancante): non
+    // c'è niente da riallineare, si tiene la posizione calcolata.
+    if (!coordinata) continue;
     let migliore = risultato[i - 1];
     let minima = Infinity;
     for (let k = risultato[i - 1]; k < nuove.length; k += 1) {
-      const d = distanza(coordinate.get(ids[i]), nuove[k]);
+      const d = distanza(coordinata, nuove[k]);
       if (d < minima) { minima = d; migliore = k; }
     }
     risultato[i] = migliore;
@@ -246,21 +258,37 @@ function inserisciProiezioni(punti, ids, posizioni, coordinate) {
 
 /* --- Rete ferroviaria OSM ------------------------------------------- */
 
-function scaricaOsm() {
+// Overpass è un servizio pubblico e a volte risponde 502 o va in timeout: in
+// pipeline si prova più di un server, con attese crescenti, prima di arrendersi.
+async function scaricaOsm() {
   if (fs.existsSync(osmPath)) return leggiJSON(osmPath);
   fs.mkdirSync(path.dirname(osmPath), { recursive: true });
   const query = '[out:json][timeout:180];way["railway"="rail"](44.28,10.95,44.56,11.82);out geom;';
-  const url = URL_OVERPASS + '?data=' + encodeURIComponent(query);
   console.log('Scarico la rete ferroviaria da OpenStreetMap…');
-  return fetch(url, { headers: { 'User-Agent': UA } })
-    .then((r) => {
-      if (!r.ok) throw new Error('Overpass HTTP ' + r.status);
-      return r.text();
-    })
-    .then((testo) => {
+  let ultimo = null;
+  for (let giro = 0; giro < SERVER_OVERPASS.length; giro += 1) {
+    const server = SERVER_OVERPASS[giro];
+    try {
+      const risposta = await fetch(server + '?data=' + encodeURIComponent(query), {
+        headers: { 'User-Agent': UA },
+        signal: AbortSignal.timeout(200000)
+      });
+      if (!risposta.ok) throw new Error('HTTP ' + risposta.status);
+      const testo = await risposta.text();
+      const dati = JSON.parse(testo);
       fs.writeFileSync(osmPath, testo);
-      return JSON.parse(testo);
-    });
+      return dati;
+    } catch (errore) {
+      ultimo = errore;
+      console.log('  ' + new URL(server).host + ' non disponibile (' + errore.message + ')' +
+        (giro + 1 < SERVER_OVERPASS.length ? ', provo un altro server' : ''));
+      if (giro + 1 < SERVER_OVERPASS.length) {
+        await new Promise((risolvi) => setTimeout(risolvi, 5000 * (giro + 1)));
+      }
+    }
+  }
+  throw new Error('nessun server Overpass disponibile (' + (ultimo && ultimo.message) +
+    '): riprova più tardi o passa --osm con un estratto della rete ferroviaria');
 }
 
 function costruisciGrafo(osm) {
@@ -431,14 +459,19 @@ async function main() {
     for (let q = 0; q < vecchiaTab.length; q += 2) ids.push(orari.fermate[vecchiaTab[q]]);
     let punti = decodifica(tracciati.forme[k]);
 
-    if (!formaPlausibile(punti, formeTreno.has(k))) {
+    const treno = formeTreno.has(k);
+    // Le forme ferroviarie del GTFS nazionale sono volutamente rade (pochi punti
+    // e salti di chilometri): qui si scartano solo quelle dei bus, mentre per i
+    // treni si passa alla ricostruzione sul binario qui sotto. Scartandole prima
+    // restavano senza geometria e la mappa non disegnava la tratta.
+    if (!treno && !formaPlausibile(punti, false)) {
       tracciati.forme[k] = '';
       tracciati.posizioni[k] = [];
       formeScartate += 1;
       continue;
     }
 
-    if (formeTreno.has(k) && ids.length >= 2) {
+    if (treno && ids.length >= 2) {
       const esito = percorsoStazioni(rete, ids, coordinate);
       if (!esito || esito.punti.length < 2) {
         errori.push('forma treno ' + k + ': nessun percorso ferroviario per ' + ids.join('→'));

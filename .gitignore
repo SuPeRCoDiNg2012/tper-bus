@@ -6,3 +6,6 @@ __pycache__/
 .tmp-binari/
 .tmp-treni/
 .tmp-pdf/
+
+# Download e copia di sicurezza della pipeline dati automatica
+.tmp-dati/

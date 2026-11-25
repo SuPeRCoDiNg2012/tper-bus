@@ -5,6 +5,7 @@
   "description": "PWA dei trasporti pubblici di Bologna: percorsi, orari, zone e biglietto",
   "scripts": {
     "bump": "node scripts/bump-cache.js",
+    "dati": "node scripts/aggiorna-dati.js",
     "test": "node --test tests"
   }
 }

@@ -10,7 +10,7 @@ Web app mobile-first (PWA) per calcolare zone tariffarie, costo del biglietto e 
 |---|---|---|---|---|
 | Frontend | HTML + CSS + JavaScript puro (nessun framework, nessuna build) | 0 € per sempre | Nessuno: codice statico, gira in qualsiasi browser moderno | — (web standard) |
 | Hosting | GitHub Pages (consigliato) — alternative equivalenti: Netlify, Vercel, Cloudflare Pages | 0 € per sempre, nessuna carta richiesta | GitHub Pages: 1 GB di spazio, 100 GB/mese di banda, limite ampiamente sufficiente per questa app | https://pages.github.com |
-| Dati fermate bus | Dataset open data Regione Emilia-Romagna | 0 € — licenza aperta | Va scaricato e aggiornato periodicamente a mano (non in tempo reale) | https://dati.emilia-romagna.it/dataset/tper-fermate-autobus |
+| Dati fermate bus | Dataset open data Regione Emilia-Romagna | 0 € — licenza aperta | Aggiornato ogni notte dal workflow `aggiorna-dati` (non in tempo reale) | https://dati.emilia-romagna.it/dataset/tper-fermate-autobus |
 | Linee/orari (GTFS) | Feed open data GTFS ufficiale TPER | 0 € — licenza open data | File grande: va preprocessato offline con lo script incluso, non scaricato dal browser | https://solweb.tper.it/web/tools/open-data/open-data-download.aspx |
 | Orari in tempo reale | TPER HelloBus (web service XML pubblico) | 0 € — nessuna API key | Il servizio non invia header CORS: l'app passa da un relay pubblico (proxy.corsfix.com, con fallback), sostituibile dal menu → Informazioni e fonti dati | https://hellobuswsweb.tper.it/web-services/hellobus.asmx |
 | Calcolo del percorso | Motore RAPTOR in `routing.js` sugli orari programmati GTFS TPER (bus) e Trenitalia (treni) | 0 € — nessuna API esterna, nessuna key | Orari di tabella: la prima corsa bus mostra il passaggio reale da HelloBus, i treni restano sull'orario programmato perché non esiste un feed aperto. Il piano considera tempi di cambio diversi per bus e treno e propone percorsi alternativi distinti | https://developers.google.com/transit/gtfs |
@@ -94,6 +94,27 @@ tper-zone-calc/
 In tutti i casi, trattandosi di file statici (nessun server, nessun database), il deploy è immediato: basta puntare alla root del progetto.
 
 ## Come aggiornare i dati (dataset completo)
+
+### Aggiornamento automatico (GitHub Actions)
+
+Il workflow `.github/workflows/aggiorna-dati.yml` gira ogni notte alle 03:17 UTC e a richiesta da **Actions → Aggiorna dati TPER → Run workflow**. Esegue `node scripts/aggiorna-dati.js`, cioè l'intero giro qui sotto in un solo comando: fermate bus, GTFS TPER (versione letta da SolWeb), orari, colori, treni nazionali e locali, riparazione delle geometrie, gzip. Poi esegue `npm test`, incrementa la versione delle cache in `sw.js` con `npm run bump` e fa commit e push su `main` solo se i dati sono davvero cambiati: quel push è anche il deploy di GitHub Pages.
+
+Le fonti e i controlli di sicurezza:
+
+- **Fermate**: prima l'API CKAN della Regione, poi l'export Opendatasoft del Comune di Bologna (stessi campi), che è quello usato quando il portale regionale non risponde.
+- **GTFS TPER**: la versione corrente viene letta dalla pagina SolWeb; nessun numero di versione da aggiornare a mano.
+- **Treni**: GTFS nazionale (mirror pubblico CC BY 4.0, sostituibile) e PDF ufficiale degli orari locali S2A. Le geometrie ferroviarie vengono ricostruite su OpenStreetMap con Overpass.
+- **Niente dati a metà**: prima di scrivere, il dataset attuale viene copiato in `.tmp-dati/prima`. Se una fase fallisce, se manca una stazione o se le fermate, le corse o le forme calano di oltre il 10%, la copia viene ripristinata e il workflow esce in errore senza pubblicare nulla.
+- **Niente commit inutili**: se il contenuto è identico a parte il campo `aggiornato`, il workflow non produce modifiche e non fa commit.
+
+Per lanciarlo in locale servono Node.js 18+, Python 3, `unzip` e `pdftotext` (`apt-get install -y poppler-utils unzip`), poi:
+
+```bash
+npm run dati          # oppure: node scripts/aggiorna-dati.js
+npm test && npm run bump
+```
+
+Quando una fonte cambia indirizzo si può passare un URL alternativo da **Run workflow** (`versione_gtfs`, `url_fermate`, `url_gtfs_treni`, `url_pdf_treni`) o con le stesse variabili d'ambiente in locale (`VERSIONE_GTFS`, `URL_FERMATE`, `URL_GTFS_TPER`, `URL_GTFS_TRENI`, `URL_PDF_TRENI`). Quando TPER pubblica il nuovo orario ferroviario serve invece aggiornare il periodo di validità in `scripts/aggiungi-treni-locali.js` (`VALIDITA`) insieme al PDF: la pipeline si ferma dichiarandolo, non inventa corse.
 
 ### A) Fermate bus + linee (metodo consigliato, un solo file)
 

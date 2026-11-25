@@ -1,0 +1,105 @@
+name: Aggiorna dati TPER
+
+# Ogni notte alle 03:17 UTC (04:17/05:17 in Italia) e a richiesta.
+# Se i dati sono identici a quelli già in repo, non crea nessun commit.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      versione_gtfs:
+        description: 'Versione GTFS TPER (YYYYMMDD). Vuoto = ultima disponibile'
+        required: false
+        default: ''
+      url_fermate:
+        description: 'URL alternativo del JSON fermate (vuoto = automatico)'
+        required: false
+        default: ''
+      url_gtfs_treni:
+        description: 'URL alternativo del GTFS nazionale Trenitalia'
+        required: false
+        default: ''
+      url_pdf_treni:
+        description: 'URL alternativo del PDF orari ferroviari locali'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aggiorna-dati
+  cancel-in-progress: false
+
+jobs:
+  aggiorna:
+    name: Pipeline, test, bump e push
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Strumenti di sistema (pdftotext e unzip)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils unzip
+
+      # La rete ferroviaria OSM cambia di rado: la cache evita di dipendere da
+      # Overpass ogni notte (che a volte risponde 502). Cambiando il bbox o la
+      # query in ricostruisci-tracciati.js va cambiata anche la chiave.
+      - name: Cache della rete ferroviaria OSM
+        uses: actions/cache@v4
+        with:
+          path: .tmp-binari/binari.json
+          key: binari-osm-v1
+
+      # Fermate, GTFS, orari, treni e geometrie. Se una fonte non risponde il
+      # passo fallisce e i dati precedenti vengono ripristinati: non si pubblica
+      # un dataset a metà.
+      - name: Rigenera i dati
+        env:
+          VERSIONE_GTFS: ${{ inputs.versione_gtfs }}
+          URL_FERMATE: ${{ inputs.url_fermate }}
+          URL_GTFS_TRENI: ${{ inputs.url_gtfs_treni }}
+          URL_PDF_TRENI: ${{ inputs.url_pdf_treni }}
+        run: node scripts/aggiorna-dati.js
+
+      - name: Test dei dati
+        run: npm test
+
+      - name: Ci sono modifiche da pubblicare?
+        id: modifiche
+        run: |
+          if git diff --quiet -- data; then
+            echo "esito=no" >> "$GITHUB_OUTPUT"
+            echo "Nessuna modifica ai dati: nessun commit."
+          else
+            echo "esito=si" >> "$GITHUB_OUTPUT"
+            git diff --stat -- data
+          fi
+
+      - name: Bump della cache del service worker
+        if: steps.modifiche.outputs.esito == 'si'
+        run: npm run bump
+
+      # Il push su main è anche il deploy: GitHub Pages ricostruisce il sito.
+      - name: Commit e push
+        if: steps.modifiche.outputs.esito == 'si'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data sw.js
+          git commit -m "Aggiorna i dati TPER ($(date -u +%Y-%m-%d))"
+          git push
