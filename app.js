@@ -1181,6 +1181,47 @@
     return geometria && Piedi.valida(geometria, PIEDI_MAX_METRI) ? geometria : null;
   }
 
+  // OSRM pedonale è un servizio pubblico con limiti d'uso: un percorso chiede
+  // una decina di tratti tutti insieme e il server risponde 429 (visto nei log).
+  // Qui le richieste passano da una coda con una sola attiva e un secondo di
+  // distanza, come chiede la policy del servizio demo; a un 429 si svuota la
+  // coda per qualche secondo. I tratti restano diritti finché la geometria
+  // arriva: nessun percorso si blocca per colpa del cammino.
+  const piediCoda = { coda: [], attive: 0, massimo: 1, pausa: 0, sospesoFino: 0, timer: null };
+  const PIEDI_INTERVALLO = 1000;   // ms fra due richieste OSRM
+  const PIEDI_RIPROVA = 20000;     // ms dopo cui un errore di rete si può ritentare
+
+  function accodaPiedi(chiave, esegui) {
+    piediCoda.coda.push({ chiave, esegui });
+    svuotaCodaPiedi();
+  }
+
+  function svuotaCodaPiedi() {
+    if (!piediCoda.coda.length || piediCoda.attive >= piediCoda.massimo) return;
+    const ora = Date.now();
+    const attesa = Math.max(piediCoda.pausa - ora, piediCoda.sospesoFino - ora, 0);
+    if (attesa > 0) {
+      if (!piediCoda.timer) {
+        piediCoda.timer = setTimeout(() => {
+          piediCoda.timer = null;
+          svuotaCodaPiedi();
+        }, attesa);
+      }
+      return;
+    }
+    const voce = piediCoda.coda.shift();
+    piediCoda.attive += 1;
+    piediCoda.pausa = ora + PIEDI_INTERVALLO;
+    Promise.resolve()
+      .then(voce.esegui)
+      .catch(() => { piediFalliti.add(voce.chiave); })
+      .finally(() => {
+        piediCoda.attive -= 1;
+        svuotaCodaPiedi();
+      });
+    svuotaCodaPiedi();
+  }
+
   function chiediPiedi(da, a) {
     if (!da || !a || !navigator.onLine) return;
     const chiave = Piedi.chiave(da, a);
@@ -1190,10 +1231,24 @@
     }
     if (piediInCorso.has(chiave) || piediFalliti.has(chiave) || piediCaricati().has(chiave)) return;
     piediInCorso.add(chiave);
+    accodaPiedi(chiave, () => scaricaPiedi(da, a, chiave));
+  }
+
+  function scaricaPiedi(da, a, chiave) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_OSRM);
-    fetch(Piedi.url(da, a) + '?overview=full&geometries=geojson&steps=false', { signal: controller.signal })
-      .then((risposta) => (risposta.ok ? risposta.json() : null))
+    return fetch(Piedi.url(da, a) + '?overview=full&geometries=geojson&steps=false', { signal: controller.signal })
+      .then((risposta) => {
+        if (risposta.status === 429) {
+          // Troppe richieste: per un po' non si insiste, la coda si svuota.
+          piediCoda.sospesoFino = Date.now() + 8000;
+          piediCoda.coda.forEach((voce) => piediFalliti.add(voce.chiave));
+          piediCoda.coda.length = 0;
+          throw new Error('OSRM 429');
+        }
+        if (!risposta.ok) throw new Error('OSRM HTTP ' + risposta.status);
+        return risposta.json();
+      })
       .then((dati) => {
         const coordinate = Piedi.geometriaRisposta(dati);
         if (!coordinate || !Piedi.valida(coordinate, PIEDI_MAX_METRI)) {
@@ -1213,7 +1268,13 @@
           disegnaTracciato();
         }
       })
-      .catch(() => { piediFalliti.add(chiave); })
+      .catch((errore) => {
+        // Un 429 o una rete caduta non sono un verdetto sul tratto: si segna
+        // fallito per non insistere subito, ma fra poco si potrà ritentare.
+        piediFalliti.add(chiave);
+        const transitorio = !errore || errore.name === 'AbortError' || /429|rate limit/i.test(errore.message || '');
+        if (transitorio) setTimeout(() => piediFalliti.delete(chiave), PIEDI_RIPROVA);
+      })
       .finally(() => {
         clearTimeout(timer);
         piediInCorso.delete(chiave);
