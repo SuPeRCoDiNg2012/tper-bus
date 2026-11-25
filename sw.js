@@ -3,8 +3,8 @@
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'muovi-bologna-static-v100';
-const CACHE_DATI = 'muovi-bologna-data-v100';
+const CACHE_STATICA = 'muovi-bologna-static-v101';
+const CACHE_DATI = 'muovi-bologna-data-v101';
 
 const ASSET_STATICI = [
   './',
@@ -77,6 +77,38 @@ self.addEventListener('activate', (event) => {
     ))
   );
   self.clients.claim();
+});
+
+// Notifiche locali: le mostra l'app con registration.showNotification(); il
+// tocco riapre gli orari della fermata che le ha generate. Il gestore `push`
+// non ha ancora un mittente: senza un server non arriva nulla, ma se un giorno
+// si aggiunge un backend l'app è già pronta a riceverlo.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const fermata = (event.notification.data && event.notification.data.fermata) || '';
+  const destinazione = './' + (fermata ? '?fermata=' + encodeURIComponent(fermata) : '');
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clienti) => {
+      const aperto = clienti.find((c) => c.url.indexOf(self.location.origin) === 0);
+      if (aperto) {
+        aperto.focus();
+        if (fermata) aperto.postMessage({ tipo: 'fermata', id: fermata });
+        return null;
+      }
+      return self.clients.openWindow(destinazione);
+    })
+  );
+});
+
+self.addEventListener('push', (event) => {
+  let dati = {};
+  try { dati = event.data ? event.data.json() : {}; } catch (errore) { dati = {}; }
+  event.waitUntil(self.registration.showNotification(dati.titolo || 'Muovi Bologna', {
+    body: dati.corpo || '',
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    data: { fermata: dati.fermata || '' }
+  }));
 });
 
 self.addEventListener('fetch', (event) => {

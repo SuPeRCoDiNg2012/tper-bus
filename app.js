@@ -39,6 +39,7 @@
   const K_ONBOARDING = 'tperzc_onboarding_visto_v1';
   const K_ULTIMA = 'tperzc_ultima_v1';
   const K_PREFERITI = 'tperzc_preferiti_v1';
+  const K_AVVISI = 'tperzc_avvisi_v1';
   const K_ERRORI = 'tperzc_errori_v1';
   const URL_UFFICIALE = 'https://solweb.tper.it/web/tools/zone-calculator.aspx';
   const HELLOBUS = 'https://hellobuswsweb.tper.it/web-services/hellobus.asmx/QueryHellobus';
@@ -2632,6 +2633,7 @@
       const validi = preferitiValidi();
       riquadro.innerHTML = PREFERITI.map((voce) => {
         const scelto = validi.find((v) => v.slot === voce.slot);
+        const acceso = scelto && avvisoAttivo(voce.slot);
         return '<div class="menu-pref-riga">' +
           '<button type="button" class="menu-pref" data-azione="pref-scegli" data-slot="' + voce.slot + '">' +
           Icone.svg(voce.icona, 20) +
@@ -2640,13 +2642,144 @@
           esc(scelto ? nomeBreve(scelto.luogo.nome) : 'Imposta') + '</span>' +
           '</button>' +
           (scelto
-            ? '<button type="button" class="menu-pref-rimuovi" data-azione="pref-rimuovi" data-slot="' + voce.slot +
+            ? '<button type="button" class="menu-pref-avviso' + (acceso ? ' acceso' : '') + '" data-azione="pref-avviso" data-slot="' +
+              voce.slot + '" aria-pressed="' + (acceso ? 'true' : 'false') + '" aria-label="Avvisa 5 minuti prima del bus da ' +
+              voce.etichetta + '">' + Icone.svg(acceso ? 'bell' : 'bell-off', 18) + '</button>' +
+              '<button type="button" class="menu-pref-rimuovi" data-azione="pref-rimuovi" data-slot="' + voce.slot +
               '" aria-label="Rimuovi ' + voce.etichetta + '">' + ICONA_X + '</button>'
             : '') +
           '</div>';
       }).join('');
     }
     if (vistaAttiva === 'percorso' && !(sel.partenza && sel.destinazione)) renderPercorso();
+  }
+
+  /* --- Avvisi sul prossimo bus --------------------------------------- */
+  // Notifica locale: non c'è un server, quindi parte solo mentre l'app è
+  // aperta o in background recente. Con l'app chiusa del tutto servirebbe un
+  // push con un backend, che qui non esiste.
+  const AVVISO_MINUTI = 5;
+  const AVVISO_INTERVALLO = 60000;
+  let avvisiTimer = null;
+  const avvisiInviati = new Set();
+
+  function avvisiSalvati() {
+    const salvati = leggiJSON(K_AVVISI);
+    return salvati && typeof salvati === 'object' ? salvati : {};
+  }
+
+  function avvisoAttivo(slot) {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
+    return !!avvisiSalvati()[slot];
+  }
+
+  function scriviAvviso(slot, attivo) {
+    const salvati = avvisiSalvati();
+    if (attivo) salvati[slot] = true;
+    else delete salvati[slot];
+    scrivi(K_AVVISI, JSON.stringify(salvati));
+  }
+
+  async function mostraNotifica(titolo, corpo, fermataId) {
+    const opzioni = {
+      body: corpo,
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-192.png',
+      tag: 'muovi-bologna-avviso',
+      renotify: true,
+      data: { fermata: fermataId || '' }
+    };
+    try {
+      const registrazione = await navigator.serviceWorker.ready;
+      if (registrazione && registrazione.showNotification) {
+        await registrazione.showNotification(titolo, opzioni);
+        return true;
+      }
+    } catch (errore) { /* si prova con la notifica diretta */ }
+    try {
+      // Su Android new Notification() non è ammesso: resta un ripiego desktop.
+      new Notification(titolo, opzioni);
+      return true;
+    } catch (errore) {
+      return false;
+    }
+  }
+
+  // Fermata da interrogare per un preferito: per un indirizzo vale la palina
+  // più vicina, come per il tempo reale della scheda fermata.
+  function fermataPerAvviso(luogo) {
+    if (!luogo) return null;
+    if (!eIndirizzo(luogo) && lineeDaInterrogare(luogo).length) return palinaConLinee(luogo);
+    if (luogo.lat == null || luogo.lon == null) return null;
+    return fermateVicine(luogo.lat, luogo.lon, 1)[0] || null;
+  }
+
+  async function controllaAvvisi() {
+    const attivi = preferitiValidi().filter((voce) => avvisoAttivo(voce.slot));
+    if (!attivi.length) return;
+    const giorno = oggiISO();
+    for (const voce of attivi) {
+      const fermata = fermataPerAvviso(voce.luogo);
+      if (!fermata) continue;
+      const linea = lineeDaInterrogare(fermata)[0];
+      if (!linea) continue;
+      let arrivi = [];
+      try {
+        arrivi = parseHellobus(await queryHellobus(fermata.id, linea));
+      } catch (errore) {
+        continue;
+      }
+      const prossimo = arrivi
+        .filter((a) => a.minuti != null && a.minuti >= 0 && a.minuti <= AVVISO_MINUTI)
+        .sort((a, b) => a.minuti - b.minuti)[0];
+      if (!prossimo) continue;
+      const chiave = [voce.slot, prossimo.linea, prossimo.ora, giorno].join('|');
+      if (avvisiInviati.has(chiave)) continue;
+      avvisiInviati.add(chiave);
+      const titolo = 'Bus ' + prossimo.linea + ' tra ' + prossimo.minuti + ' min';
+      const corpo = voce.etichetta + ' · ' + nomeBreve(voce.luogo.nome) + ' · ' + prossimo.ora;
+      await mostraNotifica(titolo, corpo, fermata.id);
+    }
+  }
+
+  function avviaAvvisi() {
+    if (avvisiTimer) return;
+    avvisiTimer = setInterval(() => { controllaAvvisi(); }, AVVISO_INTERVALLO);
+    controllaAvvisi();
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) controllaAvvisi();
+    });
+  }
+
+  async function alternaAvviso(slot) {
+    const voce = PREFERITI.find((p) => p.slot === slot);
+    if (!voce) return;
+    if (avvisoAttivo(slot)) {
+      scriviAvviso(slot, false);
+      renderPreferiti();
+      mostraToast('Avvisi spenti per ' + voce.etichetta);
+      return;
+    }
+    if (typeof Notification === 'undefined') {
+      mostraToast('Questo browser non supporta le notifiche');
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      mostraToast('Notifiche bloccate: riattivale dalle impostazioni del sito');
+      return;
+    }
+    const permesso = Notification.permission === 'granted'
+      ? 'granted' : await Notification.requestPermission();
+    if (permesso !== 'granted') {
+      mostraToast('Notifiche non attivate');
+      return;
+    }
+    scriviAvviso(slot, true);
+    renderPreferiti();
+    avviaAvvisi();
+    controllaAvvisi();
+    mostraToast('Ti avviso 5 minuti prima del bus da ' + voce.etichetta +
+      " (con l'app aperta o in background)");
   }
 
   function apriCercaPreferito(slot) {
@@ -2675,8 +2808,13 @@
       apriCercaPreferito(pulsante.getAttribute('data-slot'));
       return true;
     }
+    if (azione === 'pref-avviso') {
+      alternaAvviso(pulsante.getAttribute('data-slot'));
+      return true;
+    }
     if (azione === 'pref-rimuovi') {
       const slot = pulsante.getAttribute('data-slot');
+      scriviAvviso(slot, false);
       const voce = PREFERITI.find((p) => p.slot === slot);
       if (salvaPreferito(slot, null)) mostraToast((voce ? voce.etichetta : 'Preferito') + ' rimosso');
       return true;
@@ -5307,6 +5445,15 @@
       ricaricaDaAggiornamento = false;
       window.location.reload();
     });
+
+    // Tocco su una notifica mentre l'app è già aperta: il service worker non
+    // può aprirla due volte, quindi manda la fermata qui.
+    navigator.serviceWorker.addEventListener('message', (evento) => {
+      const dati = evento.data || {};
+      if (dati.tipo !== 'fermata') return;
+      const fermata = fermataPerId(dati.id);
+      if (fermata) apriOrari(fermata);
+    });
   }
 
   function gestisciInstallazione() {
@@ -5832,6 +5979,14 @@
     else if (mappa) mappa.jumpTo({ center: [11.3426, 44.4949], zoom: 13 });
     chiudiAvvio();
     mostraOnboarding();
+    avviaAvvisi();
+    // Notifica toccata: apre gli orari della fermata che l'ha generata.
+    const fermataAvviso = new URLSearchParams(location.search).get('fermata');
+    if (fermataAvviso) {
+      const fermata = fermataPerId(fermataAvviso);
+      history.replaceState(null, '', location.pathname);
+      if (fermata) apriOrari(fermata);
+    }
   }
 
   // Con la tastiera chiusa i campi sono già leggibili senza aprire il pannello:
