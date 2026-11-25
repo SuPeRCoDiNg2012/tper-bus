@@ -14,7 +14,12 @@
   const URL_FERMATE = './data/fermate.json';
   const URL_LINEE = './data/linee-per-fermata.json';
   const URL_COLORI = './data/linee-colori.json';
+  // Timeout per tipo di chiamata: i JSON grandi hanno più tempo, Nominatim ne
+  // ha meno perché la ricerca deve restare reattiva mentre si scrive.
   const TIMEOUT_FETCH = 10000;
+  const TIMEOUT_ORARI = 15000;
+  const TIMEOUT_NOMINATIM = 5000;
+  const TIMEOUT_OSRM = 8000;
   const K_FERMATE = 'tperzc_fermate_v2';
   const K_LINEE = 'tperzc_linee_v2';
   const K_COLORI = 'tperzc_colori_v1';
@@ -29,9 +34,16 @@
   const K_CRITERIO_PROPOSTO = 'tperzc_criterio_proposto_v1';
   const K_PROXY = 'tperzc_proxy';
   const K_RELAY = 'tperzc_relay';
+  const K_USI = 'tperzc_usi_v1';
+  const K_INSTALL_VISTO = 'tperzc_install_visto_v1';
+  const K_ONBOARDING = 'tperzc_onboarding_visto_v1';
+  const K_ULTIMA = 'tperzc_ultima_v1';
+  const K_ERRORI = 'tperzc_errori_v1';
   const URL_UFFICIALE = 'https://solweb.tper.it/web/tools/zone-calculator.aspx';
   const HELLOBUS = 'https://hellobuswsweb.tper.it/web-services/hellobus.asmx/QueryHellobus';
   const RELAY_PREDEFINITO = 'https://api.allorigins.win/raw?url=';
+  // Worker Cloudflare personale per il relay CORS verso HelloBus. Se un giorno
+  // viene rinominato, questo è l'unico punto da toccare in app.js.
   const RELAY_WORKER = 'https://hellobus-proxy.zeno-astolfi12.workers.dev/?url=';
   const INTERVALLO_LIVE = 30000;
   const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
@@ -133,6 +145,12 @@
   const $ = (id) => document.getElementById(id);
   // Set unico di icone: Lucide inline, nessuna CDN e nessun font esterno.
   const Icone = window.Icone;
+  // Funzioni pure (contrasto, cache, inviti) verificate da tests/utilita.test.js.
+  const Utilita = window.Utilita;
+  const MENO_MOVIMENTO = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // Con "riduci movimento" attivo la mappa salta invece di volare.
+  function durataMovimento(ms) { return MENO_MOVIMENTO ? 0 : ms; }
   const ICONA_BUS = Icone.svg('bus-front', 18);
   const ICONA_TRENO = Icone.svg('train-front', 18);
   const ICONA_LUOGO = Icone.svg('map-pin', 18);
@@ -276,13 +294,126 @@
   /* ------------------------------------------------------------------ *
    * Dati fermate
    * ------------------------------------------------------------------ */
-  function fetchConTimeout(url, ms) {
+  /**
+   * Fetch con timeout e retry a passi crescenti (1 s, 3 s): un 502 momentaneo
+   * del relay non deve bruciare il caricamento. `cache: 'no-cache'` obbliga a
+   * rivalidare i JSON dati, che altrimenti possono arrivare vecchi.
+   */
+  async function fetchConTimeout(url, ms, opzioni) {
+    const o = opzioni || {};
+    const tentativi = o.tentativi == null ? 3 : Math.max(1, o.tentativi);
+    let ultimo = null;
+    for (let i = 0; i < tentativi; i += 1) {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), ms || TIMEOUT_FETCH);
+      try {
+        const risposta = await fetch(url, { signal: controller.signal, cache: 'no-cache' });
+        // 4xx non si ritenta: è la richiesta a essere sbagliata.
+        if (!risposta.ok && risposta.status >= 500 && i + 1 < tentativi) {
+          throw new Error('HTTP ' + risposta.status);
+        }
+        return risposta;
+      } catch (errore) {
+        ultimo = errore;
+        if (i + 1 < tentativi) {
+          aggiornaAvvio('Riprovo…');
+          await new Promise((risolvi) => setTimeout(risolvi, i === 0 ? 1000 : 3000));
+        }
+      } finally {
+        clearTimeout(id);
+      }
+    }
+    throw ultimo || new Error('rete non disponibile');
+  }
+
+  // Un segnale che scade da solo, da unire a quello di una ricerca annullata.
+  function segnaleConTimeout(esterno, ms) {
+    if (typeof AbortController !== 'function') return esterno;
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), ms);
-    return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
+    controller.signal.addEventListener('abort', () => clearTimeout(id), { once: true });
+    if (esterno) {
+      if (esterno.aborted) controller.abort();
+      else esterno.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+    return controller.signal;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Avvio: splash e placeholder della mappa
+   * ------------------------------------------------------------------ */
+  function aggiornaAvvio(testo) {
+    const riga = $('avvio-stato');
+    if (riga && testo) riga.textContent = testo;
+  }
+
+  function chiudiAvvio() {
+    const avvio = $('avvio');
+    if (!avvio || avvio.classList.contains('fuori')) return;
+    avvio.classList.add('fuori');
+    setTimeout(() => { avvio.hidden = true; }, MENO_MOVIMENTO ? 0 : 300);
+  }
+
+  function chiudiAttesaMappa() {
+    const attesa = $('mappa-attesa');
+    if (!attesa || attesa.classList.contains('fuori')) return;
+    attesa.classList.add('fuori');
+    setTimeout(() => { attesa.hidden = true; }, MENO_MOVIMENTO ? 0 : 320);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Errori: ultimi 50 in locale, per capire cosa non va senza analytics
+   * ------------------------------------------------------------------ */
+  function registraErrore(tipo, messaggio, stack) {
+    try {
+      const elenco = leggiJSON(K_ERRORI) || [];
+      elenco.unshift({
+        ts: Date.now(),
+        tipo: String(tipo || 'errore'),
+        messaggio: String(messaggio || '').slice(0, 300),
+        stack: String(stack || '').slice(0, 500)
+      });
+      scrivi(K_ERRORI, JSON.stringify(elenco.slice(0, 50)));
+    } catch (errore) { /* quota piena: pazienza */ }
+  }
+
+  function collegaErrori() {
+    window.addEventListener('error', (evento) => {
+      registraErrore('errore', evento.message || 'errore sconosciuto',
+        evento.error && evento.error.stack ? evento.error.stack : (evento.filename || ''));
+    });
+    window.addEventListener('unhandledrejection', (evento) => {
+      const motivo = evento.reason || {};
+      registraErrore('promise', motivo.message || String(motivo), motivo.stack || '');
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Spazio nel localStorage: le cache rigenerabili si svuotano da sole
+   * ------------------------------------------------------------------ */
+  function pulisciCacheSeNecessario() {
+    try {
+      const misure = {};
+      let totale = 0;
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const chiave = localStorage.key(i);
+        if (!chiave) continue;
+        const peso = chiave.length + (localStorage.getItem(chiave) || '').length;
+        misure[chiave] = peso;
+        totale += peso;
+      }
+      if (totale <= Utilita.SOGLIA_CACHE) return [];
+      const svuotate = Utilita.cacheDaSvuotare(misure, Utilita.SOGLIA_CACHE);
+      svuotate.forEach((chiave) => localStorage.removeItem(chiave));
+      if (svuotate.length) piediCache = null;
+      return svuotate;
+    } catch (errore) {
+      return [];
+    }
   }
 
   async function caricaDati() {
+    aggiornaAvvio('Carico le fermate…');
     try {
       const [rispostaFermate, risposteLinee, rispostaColori] = await Promise.all([
         fetchConTimeout(URL_FERMATE, TIMEOUT_FETCH),
@@ -292,6 +423,7 @@
       ]);
       if (!rispostaFermate.ok || !risposteLinee.ok) throw new Error('Risposta non valida');
       const datiFermate = await rispostaFermate.json();
+      aggiornaAvvio('Carico le linee…');
       const datiLinee = await risposteLinee.json();
       fermate = datiFermate.fermate || [];
       lineePerFermata = datiLinee.linee || {};
@@ -309,7 +441,9 @@
         const cacheColori = leggiJSON(K_COLORI);
         if (cacheColori && cacheColori.linee) coloriLinee = cacheColori.linee;
       }
+      aggiornaAvvio('Preparo la mappa…');
     } catch (errore) {
+      registraErrore('dati', errore && errore.message, errore && errore.stack);
       const cacheFermate = leggiJSON(K_FERMATE);
       const cacheLinee = leggiJSON(K_LINEE);
       const cacheColori = leggiJSON(K_COLORI);
@@ -415,6 +549,7 @@
     if (!window.maplibregl) {
       elemento.classList.add('senza-mappa');
       elemento.innerHTML = '<p>Mappa non disponibile offline: la ricerca fermate funziona lo stesso.</p>';
+      chiudiAttesaMappa();
       return;
     }
     mappa = new maplibregl.Map({
@@ -461,6 +596,7 @@
     });
     ['mouseup', 'touchend', 'touchcancel', 'dragstart', 'zoomstart', 'movestart'].forEach((nome) => mappa.on(nome, fermaPressione));
     mappa.on('load', () => {
+      chiudiAttesaMappa();
       aggiungiLivelliPercorso();
       aggiornaMarker();
       inquadra(false);
@@ -500,7 +636,7 @@
     // In orizzontale i 205 px fissi in alto più la copertura del pannello
     // superavano l'altezza dello schermo e fitBounds perdeva il viaggio.
     const sopra = Math.min(205, Math.round(window.innerHeight * 0.24));
-    const durata = animato === false ? 0 : 600;
+    const durata = animato === false ? 0 : durataMovimento(600);
     if (punti.length === 2) {
       const limiti = new maplibregl.LngLatBounds();
       punti.forEach((punto) => limiti.extend(punto));
@@ -1055,7 +1191,7 @@
     if (piediInCorso.has(chiave) || piediFalliti.has(chiave) || piediCaricati().has(chiave)) return;
     piediInCorso.add(chiave);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 9000);
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_OSRM);
     fetch(Piedi.url(da, a) + '?overview=full&geometries=geojson&steps=false', { signal: controller.signal })
       .then((risposta) => (risposta.ok ? risposta.json() : null))
       .then((dati) => {
@@ -1479,7 +1615,7 @@
     navigazione.ultimoVolo = 0;
     aggiornaNavFollow();
     if (navigazione.ultima && mappa) {
-      mappa.easeTo({ center: [navigazione.ultima.lon, navigazione.ultima.lat], zoom: NAV_ZOOM, duration: 600 });
+      mappa.easeTo({ center: [navigazione.ultima.lon, navigazione.ultima.lat], zoom: NAV_ZOOM, duration: durataMovimento(600) });
       navigazione.inquadrato = true;
       navigazione.ultimoVolo = Date.now();
     }
@@ -1829,7 +1965,10 @@
       // bounded=1: senza, il viewbox è solo un suggerimento e la ricerca
       // restituiva anche un "Mercato" di Napoli con la sua zona.
       '&viewbox=11.20,44.62,11.50,44.34&bounded=1&q=' + encodeURIComponent(testo);
-    const risposta = await fetch(url, { signal: indirizziAbort.signal, headers: { Accept: 'application/json' } });
+    const risposta = await fetch(url, {
+      signal: segnaleConTimeout(indirizziAbort.signal, TIMEOUT_NOMINATIM),
+      headers: { Accept: 'application/json' }
+    });
     if (!risposta.ok) throw new Error('Nominatim: ' + risposta.status);
     const elenco = await risposta.json();
     if (!Array.isArray(elenco)) return [];
@@ -1991,6 +2130,9 @@
   // Le fermate si salvano per id, gli indirizzi per coordinate (l'id è finto).
   function luogoSalvato(luogo) {
     if (!luogo) return null;
+    // Le coordinate del GPS non si salvano: si salvano solo fermate, indirizzi
+    // e punti scelti a mano (privacy, come da vincoli).
+    if (luogo.gps) return null;
     return {
       id: luogo.id, nome: luogo.nome, indirizzo: luogo.indirizzo || '',
       lat: luogo.lat, lon: luogo.lon, zona: luogo.zona, tipo: luogo.tipo,
@@ -2081,6 +2223,113 @@
       '</div></div>';
   }
 
+  /* ------------------------------------------------------------------ *
+   * Inviti: installazione, prima apertura, tratta di ieri
+   * ------------------------------------------------------------------ */
+  let usiApp = 0;
+
+  function contaUso() {
+    usiApp = (parseInt(leggi(K_USI), 10) || 0) + 1;
+    scrivi(K_USI, String(usiApp));
+  }
+
+  function appInstallata() {
+    return !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+      navigator.standalone === true;
+  }
+
+  function sistemaIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent);
+  }
+
+  // Invito discreto dentro il pannello: niente banner a tutta larghezza.
+  function invitoInstallazioneHTML() {
+    const visto = leggi(K_INSTALL_VISTO) === '1';
+    if (!Utilita.deveMostrareInvito(usiApp, visto, appInstallata())) return '';
+    const ios = sistemaIOS();
+    return '<div class="invito-installa">' +
+      '<span class="invito-testo">Installa Muovi Bologna sulla home' +
+      (ios ? '<span class="voce-motivo">Safari → Condividi → Aggiungi a Home</span>' : '') + '</span>' +
+      (ios ? '' : '<button type="button" class="btn btn-tenue" data-azione="installa-app">Installa</button>') +
+      '<button type="button" class="icona" data-azione="chiudi-invito" aria-label="Non ora">' + ICONA_X + '</button>' +
+      '</div>';
+  }
+
+  // L'ultima destinazione scelta serve al chip "Di nuovo a …?".
+  function ultimaDestinazione() {
+    const salvata = leggiJSON(K_ULTIMA);
+    if (!salvata) return null;
+    return luogoRipristinato(salvata);
+  }
+
+  // Stato vuoto con azioni: tre chip che riempiono la ricerca in un tocco.
+  function bloccoVuotoHTML() {
+    if (sel.partenza && sel.destinazione) return '';
+    const bentornato = ultimaDestinazione();
+    let html = '<div class="vuoto-block">';
+    if (bentornato && !sel.destinazione) {
+      html += '<button type="button" class="bentornato" data-azione="riprendi-ultima">' +
+        '<span>Di nuovo a ' + esc(nomeBreve(bentornato.nome)) + '?</span>' + ICONA_CHEVRON + '</button>';
+    }
+    html += '<p class="vuoto-testo">Dove vuoi andare?</p><div>' +
+      '<button type="button" class="chip-vuoto" data-azione="chip-cerca" data-testo="Piazza Maggiore">Piazza Maggiore</button>' +
+      '<button type="button" class="chip-vuoto" data-azione="chip-cerca" data-testo="Stazione Centrale">Stazione Centrale</button>' +
+      '<button type="button" class="chip-vuoto" data-azione="usa-posizione">La mia posizione</button>' +
+      '</div></div>';
+    return html;
+  }
+
+  // Onboarding: tre slide, una volta sola, con Salta sempre disponibile.
+  const onboarding = { slide: 0 };
+
+  function mostraOnboarding() {
+    if (leggi(K_ONBOARDING) === '1') return;
+    const schermo = $('onboarding');
+    if (!schermo) return;
+    onboarding.slide = 0;
+    schermo.hidden = false;
+    aggiornaOnboarding();
+  }
+
+  function aggiornaOnboarding() {
+    const slide = document.querySelectorAll('.ob-slide');
+    Array.prototype.forEach.call(slide, (el, indice) => { el.hidden = indice !== onboarding.slide; });
+    const punti = document.querySelectorAll('.ob-punto');
+    Array.prototype.forEach.call(punti, (el, indice) => el.classList.toggle('attivo', indice === onboarding.slide));
+    const avanti = $('ob-avanti');
+    if (avanti) avanti.textContent = onboarding.slide >= slide.length - 1 ? 'Inizia' : 'Avanti';
+  }
+
+  function chiudiOnboarding() {
+    const schermo = $('onboarding');
+    if (schermo) schermo.hidden = true;
+    scrivi(K_ONBOARDING, '1');
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Tasto indietro del browser: chiude un livello invece di uscire
+   * ------------------------------------------------------------------ */
+  let statoPercorsoInStoria = false;
+
+  function segnalaStoriaPercorso() {
+    if (statoPercorsoInStoria || !window.history || !history.pushState) return;
+    try {
+      history.pushState({ muovi: 'percorso' }, '');
+      statoPercorsoInStoria = true;
+    } catch (errore) { /* Safari vecchio: si resta senza voce */ }
+  }
+
+  // Un livello per volta: overlay, menu, dettaglio, metà, poi il percorso.
+  function indietroBrowser() {
+    if ($('onboarding') && !$('onboarding').hidden) { chiudiOnboarding(); return; }
+    if (!$('cerca').hidden) { chiudiOverlay(); return; }
+    if ($('drawer').classList.contains('aperto')) { chiudiMenu(); return; }
+    if (statoSheet === 'piena') { impostaSheet('meta'); return; }
+    if (statoSheet === 'meta' && (sel.partenza || sel.destinazione)) { impostaSheet('peek'); return; }
+    if (sel.destinazione) { azzeraNavigazione(); return; }
+    if (miniFermata) chiudiMini();
+  }
+
   // Unica sorgente del pannello: campi, data/ora e risultato.
   function renderPercorso() {
     const vista = $('vista-percorso');
@@ -2097,6 +2346,8 @@
         : '') +
       '</div>' +
       (quandoAperto ? pannelloQuandoHTML() : '') +
+      (tratta ? '' : bloccoVuotoHTML()) +
+      invitoInstallazioneHTML() +
       (tratta ? '' : '<button type="button" class="btn btn-primario" data-azione="cerca">Cerca percorso</button>') +
       '<div id="vista-risultato"></div>';
     collegaCampi();
@@ -2177,7 +2428,7 @@
     return (e.tappe || []).map((tappa) => {
       const treno = tappa.tipo === 1 || tappa.tipo === 2;
       const stile = !treno && tappa.colore
-        ? ' style="background:' + esc(tappa.colore) + ';color:' + esc(tappa.coloreTesto || '#FFFFFF') + '"'
+        ? ' style="background:' + esc(tappa.colore) + ';color:' + esc(Utilita.testoSuColore(tappa.colore, tappa.coloreTesto)) + '"'
         : '';
       return '<span class="linea' + (treno ? ' treno' : '') + '"' + stile + '>' + esc(tappa.linea) + '</span>';
     }).join('');
@@ -3299,6 +3550,12 @@
         routing.opzionePiedi = risultato.piedi || null;
         routing.suggerimento = null;
         routing.avvisoRitardo = '';
+        // Ultima destinazione e voce di storia: la prima serve al chip
+        // "Di nuovo a …?", la seconda al tasto indietro del telefono.
+        if (sel.destinazione && !sel.destinazione.gps) {
+          scrivi(K_ULTIMA, JSON.stringify(luogoSalvato(sel.destinazione)));
+        }
+        segnalaStoriaPercorso();
         // Le geometrie arrivano dopo il calcolo: appena pronte il tracciato
         // viene ridisegnato con il percorso reale della linea.
         if (typeof TPERRouting !== 'undefined' && TPERRouting.caricaTracciati) {
@@ -3841,7 +4098,7 @@
       const tempo = Math.max(0, minuti) + '<span class="unita">min</span>';
       const voce = coloreLinea(arrivo.linea);
       const colore = voce
-        ? ' style="background:' + esc(voce[0]) + ';color:' + esc(voce[1] || '#FFFFFF') + '"'
+        ? ' style="background:' + esc(voce[0]) + ';color:' + esc(Utilita.testoSuColore(voce[0], voce[1])) + '"'
         : '';
       const aperto = live.aperto === indice;
       const attivo = !!(live.avvisa && live.avvisa.linea === arrivo.linea && live.avvisa.ora === arrivo.ora);
@@ -3932,7 +4189,7 @@
     const riga = (p, passato) => {
       const voce = coloreLinea(p.linea);
       const colore = voce
-        ? ' style="background:' + esc(voce[0]) + ';color:' + esc(voce[1] || '#FFFFFF') + '"'
+        ? ' style="background:' + esc(voce[0]) + ';color:' + esc(Utilita.testoSuColore(voce[0], voce[1])) + '"'
         : '';
       // Il motore conosce solo gli id delle fermate: il nome del capolinea
       // arriva dall'elenco fermate dell'app.
@@ -4398,9 +4655,31 @@
       '<p>App non ufficiale, non affiliata a TPER.</p>';
   }
 
+  function renderLogErrori() {
+    const box = $('log-errori');
+    if (!box) return;
+    const elenco = leggiJSON(K_ERRORI) || [];
+    if (!elenco.length) {
+      box.innerHTML = '<p>Nessun errore registrato.</p>';
+      return;
+    }
+    box.innerHTML = elenco.slice(0, 10).map((voce) => {
+      const quando = new Date(voce.ts || Date.now()).toLocaleString('it-IT');
+      return '<div class="voce-log"><b>' + esc(voce.tipo || 'errore') + '</b> · ' + esc(quando) +
+        '<br>' + esc(voce.messaggio || '') + '</div>';
+    }).join('') + '<button type="button" class="link-mini" data-azione="cancella-log">Cancella il log</button>';
+  }
+
   function sincronizzaMenu() {
     const check = $('menu-abbonamento');
     if (check) check.checked = abbonamento;
+    const voceErrori = $('menu-errori');
+    if (voceErrori) {
+      const quanti = (leggiJSON(K_ERRORI) || []).length;
+      voceErrori.hidden = quanti === 0;
+      const conteggio = $('menu-errori-conteggio');
+      if (conteggio) conteggio.textContent = quanti ? String(quanti) : '';
+    }
     const recente = $('menu-recente');
     const vuoto = $('menu-recente-vuoto');
     if (recente && vuoto) {
@@ -4467,7 +4746,14 @@
     navigator.geolocation.getCurrentPosition((posizione) => {
       mostraPosizioneUtente(posizione);
       const vicine = senzaDoppioni(fermateVicine(posizione.coords.latitude, posizione.coords.longitude, 8)).slice(0, 6);
-      if (mappa) mappa.flyTo({ center: [posizione.coords.longitude, posizione.coords.latitude], zoom: 15, offset: [0, -120] });
+      if (mappa) {
+        mappa.flyTo({
+          center: [posizione.coords.longitude, posizione.coords.latitude],
+          zoom: 15,
+          offset: [0, -120],
+          duration: durataMovimento(900)
+        });
+      }
       mostraVista('percorso');
       impostaSheet('meta');
       renderPercorso();
@@ -4551,6 +4837,21 @@
     $('btn-menu').addEventListener('click', apriMenu);
     $('drawer-chiudi').addEventListener('click', chiudiMenu);
     $('drawer-velo').addEventListener('click', chiudiMenu);
+    // ---- Prima apertura e tasto indietro ----
+    $('ob-avanti').addEventListener('click', () => {
+      const ultima = document.querySelectorAll('.ob-slide').length - 1;
+      if (onboarding.slide >= ultima) { chiudiOnboarding(); return; }
+      onboarding.slide += 1;
+      aggiornaOnboarding();
+    });
+    $('ob-salta').addEventListener('click', chiudiOnboarding);
+    window.addEventListener('popstate', indietroBrowser);
+    $('menu-errori').addEventListener('click', () => {
+      const box = $('log-errori');
+      if (!box) return;
+      box.hidden = !box.hidden;
+      if (!box.hidden) renderLogErrori();
+    });
     $('btn-geo').addEventListener('click', vaiVicino);
     $('btn-inquadra').addEventListener('click', () => {
       if (routing.stato === 'ok' && ultimeFeatures.length) inquadraPercorso(400);
@@ -4611,6 +4912,11 @@
         live.items = []; live.ts = 0; live.stato = 'idle';
         mostraToast(valore ? 'Relay salvato' : 'Relay predefinito ripristinato');
         caricaLive(true);
+      }
+      if (azione === 'cancella-log') {
+        localStorage.removeItem(K_ERRORI);
+        renderLogErrori();
+        sincronizzaMenu();
       }
       if (azione === 'azzera-proxy') {
         localStorage.removeItem(K_PROXY);
@@ -4712,7 +5018,8 @@
           zona: vicina ? vicina.zona : '500',
           tipo: 'indirizzo',
           genere: 'indirizzo',
-          categoria: 'Posizione attuale'
+          categoria: 'Posizione attuale',
+          gps: true
         });
         return;
       }
@@ -4802,6 +5109,30 @@
           else { routing.chiave = null; impostaSheet('meta'); calcolaPercorso(); }
         }
         if (azione === 'dettagli') impostaSheet('piena');
+        if (azione === 'chiudi-invito') {
+          scrivi(K_INSTALL_VISTO, '1');
+          renderPercorso();
+        }
+        if (azione === 'installa-app') {
+          scrivi(K_INSTALL_VISTO, '1');
+          if (window.installaApp) window.installaApp();
+          renderPercorso();
+        }
+        if (azione === 'chip-cerca') {
+          const testo = pulsante.getAttribute('data-testo') || '';
+          apriCerca('destinazione');
+          const input = $('cerca-input');
+          if (input) {
+            input.value = testo;
+            aggiornaPulisci();
+            apriSuggerimenti('destinazione', testo);
+          }
+        }
+        if (azione === 'usa-posizione') vaiVicino();
+        if (azione === 'riprendi-ultima') {
+          const ultima = ultimaDestinazione();
+          if (ultima) selezionaFermata('destinazione', ultima);
+        }
         if (azione === 'altre') {
           alternativeAperte = !alternativeAperte;
           if (alternativeAperte) impostaSheet('piena');
@@ -4873,7 +5204,7 @@
               mappa.easeTo({
                 center: gruppo.geometry.coordinates,
                 zoom: Math.min(18, zoom + 0.2),
-                duration: 450
+                duration: durataMovimento(450)
               });
             }).catch(() => { /* resta lo zoom attuale */ });
           }
@@ -4930,21 +5261,45 @@
       else if (vistaAttiva === 'percorso' && routing.stato !== 'idle') disegnaPercorso();
     });
 
-    window.addEventListener('offline', () => { $('pill-offline').hidden = false; });
-    window.addEventListener('online', () => { $('pill-offline').hidden = true; });
-    $('pill-offline').hidden = navigator.onLine !== false;
+    // ---- Offline / di nuovo online: una pillola, due secondi ----
+    const pillola = $('pill-offline');
+    if (pillola) {
+      pillola.textContent = 'Offline';
+      pillola.hidden = navigator.onLine !== false;
+      window.addEventListener('offline', () => {
+        pillola.textContent = 'Offline';
+        pillola.hidden = false;
+      });
+      window.addEventListener('online', () => {
+        pillola.textContent = 'Di nuovo online';
+        pillola.hidden = false;
+        clearTimeout(collegaEventi._pillola);
+        collegaEventi._pillola = setTimeout(() => {
+          pillola.hidden = true;
+          pillola.textContent = 'Offline';
+        }, 2000);
+      });
+    }
   }
 
   /* ------------------------------------------------------------------ *
    * Avvio
    * ------------------------------------------------------------------ */
   async function avvia() {
+    // Spazio, errori e conteggio degli usi vanno sistemati prima di tutto:
+    // la pulizia deve avvenire quando le cache sono ancora scrivibili.
+    pulisciCacheSeNecessario();
+    contaUso();
+    collegaErrori();
     initMappa();
     collegaEventi();
     avviaOrologio();
     gestisciInstallazione();
     registraServiceWorker();
     disposizioneIniziale();
+    // Se lo stile della mappa non arriva, il segnaposto non resta per sempre.
+    setTimeout(chiudiAttesaMappa, 2500);
+    setTimeout(chiudiAvvio, 6000);
     await caricaDati();
     ripristinaTratta();
     aggiornaFermateMappa();
@@ -4958,6 +5313,8 @@
     if (mappa) mappa.resize();
     if (sel.partenza || sel.destinazione) inquadra(false);
     else if (mappa) mappa.jumpTo({ center: [11.3426, 44.4949], zoom: 13 });
+    chiudiAvvio();
+    mostraOnboarding();
   }
 
   // Con la tastiera chiusa i campi sono già leggibili senza aprire il pannello:

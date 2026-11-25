@@ -11,6 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Muovi Bologna">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://*.tper.it https://*.workers.dev https://api.allorigins.win https://routing.openstreetmap.de https://nominatim.openstreetmap.org https://tiles.openfreemap.org; img-src 'self' data: blob: https://tiles.openfreemap.org; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; worker-src 'self' blob:; child-src 'self' blob:; base-uri 'self'; form-action 'self'">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
@@ -377,6 +378,43 @@
   .b-conviene b{font-weight:600;}
   .spunta-abb{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--rosso);color:#fff;vertical-align:middle;margin-left:8px;}
 
+  /* ---------- Avvio, mappa in attesa, onboarding ---------- */
+  .avvio{position:fixed;inset:0;z-index:2000;background:var(--sup);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:opacity .25s ease;}
+  .avvio.fuori{opacity:0;pointer-events:none;}
+  .avvio img{width:64px;height:64px;border-radius:16px;}
+  .avvio-titolo{font-size:18px;font-weight:700;letter-spacing:-.3px;margin:6px 0 0;}
+  .avvio-stato{font-size:13px;color:var(--testo-2);margin:0;}
+
+  .mappa-attesa{position:fixed;inset:0;background:#EFEFEF;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--testo-2);font-size:13px;transition:opacity .3s ease;z-index:1;}
+  .mappa-attesa.fuori{opacity:0;pointer-events:none;}
+  .mappa-attesa img{width:48px;height:48px;opacity:.45;}
+
+  .onboarding{position:fixed;inset:0;z-index:1900;background:rgba(255,255,255,.98);display:flex;flex-direction:column;padding:calc(24px + env(safe-area-inset-top,0px)) 20px calc(20px + env(safe-area-inset-bottom,0px));}
+  .onboarding[hidden]{display:none;}
+  .ob-slide{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:12px;max-width:420px;margin:0 auto;width:100%;}
+  .ob-slide[hidden]{display:none;}
+  .ob-ico{width:56px;height:56px;border-radius:16px;background:#F4F4F4;display:flex;align-items:center;justify-content:center;color:var(--testo);}
+  .ob-num{font-size:12px;font-weight:700;color:var(--rosso);letter-spacing:.6px;}
+  .ob-titolo{font-size:26px;font-weight:800;letter-spacing:-.7px;line-height:1.15;margin:0;}
+  .ob-testo{font-size:14px;color:var(--testo-2);margin:0;line-height:1.5;}
+  .onboarding-piede{display:flex;align-items:center;justify-content:space-between;gap:10px;max-width:420px;margin:0 auto;width:100%;}
+  .ob-punti{display:flex;gap:6px;}
+  .ob-punto{width:7px;height:7px;border-radius:50%;background:var(--bordo-2);}
+  .ob-punto.attivo{background:var(--rosso);}
+
+  /* ---------- Inviti e stati vuoti ---------- */
+  .vuoto-block{display:flex;flex-direction:column;gap:8px;padding:4px 0;}
+  .vuoto-testo{font-size:13px;color:var(--testo-2);margin:0;}
+  .chip-vuoto{display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:0 14px;border:1px solid var(--bordo);border-radius:999px;background:var(--sup);font-size:13px;font-weight:600;color:var(--testo);cursor:pointer;margin:0 6px 6px 0;}
+  .chip-vuoto:active{background:#F4F4F4;}
+  .invito-installa{display:flex;align-items:center;gap:10px;border:1px solid var(--bordo);border-radius:var(--r-card);padding:10px 12px;margin-top:4px;}
+  .invito-testo{flex:1;min-width:0;font-size:13px;font-weight:600;display:flex;flex-direction:column;gap:2px;}
+  .invito-installa .btn{min-height:38px;padding:0 12px;}
+  .bentornato{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--bordo);border-radius:var(--r-card);padding:10px 12px;background:var(--sup);font-size:13px;font-weight:600;text-align:left;cursor:pointer;}
+  .bentornato span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .log-errori{display:flex;flex-direction:column;gap:8px;padding:0 16px 12px;font-size:11px;color:var(--testo-2);}
+  .log-errori .voce-log{border-top:1px solid var(--bordo);padding-top:6px;white-space:pre-wrap;overflow-wrap:anywhere;}
+
   /* Pallino del tempo reale: pulsa solo quando il dato è vero (non spento). */
   .stato-live .punto:not(.off){animation:pulsa 2s ease-out infinite;}
   .stato-live{align-items:center;}
@@ -387,7 +425,17 @@
 </style>
 </head>
 <body>
+<div class="avvio" id="avvio">
+  <img src="./icons/icon-192.svg" alt="" width="64" height="64">
+  <p class="avvio-titolo">Muovi Bologna</p>
+  <p class="avvio-stato" id="avvio-stato" role="status" aria-live="polite">Carico le fermate…</p>
+</div>
+
 <div id="mappa" role="region" aria-label="Mappa delle fermate"></div>
+<div class="mappa-attesa" id="mappa-attesa" aria-hidden="true">
+  <img src="./icons/icon-192.svg" alt="" width="48" height="48">
+  <span>Preparo la mappa…</span>
+</div>
 
 <header class="barra" id="barra">
   <button class="icona" id="btn-menu" aria-label="Apri il menu" aria-expanded="false" aria-controls="drawer">
@@ -454,6 +502,34 @@
   <button type="button" class="btn btn-primario" data-azione="ferma-navigazione">Termina</button>
 </div>
 
+<div class="onboarding" id="onboarding" hidden role="dialog" aria-modal="true" aria-label="Come funziona Muovi Bologna">
+  <div class="ob-slide" data-slide="0">
+    <span class="ob-ico" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg></span>
+    <span class="ob-num">1 di 3</span>
+    <h2 class="ob-titolo">Cerca una fermata o un indirizzo</h2>
+    <p class="ob-testo">Scrivi dove vai: l'app trova fermate, luoghi e indirizzi e calcola il percorso con i bus TPER.</p>
+  </div>
+  <div class="ob-slide" data-slide="1" hidden>
+    <span class="ob-ico" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg></span>
+    <span class="ob-num">2 di 3</span>
+    <h2 class="ob-titolo">Confronta le alternative e scegli</h2>
+    <p class="ob-testo">Tempi, prezzi e cambi di ogni soluzione: apri le alternative e prendi quella che ti conviene.</p>
+  </div>
+  <div class="ob-slide" data-slide="2" hidden>
+    <span class="ob-ico" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 22 2l-9 19-2-8-8-2Z"/></svg></span>
+    <span class="ob-num">3 di 3</span>
+    <h2 class="ob-titolo">Avvia la navigazione e ricevi avvisi</h2>
+    <p class="ob-testo">Con "Avvia" l'app ti segue passo per passo, ti dice dove scendere e tiene acceso il tempo reale.</p>
+  </div>
+  <div class="onboarding-piede">
+    <button type="button" class="btn btn-tenue" id="ob-salta">Salta</button>
+    <div class="ob-punti" aria-hidden="true">
+      <span class="ob-punto attivo"></span><span class="ob-punto"></span><span class="ob-punto"></span>
+    </div>
+    <button type="button" class="btn btn-primario" id="ob-avanti">Avanti</button>
+  </div>
+</div>
+
 <div class="velo" id="drawer-velo" hidden></div>
 <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Impostazioni" aria-hidden="true">
   <div class="drawer-testa">
@@ -478,6 +554,12 @@
       <span class="spazio">Mostra tutte le linee</span>
       <span class="interruttore"><input type="checkbox" id="menu-linee"><span class="binario"></span></span>
     </label>
+    <button class="voce-menu" id="menu-errori" hidden>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+      <span class="spazio">Log errori</span>
+      <span class="nota" id="menu-errori-conteggio"></span>
+    </button>
+    <div class="log-errori" id="log-errori" hidden></div>
     <div class="menu-sezione">Percorsi recenti</div>
     <button class="menu-recente" id="menu-recente" hidden></button>
     <p class="menu-sezione" id="menu-recente-vuoto">Nessun percorso ancora.</p>
@@ -514,6 +596,7 @@
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" defer></script>
+<script src="./utilita.js" defer></script>
 <script src="./routing.js" defer></script>
 <script src="./icone.js" defer></script>
 <script src="./vista-percorso.js" defer></script>

@@ -1,0 +1,10 @@
+{
+  "name": "muovi-bologna",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PWA dei trasporti pubblici di Bologna: percorsi, orari, zone e biglietto",
+  "scripts": {
+    "bump": "node scripts/bump-cache.js",
+    "test": "node --test tests"
+  }
+}

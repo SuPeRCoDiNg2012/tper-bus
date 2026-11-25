@@ -3,13 +3,14 @@
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'muovi-bologna-static-v73';
-const CACHE_DATI = 'muovi-bologna-data-v73';
+const CACHE_STATICA = 'muovi-bologna-static-v74';
+const CACHE_DATI = 'muovi-bologna-data-v74';
 
 const ASSET_STATICI = [
   './',
   './index.html',
   './app.js',
+  './utilita.js',
   './routing.js',
   './icone.js',
   './vista-percorso.js',
@@ -90,7 +91,7 @@ self.addEventListener('fetch', (event) => {
 
   // Network-first per l'app (così un aggiornamento si vede al primo ricaricamento),
   // con la copia in cache come fallback offline.
-  const isApp = url.pathname.endsWith('/') || url.pathname.endsWith('/index.html') || url.pathname.endsWith('/app.js') || url.pathname.endsWith('/routing.js') || url.pathname.endsWith('/vista-percorso.js');
+  const isApp = url.pathname.endsWith('/') || url.pathname.endsWith('/index.html') || url.pathname.endsWith('/app.js') || url.pathname.endsWith('/routing.js') || url.pathname.endsWith('/utilita.js') || url.pathname.endsWith('/vista-percorso.js');
   if (isApp) {
     event.respondWith(
       // no-cache rivalida sempre: il network-first non basta se il browser
