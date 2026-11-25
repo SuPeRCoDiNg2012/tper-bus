@@ -3,8 +3,8 @@
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'muovi-bologna-static-v93';
-const CACHE_DATI = 'muovi-bologna-data-v93';
+const CACHE_STATICA = 'muovi-bologna-static-v96';
+const CACHE_DATI = 'muovi-bologna-data-v96';
 
 const ASSET_STATICI = [
   './',
@@ -36,13 +36,29 @@ const ASSET_DATI = [
   './data/tracciati.json.gz'
 ];
 
+// Le cache si accumulavano una per versione finché nessuno premeva "Aggiorna":
+// qui si tengono solo la versione scaricata e quella ancora in uso.
+function versioneCache(nome) {
+  const trovata = String(nome).match(/-v(\d+)$/);
+  return trovata ? Number(trovata[1]) : 0;
+}
+
+function pulisciCacheVecchie() {
+  const attuale = versioneCache(CACHE_STATICA);
+  return caches.keys().then((nomi) => Promise.all(
+    nomi
+      .filter((n) => versioneCache(n) && versioneCache(n) < attuale - 1)
+      .map((n) => caches.delete(n))
+  ));
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     // cache: 'reload' salta la cache HTTP del browser: senza, una nuova
     // versione del service worker poteva installare i file vecchi.
     caches.open(CACHE_STATICA).then((cache) =>
       cache.addAll(ASSET_STATICI.map((url) => new Request(url, { cache: 'reload' })))
-    )
+    ).then(pulisciCacheVecchie)
   );
   // La nuova versione resta in attesa finché l'utente non tocca "Aggiorna":
   // così si evita di servire metà app vecchia e metà nuova.
@@ -91,7 +107,13 @@ self.addEventListener('fetch', (event) => {
 
   // Network-first per l'app (così un aggiornamento si vede al primo ricaricamento),
   // con la copia in cache come fallback offline.
-  const isApp = url.pathname.endsWith('/') || url.pathname.endsWith('/index.html') || url.pathname.endsWith('/app.js') || url.pathname.endsWith('/routing.js') || url.pathname.endsWith('/utilita.js') || url.pathname.endsWith('/vista-percorso.js');
+  // Tutti i moduli dell'app vanno in network-first: se uno solo restasse
+  // cache-first, un aggiornamento darebbe app.js nuovo con icone.js vecchio.
+  const isApp = url.pathname.endsWith('/') || url.pathname.endsWith('/index.html') ||
+    url.pathname.endsWith('/app.js') || url.pathname.endsWith('/routing.js') ||
+    url.pathname.endsWith('/utilita.js') || url.pathname.endsWith('/vista-percorso.js') ||
+    url.pathname.endsWith('/icone.js') || url.pathname.endsWith('/tariffe.js') ||
+    url.pathname.endsWith('/piedi.js') || url.pathname.endsWith('/manifest.json');
   if (isApp) {
     event.respondWith(
       // no-cache rivalida sempre: il network-first non basta se il browser
@@ -102,14 +124,24 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_STATICA).then((cache) => cache.put(event.request, copia)).catch(() => {});
           return rispostaRete;
         })
-        .catch(() => caches.match(event.request).then((r) => r || caches.match('./index.html')))
+        .catch(() => caches.open(CACHE_STATICA).then((cache) =>
+          cache.match(event.request).then((r) => r || cache.match('./index.html'))))
     );
     return;
   }
 
+  // Solo la cache della versione che sta servendo: caches.match() guarda in
+  // tutte, compresa quella appena installata dalla versione in attesa, e
+  // mescolerebbe file di due versioni diverse.
   event.respondWith(
-    caches.match(event.request).then((rispostaCache) => {
-      return rispostaCache || fetch(event.request).catch(() => caches.match('./index.html'));
-    })
+    caches.open(CACHE_STATICA).then((cache) =>
+      cache.match(event.request).then((rispostaCache) => {
+        if (rispostaCache) return rispostaCache;
+        if (event.request.mode === 'navigate') {
+          return cache.match('./index.html').then((r) => r || fetch(event.request));
+        }
+        return fetch(event.request);
+      })
+    )
   );
 });
