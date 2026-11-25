@@ -157,7 +157,9 @@
   const ICONA_ACCESSIBILITA = Icone.svg('accessibility', 16);
   const ICONA_REFRESH = Icone.svg('refresh-cw', 18);
   const ICONA_INFO = Icone.svg('info', 18);
-  const ICONA_CHEVRON = Icone.svg('chevron-right', 18, 'voce-freccia');
+  // Una voce di ricerca si sceglie e chiude la lista: il segno giusto è un più.
+  // Il chevron prometteva una schermata successiva che non esiste.
+  const ICONA_PIU = Icone.svg('plus', 18, 'voce-piu');
   const ICONA_PIEDANA = Icone.svg('footprints', 20);
   const ICONA_OROLOGIO = Icone.svg('clock', 16);
   const ICONA_SCAMBIA = Icone.svg('arrow-up-down', 18);
@@ -2066,16 +2068,47 @@
     return '';
   }
 
-  function voceHTML(f, ruolo, motivo, rimuovi) {
+  // Il comune davanti al nome è lo stesso per metà lista e mangia lo spazio
+  // utile: si toglie dal nome della maggioranza dei risultati, e resta intero
+  // sulle righe di comuni diversi, che altrimenti non si distinguerebbero.
+  function prefissoComune(nome) {
+    const i = String(nome).indexOf(' - ');
+    return i > 0 ? String(nome).slice(0, i) : '';
+  }
+
+  function nomiCompatti(items) {
+    const conta = new Map();
+    items.forEach((f) => {
+      const p = prefissoComune(f.nome);
+      if (p) conta.set(p, (conta.get(p) || 0) + 1);
+    });
+    let dominante = '';
+    let massimo = 0;
+    conta.forEach((quante, comune) => {
+      if (quante > massimo || (quante === massimo && comune < dominante)) { massimo = quante; dominante = comune; }
+    });
+    const mappa = new Map();
+    items.forEach((f) => {
+      const p = prefissoComune(f.nome);
+      // Con una sola fermata del comune non c'è ripetizione da togliere.
+      const compatto = massimo > 1 && p === dominante;
+      mappa.set(f.id, compatto ? f.nome.slice(p.length + 3) : f.nome);
+    });
+    return mappa;
+  }
+
+  function voceHTML(f, ruolo, motivo, rimuovi, nome) {
     const classe = classeTipo(f.tipo);
+    const mostrato = nome || f.nome;
     const bottone = '<button class="voce" role="option" data-voce="' + esc(f.id) + '" data-ruolo="' + esc(ruolo) + '">' +
       '<span class="voce-ico ' + classe + '">' + iconaTipo(f.tipo) + '</span>' +
-      '<span class="voce-testo"><span class="voce-nome">' + esc(f.nome) + '</span>' +
+      '<span class="voce-testo"><span class="voce-nome"' +
+      (mostrato === f.nome ? '' : ' title="' + esc(f.nome) + '"') + '>' + esc(mostrato) + '</span>' +
       (f.indirizzo ? '<span class="voce-indirizzo">' + esc(f.indirizzo) + '</span>' : '') +
       '<span class="voce-meta">' + esc(metaFermata(f)) + '</span>' +
       (motivo ? '<span class="voce-motivo">' + esc(motivo) + '</span>' : '') +
       '</span>' +
-      (rimuovi ? '' : ICONA_CHEVRON) +
+      (rimuovi ? '' : ICONA_PIU) +
       '</button>';
     if (!rimuovi) return bottone;
     // Niente bottoni dentro bottoni: la X dei recenti è un fratello della voce.
@@ -2163,7 +2196,7 @@
       '<span class="voce-testo"><span class="voce-nome">' + esc(luogo.nome) + '</span>' +
       (luogo.indirizzo ? '<span class="voce-indirizzo">' + esc(luogo.indirizzo) + '</span>' : '') +
       '<span class="voce-meta">' + esc(categoria) + ' · zona ' + esc(luogo.zona) + '</span></span>' +
-      ICONA_CHEVRON +
+      ICONA_PIU +
       '</button>';
   }
 
@@ -2194,7 +2227,7 @@
       html += '<button class="voce" role="option" data-posizione="1" data-ruolo="partenza">' +
         '<span class="voce-ico geo">' + ICONA_MIRINO + '</span>' +
         '<span class="voce-testo"><span class="voce-nome">La mia posizione attuale</span>' +
-        '<span class="voce-motivo">GPS · coordinate esatte</span></span>' + ICONA_CHEVRON + '</button>';
+        '<span class="voce-motivo">GPS · coordinate esatte</span></span>' + ICONA_PIU + '</button>';
     }
     html += suggerimenti.gruppi.map((gruppo) => {
       const recenti = gruppo.titolo === 'Recenti';
@@ -2204,8 +2237,9 @@
           '<button type="button" class="link-mini" data-azione="modifica-recenti">' +
           (modifica ? 'Fine' : 'Modifica') + '</button></div>'
         : '<div class="gruppo-titolo">' + esc(gruppo.titolo) + '</div>';
+      const nomi = nomiCompatti(gruppo.items);
       return testa + gruppo.items.map((f, indice) =>
-        voceHTML(f, campo, motivoVoce(f, gruppo.titolo, indice), modifica)
+        voceHTML(f, campo, motivoVoce(f, gruppo.titolo, indice), modifica, nomi.get(f.id))
       ).join('');
     }).join('');
     const luoghi = suggerimenti.indirizzi.filter((luogo) => luogo.genere === 'luogo');
@@ -2557,7 +2591,7 @@
     let html = '<div class="vuoto-block">';
     if (bentornato && !sel.destinazione) {
       html += '<button type="button" class="bentornato" data-azione="riprendi-ultima">' +
-        '<span>Di nuovo a ' + esc(nomeBreve(bentornato.nome)) + '?</span>' + ICONA_CHEVRON + '</button>';
+        '<span>Di nuovo a ' + esc(nomeBreve(bentornato.nome)) + '?</span>' + ICONA_PIU + '</button>';
     }
     html += '<p class="vuoto-testo">Dove vuoi andare?</p><div>' +
       '<button type="button" class="chip-vuoto" data-azione="chip-cerca" data-testo="Piazza Maggiore">Piazza Maggiore</button>' +
@@ -2941,8 +2975,9 @@
     }
     if (!elenco.length) return '';
     const titolo = sel.partenza && sel.partenza.lat != null ? 'Vicine a ' + nomeBreve(sel.partenza.nome) : 'Fermate vicine';
+    const nomi = nomiCompatti(elenco);
     return '<div class="gruppo">' + esc(titolo) + '</div>' +
-      elenco.map((f) => voceHTML(f, 'destinazione')).join('');
+      elenco.map((f) => voceHTML(f, 'destinazione', '', false, nomi.get(f.id))).join('');
   }
 
   // Il pannello si ridisegna quando cambia la tariffa (abbonamento) o la scelta.
