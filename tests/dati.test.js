@@ -91,7 +91,19 @@ test('tracciati: corse allineate, forme e posizioni valide', () => {
   tracciati.corse.forEach((forma, indice) => {
     assert.ok(forma === -1 || (forma >= 0 && forma < tracciati.forme.length), 'forma fuori range alla corsa ' + indice);
   });
-  tracciati.forme.forEach((forma) => assert.ok(typeof forma === 'string' && forma.length > 0));
+  // Regola dichiarata: una forma inutilizzabile diventa assente (''), la corsa
+  // resta e la mappa disegna la retta tratteggiata. Le forme assenti non devono
+  // però diventare la norma: se crescono, la fonte ha un problema.
+  let assenti = 0;
+  tracciati.forme.forEach((forma, indice) => {
+    if (forma === '') {
+      assenti += 1;
+      assert.deepEqual(tracciati.posizioni[indice], [], 'forma assente ma con posizioni: ' + indice);
+      return;
+    }
+    assert.ok(typeof forma === 'string' && forma.length > 0);
+  });
+  assert.ok(assenti < tracciati.forme.length / 20, 'troppe forme assenti: ' + assenti);
   tracciati.posizioni.forEach((tabella, indice) => {
     assert.equal(tabella.length % 2, 0, 'tabella posizioni dispari: ' + indice);
     let ultimo = -1;

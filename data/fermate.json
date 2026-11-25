@@ -1,5 +1,5 @@
 {
-  "aggiornato": "2026-11-23",
+  "aggiornato": "2026-11-25",
   "fonte": "Dataset ufficiale TPER (open data) convertito con converti-fermate-autobus.py; stazioni ferroviarie integrate manualmente",
   "fermate": [
     {
@@ -75,15 +75,6 @@
       "indirizzo": "Via Massafiscaglia 409"
     },
     {
-      "id": "604063",
-      "nome": "Alberone - Alberone",
-      "tipo": "bus",
-      "zona": "425",
-      "lat": 44.813875,
-      "lon": 11.312409,
-      "indirizzo": "Via Chiesa"
-    },
-    {
       "id": "620051",
       "nome": "Alberone - Alberone",
       "tipo": "bus",
@@ -100,6 +91,15 @@
       "lat": 44.963825,
       "lon": 11.836643,
       "indirizzo": "Piazza Zambonati 13"
+    },
+    {
+      "id": "604063",
+      "nome": "Alberone - Alberone",
+      "tipo": "bus",
+      "zona": "425",
+      "lat": 44.813875,
+      "lon": 11.312409,
+      "indirizzo": "Via Chiesa"
     },
     {
       "id": "620053",
@@ -3457,6 +3457,14 @@
       "indirizzo": "Via Muzza Spadetta 24"
     },
     {
+      "id": "TRN024",
+      "nome": "Bazzano - Stazione",
+      "tipo": "treno",
+      "zona": "558",
+      "lat": 44.5086013,
+      "lon": 11.0782074
+    },
+    {
       "id": "68505",
       "nome": "Bazzano - Z.i. Cassola Caseificio V",
       "tipo": "bus",
@@ -4994,12 +5002,20 @@
       "indirizzo": "Viale Aldini 190"
     },
     {
-      "id": "500221",
+      "id": "500222",
       "nome": "Bologna - Aldini Valeriani",
       "tipo": "bus",
       "zona": "500",
       "lat": 44.521757,
-      "lon": 11.348157
+      "lon": 11.348132
+    },
+    {
+      "id": "500221",
+      "nome": "Bologna - Aldini Valeriani",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.521756,
+      "lon": 11.348195
     },
     {
       "id": "3351",
@@ -5026,6 +5042,14 @@
       "zona": "500",
       "lat": 44.509506,
       "lon": 11.362007
+    },
+    {
+      "id": "500144",
+      "nome": "Bologna - Aldo Moro-regione-fiera",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.509524,
+      "lon": 11.36202
     },
     {
       "id": "1009",
@@ -5833,8 +5857,16 @@
       "nome": "Bologna - Bentini - Villa Torchi",
       "tipo": "bus",
       "zona": "500",
+      "lat": 44.542616,
+      "lon": 11.355982
+    },
+    {
+      "id": "500210",
+      "nome": "Bologna - Bentini - Villa Torchi",
+      "tipo": "bus",
+      "zona": "500",
       "lat": 44.542617,
-      "lon": 11.355969
+      "lon": 11.355957
     },
     {
       "id": "2205",
@@ -6251,6 +6283,14 @@
       "indirizzo": "Via Dell`angelo Custode Fr 17"
     },
     {
+      "id": "TRN012",
+      "nome": "Bologna - Borgo Panigale",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.5151514,
+      "lon": 11.2849781
+    },
+    {
       "id": "6037",
       "nome": "Bologna - Borgo Panigale - Museo Du",
       "tipo": "bus",
@@ -6570,8 +6610,16 @@
       "nome": "Bologna - Ca' dei Fiori",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.513682,
-      "lon": 11.347254
+      "lat": 44.513672,
+      "lon": 11.347291
+    },
+    {
+      "id": "500226",
+      "nome": "Bologna - Ca' dei Fiori",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.513683,
+      "lon": 11.347216
     },
     {
       "id": "8181",
@@ -7266,14 +7314,6 @@
       "indirizzo": "Via Dell`aeroporto Bv Entrata Caserma"
     },
     {
-      "id": "500219",
-      "nome": "Bologna - Caserme Rosse",
-      "tipo": "bus",
-      "zona": "500",
-      "lat": 44.524784,
-      "lon": 11.349361
-    },
-    {
       "id": "4021",
       "nome": "Bologna - Caserme Rosse",
       "tipo": "bus",
@@ -7290,6 +7330,22 @@
       "lat": 44.525992,
       "lon": 11.349724,
       "indirizzo": "Via Corticella 180"
+    },
+    {
+      "id": "500220",
+      "nome": "Bologna - Caserme Rosse",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.524784,
+      "lon": 11.349323
+    },
+    {
+      "id": "500219",
+      "nome": "Bologna - Caserme Rosse",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.524774,
+      "lon": 11.349373
     },
     {
       "id": "4024",
@@ -8111,14 +8167,6 @@
       "indirizzo": "Via Croara 3/5"
     },
     {
-      "id": "500217",
-      "nome": "Bologna - Croce Coperta",
-      "tipo": "bus",
-      "zona": "500",
-      "lat": 44.531473,
-      "lon": 11.353254
-    },
-    {
       "id": "4025",
       "nome": "Bologna - Croce Coperta",
       "tipo": "bus",
@@ -8135,6 +8183,22 @@
       "lat": 44.530451,
       "lon": 11.352206,
       "indirizzo": "Via Corticella 180/45"
+    },
+    {
+      "id": "500217",
+      "nome": "Bologna - Croce Coperta",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.531473,
+      "lon": 11.353254
+    },
+    {
+      "id": "500218",
+      "nome": "Bologna - Croce Coperta",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.531483,
+      "lon": 11.35323
     },
     {
       "id": "2301",
@@ -8574,7 +8638,7 @@
       "tipo": "bus",
       "zona": "500",
       "lat": 44.537971,
-      "lon": 11.356399
+      "lon": 11.356436
     },
     {
       "id": "4031",
@@ -8593,6 +8657,14 @@
       "lat": 44.539422,
       "lon": 11.356344,
       "indirizzo": "Via Corticella Pl 16544"
+    },
+    {
+      "id": "500214",
+      "nome": "Bologna - Don Fiammelli",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.537972,
+      "lon": 11.356386
     },
     {
       "id": "3320",
@@ -8707,8 +8779,16 @@
       "nome": "Bologna - Ducati",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.519222,
+      "lat": 44.519213,
       "lon": 11.270091
+    },
+    {
+      "id": "500106",
+      "nome": "Bologna - Ducati",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.51923,
+      "lon": 11.270104
     },
     {
       "id": "5705",
@@ -8805,8 +8885,24 @@
       "nome": "Bologna - Emilio Lepido",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.522945,
-      "lon": 11.261188
+      "lat": 44.522955,
+      "lon": 11.261138
+    },
+    {
+      "id": "500199",
+      "nome": "Bologna - Emilio Lepido",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.522955,
+      "lon": 11.261138
+    },
+    {
+      "id": "500102",
+      "nome": "Bologna - Emilio Lepido",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.522936,
+      "lon": 11.2612
     },
     {
       "id": "2493",
@@ -9044,7 +9140,7 @@
     },
     {
       "id": "99102",
-      "nome": "Bologna - Fiera Ingresso Eima",
+      "nome": "Bologna - Fiera Ingresso Nord",
       "tipo": "bus",
       "zona": "500",
       "lat": 44.514029,
@@ -9619,12 +9715,20 @@
       "indirizzo": "Via del Giacinto Fr 6"
     },
     {
+      "id": "500138",
+      "nome": "Bologna - Giacomo Matteotti - Stazi",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.507134,
+      "lon": 11.346072
+    },
+    {
       "id": "500137",
       "nome": "Bologna - Giacomo Matteotti - Stazi",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.507133,
-      "lon": 11.346123
+      "lat": 44.507124,
+      "lon": 11.346147
     },
     {
       "id": "2019",
@@ -9757,8 +9861,16 @@
       "nome": "Bologna - Gorki - Teatro Centofiori",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.546559,
-      "lon": 11.356431
+      "lat": 44.546613,
+      "lon": 11.356445
+    },
+    {
+      "id": "500208",
+      "nome": "Bologna - Gorki - Teatro Centofiori",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.546614,
+      "lon": 11.356395
     },
     {
       "id": "5101",
@@ -9850,6 +9962,14 @@
       "lon": 11.344336
     },
     {
+      "id": "500134",
+      "nome": "Bologna - Indipendenza - 8 Agosto",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.50086,
+      "lon": 11.344286
+    },
+    {
       "id": "397",
       "nome": "Bologna - Indipendenza Mille",
       "tipo": "bus",
@@ -9913,14 +10033,6 @@
       "indirizzo": "Via Larga P.L. 29-30"
     },
     {
-      "id": "500223",
-      "nome": "Bologna - Ippodromo",
-      "tipo": "bus",
-      "zona": "500",
-      "lat": 44.517695,
-      "lon": 11.347805
-    },
-    {
       "id": "4013",
       "nome": "Bologna - Ippodromo",
       "tipo": "bus",
@@ -9937,6 +10049,22 @@
       "lat": 44.518556,
       "lon": 11.347965,
       "indirizzo": "Via Corticella Fr 87"
+    },
+    {
+      "id": "500223",
+      "nome": "Bologna - Ippodromo",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.517685,
+      "lon": 11.347842
+    },
+    {
+      "id": "500224",
+      "nome": "Bologna - Ippodromo",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.517696,
+      "lon": 11.347729
     },
     {
       "id": "7213",
@@ -10465,8 +10593,16 @@
       "nome": "Bologna - Lipparini - Ca' Bura",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.54045,
-      "lon": 11.35626
+      "lat": 44.540449,
+      "lon": 11.356322
+    },
+    {
+      "id": "500212",
+      "nome": "Bologna - Lipparini - Ca' Bura",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.540442,
+      "lon": 11.356209
     },
     {
       "id": "51510",
@@ -10935,6 +11071,14 @@
       "indirizzo": "Via Matteotti 6"
     },
     {
+      "id": "TRN039",
+      "nome": "Bologna - Mazzini",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.4826161,
+      "lon": 11.3762573
+    },
+    {
       "id": "1018",
       "nome": "Bologna - Mazzini Stazione",
       "tipo": "bus",
@@ -11092,8 +11236,24 @@
       "nome": "Bologna - Michelino - Fiera Nord",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.511953,
-      "lon": 11.370774
+      "lat": 44.511972,
+      "lon": 11.370762
+    },
+    {
+      "id": "500148",
+      "nome": "Bologna - Michelino - Fiera Nord",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.511926,
+      "lon": 11.370773
+    },
+    {
+      "id": "500198",
+      "nome": "Bologna - Michelino - Fiera Nord",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.511981,
+      "lon": 11.370763
     },
     {
       "id": "7025",
@@ -11123,14 +11283,6 @@
       "indirizzo": "Via Milazzo"
     },
     {
-      "id": "500229",
-      "nome": "Bologna - Mille",
-      "tipo": "bus",
-      "zona": "500",
-      "lat": 44.501937,
-      "lon": 11.34097
-    },
-    {
       "id": "463",
       "nome": "Bologna - Mille",
       "tipo": "bus",
@@ -11149,6 +11301,22 @@
       "indirizzo": "Via dei Mille 19"
     },
     {
+      "id": "500229",
+      "nome": "Bologna - Mille",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.501919,
+      "lon": 11.340945
+    },
+    {
+      "id": "500230",
+      "nome": "Bologna - Mille",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.501964,
+      "lon": 11.340959
+    },
+    {
       "id": "473",
       "nome": "Bologna - Mille",
       "tipo": "bus",
@@ -11156,6 +11324,14 @@
       "lat": 44.501385,
       "lon": 11.343288,
       "indirizzo": "Via dei Mille 8/C"
+    },
+    {
+      "id": "500299",
+      "nome": "Bologna - Mille",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.501919,
+      "lon": 11.340932
     },
     {
       "id": "465",
@@ -12387,12 +12563,20 @@
       "indirizzo": "Piazza Dell`unita` 11"
     },
     {
+      "id": "500228",
+      "nome": "Bologna - Piazza Dell'Unita'",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.50964,
+      "lon": 11.346802
+    },
+    {
       "id": "500227",
       "nome": "Bologna - Piazza Dell'Unita'",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.50963,
-      "lon": 11.346852
+      "lat": 44.509629,
+      "lon": 11.34689
     },
     {
       "id": "112",
@@ -12559,8 +12743,16 @@
       "nome": "Bologna - Piazza Spadolini",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.503924,
-      "lon": 11.366813
+      "lat": 44.503898,
+      "lon": 11.366787
+    },
+    {
+      "id": "500154",
+      "nome": "Bologna - Piazza Spadolini",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.503951,
+      "lon": 11.366814
     },
     {
       "id": "1303",
@@ -12725,15 +12917,6 @@
       "indirizzo": "Via Putti 32"
     },
     {
-      "id": "99031",
-      "nome": "Bologna - Piazzale Bacchelli",
-      "tipo": "bus",
-      "zona": "500",
-      "lat": 44.480331,
-      "lon": 11.344017,
-      "indirizzo": "Piazzale Bacchelli"
-    },
-    {
       "id": "8017",
       "nome": "Bologna - Piazzale Bacchelli",
       "tipo": "bus",
@@ -12741,6 +12924,15 @@
       "lat": 44.480714,
       "lon": 11.343793,
       "indirizzo": "Salita San Benedetto P.L. 1"
+    },
+    {
+      "id": "99031",
+      "nome": "Bologna - Piazzale Bacchelli",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.480331,
+      "lon": 11.344017,
+      "indirizzo": "Piazzale Bacchelli"
     },
     {
       "id": "9325",
@@ -12851,6 +13043,14 @@
       "indirizzo": "Via Corticella 201/2"
     },
     {
+      "id": "500216",
+      "nome": "Bologna - Pinardi",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.534294,
+      "lon": 11.354425
+    },
+    {
       "id": "4028",
       "nome": "Bologna - Pinardi",
       "tipo": "bus",
@@ -12864,8 +13064,8 @@
       "nome": "Bologna - Pinardi",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.534294,
-      "lon": 11.35445
+      "lat": 44.534284,
+      "lon": 11.354463
     },
     {
       "id": "4164",
@@ -13076,6 +13276,14 @@
     },
     {
       "id": "500113",
+      "nome": "Bologna - Pontelungo - Mast",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.508917,
+      "lon": 11.2965
+    },
+    {
+      "id": "500114",
       "nome": "Bologna - Pontelungo - Mast",
       "tipo": "bus",
       "zona": "500",
@@ -13317,6 +13525,14 @@
       "indirizzo": "Via San Felice 134"
     },
     {
+      "id": "500124",
+      "nome": "Bologna - Porta San Felice",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.498987,
+      "lon": 11.328047
+    },
+    {
       "id": "5209",
       "nome": "Bologna - Porta San Felice",
       "tipo": "bus",
@@ -13330,8 +13546,8 @@
       "nome": "Bologna - Porta San Felice",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.498978,
-      "lon": 11.328034
+      "lat": 44.49896,
+      "lon": 11.328021
     },
     {
       "id": "38",
@@ -13683,12 +13899,20 @@
       "indirizzo": "Viale Repubblica Fr 14"
     },
     {
+      "id": "500152",
+      "nome": "Bologna - Repubblica",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.505942,
+      "lon": 11.361548
+    },
+    {
       "id": "500151",
       "nome": "Bologna - Repubblica",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.505933,
-      "lon": 11.361523
+      "lat": 44.505925,
+      "lon": 11.361497
     },
     {
       "id": "2035",
@@ -14204,14 +14428,6 @@
       "indirizzo": "Via Tiarini 1"
     },
     {
-      "id": "500121",
-      "nome": "Bologna - Saffi",
-      "tipo": "bus",
-      "zona": "500",
-      "lat": 44.501824,
-      "lon": 11.320009
-    },
-    {
       "id": "6003",
       "nome": "Bologna - Saffi",
       "tipo": "bus",
@@ -14239,6 +14455,14 @@
       "indirizzo": "Via Malvasia 65"
     },
     {
+      "id": "500122",
+      "nome": "Bologna - Saffi",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.501842,
+      "lon": 11.320022
+    },
+    {
       "id": "6208",
       "nome": "Bologna - Saffi",
       "tipo": "bus",
@@ -14246,6 +14470,14 @@
       "lat": 44.500742,
       "lon": 11.32145,
       "indirizzo": "Via Vittorio Veneto 6"
+    },
+    {
+      "id": "500121",
+      "nome": "Bologna - Saffi",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.501816,
+      "lon": 11.319996
     },
     {
       "id": "3052",
@@ -14297,8 +14529,16 @@
       "nome": "Bologna - San Donato",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.505282,
-      "lon": 11.371648
+      "lat": 44.505255,
+      "lon": 11.371672
+    },
+    {
+      "id": "500156",
+      "nome": "Bologna - San Donato",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.505301,
+      "lon": 11.371624
     },
     {
       "id": "3507",
@@ -14346,12 +14586,28 @@
       "indirizzo": "Via San Donato"
     },
     {
+      "id": "500197",
+      "nome": "Bologna - San Donnino - Casalone",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.507821,
+      "lon": 11.376859
+    },
+    {
       "id": "500157",
       "nome": "Bologna - San Donnino - Casalone",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.507849,
-      "lon": 11.376822
+      "lat": 44.50783,
+      "lon": 11.376847
+    },
+    {
+      "id": "500158",
+      "nome": "Bologna - San Donnino - Casalone",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.507858,
+      "lon": 11.376798
     },
     {
       "id": "616",
@@ -14525,6 +14781,14 @@
       "indirizzo": "Via Toscana 140"
     },
     {
+      "id": "TRN040",
+      "nome": "Bologna - San Ruffillo",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.4626716,
+      "lon": 11.3730831
+    },
+    {
       "id": "9042",
       "nome": "Bologna - San Ruffillo Stazione",
       "tipo": "bus",
@@ -14561,6 +14825,14 @@
       "indirizzo": "Via San Vitale 50"
     },
     {
+      "id": "TRN038",
+      "nome": "Bologna - San Vitale",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.496028,
+      "lon": 11.3730902
+    },
+    {
       "id": "4087",
       "nome": "Bologna - Sant'Anna",
       "tipo": "bus",
@@ -14583,8 +14855,16 @@
       "nome": "Bologna - Sant'Anna - Byron",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.548113,
-      "lon": 11.360975
+      "lat": 44.548092,
+      "lon": 11.361088
+    },
+    {
+      "id": "500206",
+      "nome": "Bologna - Sant'Anna - Byron",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.548142,
+      "lon": 11.36085
     },
     {
       "id": "3007",
@@ -14708,8 +14988,16 @@
       "nome": "Bologna - Santa Viola - Opificio Go",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.507032,
+      "lat": 44.507023,
       "lon": 11.305119
+    },
+    {
+      "id": "500116",
+      "nome": "Bologna - Santa Viola - Opificio Go",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.507041,
+      "lon": 11.30512
     },
     {
       "id": "1103",
@@ -14968,8 +15256,16 @@
       "nome": "Bologna - Shakespeare",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.550219,
-      "lon": 11.360141
+      "lat": 44.550345,
+      "lon": 11.359668
+    },
+    {
+      "id": "500204",
+      "nome": "Bologna - Shakespeare",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.55031,
+      "lon": 11.359654
     },
     {
       "id": "4092",
@@ -15188,6 +15484,14 @@
       "indirizzo": "Via Creti 36"
     },
     {
+      "id": "500141",
+      "nome": "Bologna - Stalingrado",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.510497,
+      "lon": 11.357216
+    },
+    {
       "id": "4107",
       "nome": "Bologna - Stalingrado",
       "tipo": "bus",
@@ -15195,14 +15499,6 @@
       "lat": 44.510679,
       "lon": 11.355789,
       "indirizzo": "Via della Liberazione Fr 1/G"
-    },
-    {
-      "id": "500141",
-      "nome": "Bologna - Stalingrado",
-      "tipo": "bus",
-      "zona": "500",
-      "lat": 44.510497,
-      "lon": 11.357216
     },
     {
       "id": "500142",
@@ -15245,14 +15541,6 @@
       "zona": "500",
       "lat": 44.514264,
       "lon": 11.283915
-    },
-    {
-      "id": "500135",
-      "nome": "Bologna - Stazione Centrale",
-      "tipo": "bus",
-      "zona": "500",
-      "lat": 44.504314,
-      "lon": 11.34533
     },
     {
       "id": "2",
@@ -15336,6 +15624,14 @@
       "indirizzo": "Viale Pietramellara Fr 53"
     },
     {
+      "id": "500136",
+      "nome": "Bologna - Stazione Centrale",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.504314,
+      "lon": 11.345318
+    },
+    {
       "id": "7",
       "nome": "Bologna - Stazione Centrale",
       "tipo": "bus",
@@ -15352,6 +15648,14 @@
       "lat": 44.504787,
       "lon": 11.34462,
       "indirizzo": "Viale Pietramellara"
+    },
+    {
+      "id": "500135",
+      "nome": "Bologna - Stazione Centrale",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.504313,
+      "lon": 11.345343
     },
     {
       "id": "1",
@@ -15390,6 +15694,22 @@
     },
     {
       "id": "500201",
+      "nome": "Bologna - Stazione Corticella",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.552424,
+      "lon": 11.354477
+    },
+    {
+      "id": "500202",
+      "nome": "Bologna - Stazione Corticella",
+      "tipo": "bus",
+      "zona": "504",
+      "lat": 44.552424,
+      "lon": 11.354464
+    },
+    {
+      "id": "500298",
       "nome": "Bologna - Stazione Corticella",
       "tipo": "bus",
       "zona": "504",
@@ -15910,6 +16230,14 @@
       "indirizzo": "Viale Xii Giugno 2"
     },
     {
+      "id": "500112",
+      "nome": "Bologna - Triumvirato",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.511417,
+      "lon": 11.28944
+    },
+    {
       "id": "5701",
       "nome": "Bologna - Triumvirato",
       "tipo": "bus",
@@ -15932,8 +16260,8 @@
       "nome": "Bologna - Triumvirato - Fabbri 1905",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.511408,
-      "lon": 11.28944
+      "lat": 44.511399,
+      "lon": 11.289439
     },
     {
       "id": "7205",
@@ -15990,12 +16318,20 @@
       "indirizzo": "Via Bassi U. 10/I"
     },
     {
+      "id": "500130",
+      "nome": "Bologna - Ugo Bassi",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.495599,
+      "lon": 11.338302
+    },
+    {
       "id": "500129",
       "nome": "Bologna - Ugo Bassi",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.495563,
-      "lon": 11.3383
+      "lat": 44.495546,
+      "lon": 11.338287
     },
     {
       "id": "752",
@@ -16182,8 +16518,16 @@
       "nome": "Bologna - Viale della Fiera - Liceo",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.507417,
-      "lon": 11.367722
+      "lat": 44.507398,
+      "lon": 11.367759
+    },
+    {
+      "id": "500146",
+      "nome": "Bologna - Viale della Fiera - Liceo",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.507444,
+      "lon": 11.367698
     },
     {
       "id": "59",
@@ -16582,6 +16926,14 @@
       "indirizzo": "Via Dozza Fr 19/B"
     },
     {
+      "id": "500104",
+      "nome": "Bologna - Villaggio Ina",
+      "tipo": "bus",
+      "zona": "500",
+      "lat": 44.521074,
+      "lon": 11.264752
+    },
+    {
       "id": "6043",
       "nome": "Bologna - Villaggio Ina",
       "tipo": "bus",
@@ -16604,8 +16956,8 @@
       "nome": "Bologna - Villaggio Ina",
       "tipo": "bus",
       "zona": "500",
-      "lat": 44.521065,
-      "lon": 11.264752
+      "lat": 44.521056,
+      "lon": 11.264739
     },
     {
       "id": "4050",
@@ -18206,6 +18558,14 @@
       "lat": 44.443608,
       "lon": 11.27147,
       "indirizzo": "Via Porrettana Fr 42/5"
+    },
+    {
+      "id": "TRN028",
+      "nome": "Borgonuovo - Stazione",
+      "tipo": "treno",
+      "zona": "581",
+      "lat": 44.4436713,
+      "lon": 11.2751224
     },
     {
       "id": "62666",
@@ -21574,6 +21934,14 @@
       "indirizzo": "Via Monticelli 106"
     },
     {
+      "id": "TRN034",
+      "nome": "Carbona - Stazione",
+      "tipo": "treno",
+      "zona": "570",
+      "lat": 44.2470852,
+      "lon": 11.0963833
+    },
+    {
       "id": "9513",
       "nome": "Carteria di Sesto - Carteria Chiesa",
       "tipo": "bus",
@@ -22213,6 +22581,14 @@
       "indirizzo": "Via Isonzo 2"
     },
     {
+      "id": "TRN014",
+      "nome": "Casalecchio di Reno - Ceretolo",
+      "tipo": "treno",
+      "zona": "507",
+      "lat": 44.481463,
+      "lon": 11.2629212
+    },
+    {
       "id": "61505",
       "nome": "Casalecchio di Reno - Ceretolo Lavoro",
       "tipo": "bus",
@@ -22320,6 +22696,14 @@
       "indirizzo": "Via Aldo Moro"
     },
     {
+      "id": "TRN015",
+      "nome": "Casalecchio di Reno - Palasport",
+      "tipo": "treno",
+      "zona": "507",
+      "lat": 44.4846921,
+      "lon": 11.2475839
+    },
+    {
       "id": "70014",
       "nome": "Casalecchio di Reno - San Biagio",
       "tipo": "bus",
@@ -22399,6 +22783,14 @@
       "lat": 44.455322,
       "lon": 11.271384,
       "indirizzo": "Via della Resistenza Area"
+    },
+    {
+      "id": "TRN027",
+      "nome": "Casalecchio di Reno - Stazione",
+      "tipo": "treno",
+      "zona": "507",
+      "lat": 44.4743616,
+      "lon": 11.2762664
     },
     {
       "id": "6263",
@@ -24604,6 +24996,24 @@
       "lat": 44.576654,
       "lon": 11.363415,
       "indirizzo": "Via Bondanello 7"
+    },
+    {
+      "id": "42535",
+      "nome": "Castel Maggiore - Borgognino Via Lame",
+      "tipo": "bus",
+      "zona": "541",
+      "lat": 44.571071,
+      "lon": 11.323165,
+      "indirizzo": "Via Lame 269/1"
+    },
+    {
+      "id": "42536",
+      "nome": "Castel Maggiore - Borgognino Via Lame",
+      "tipo": "bus",
+      "zona": "541",
+      "lat": 44.571487,
+      "lon": 11.32303,
+      "indirizzo": "Via Lame 290"
     },
     {
       "id": "42501",
@@ -28241,6 +28651,14 @@
       "indirizzo": "Via Provinciale Bv Vedragno"
     },
     {
+      "id": "TRN013",
+      "nome": "Casteldebole - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.5035645,
+      "lon": 11.2745798
+    },
+    {
       "id": "68017",
       "nome": "Castelfranco Emilia - Ca' Ferrarini",
       "tipo": "bus",
@@ -31798,24 +32216,6 @@
       "indirizzo": "Via Resistenza N. 56"
     },
     {
-      "id": "605023",
-      "nome": "Codigoro - Codigoro Stazione [143]",
-      "tipo": "bus",
-      "zona": "617",
-      "lat": 44.835808,
-      "lon": 12.102247,
-      "indirizzo": "P.Le Papa Giovanni 23 39"
-    },
-    {
-      "id": "605024",
-      "nome": "Codigoro - Codigoro Stazione [143]",
-      "tipo": "bus",
-      "zona": "617",
-      "lat": 44.835491,
-      "lon": 12.102661,
-      "indirizzo": "P.Le Papa Giovanni 23 F.29"
-    },
-    {
       "id": "690143",
       "nome": "Codigoro - Codigoro Stazione [143]",
       "tipo": "bus",
@@ -31832,6 +32232,24 @@
       "lat": 44.836125,
       "lon": 12.102846,
       "indirizzo": "Via Rossini Fr 5"
+    },
+    {
+      "id": "605023",
+      "nome": "Codigoro - Codigoro Stazione [143]",
+      "tipo": "bus",
+      "zona": "617",
+      "lat": 44.835808,
+      "lon": 12.102247,
+      "indirizzo": "P.Le Papa Giovanni 23 39"
+    },
+    {
+      "id": "605024",
+      "nome": "Codigoro - Codigoro Stazione [143]",
+      "tipo": "bus",
+      "zona": "617",
+      "lat": 44.835491,
+      "lon": 12.102661,
+      "indirizzo": "P.Le Papa Giovanni 23 F.29"
     },
     {
       "id": "690628",
@@ -35380,15 +35798,6 @@
       "indirizzo": "Via Bottoni 147"
     },
     {
-      "id": "607075",
-      "nome": "Copparo - Provinciale per Formignan",
-      "tipo": "bus",
-      "zona": "612",
-      "lat": 44.880441,
-      "lon": 11.839452,
-      "indirizzo": "Provinciale per Formignana 59"
-    },
-    {
       "id": "691050",
       "nome": "Copparo - Provinciale per Formignan",
       "tipo": "bus",
@@ -35396,6 +35805,15 @@
       "lat": 44.87753,
       "lon": 11.839587,
       "indirizzo": "Provinciale per Formignana"
+    },
+    {
+      "id": "607075",
+      "nome": "Copparo - Provinciale per Formignan",
+      "tipo": "bus",
+      "zona": "612",
+      "lat": 44.880441,
+      "lon": 11.839452,
+      "indirizzo": "Provinciale per Formignana 59"
     },
     {
       "id": "607077",
@@ -36322,6 +36740,14 @@
       "lat": 44.565984,
       "lon": 11.13554,
       "indirizzo": "Via Nazionale 185"
+    },
+    {
+      "id": "TRN022",
+      "nome": "Crespellano - Stazione",
+      "tipo": "treno",
+      "zona": "558",
+      "lat": 44.5122597,
+      "lon": 11.1298768
     },
     {
       "id": "60555",
@@ -47386,9 +47812,9 @@
       "nome": "Gesso - Gesso Chiesa",
       "tipo": "bus",
       "zona": "571",
-      "lat": 44.479543,
-      "lon": 11.223623,
-      "indirizzo": "Via Garibaldi 35"
+      "lat": 44.479974,
+      "lon": 11.223727,
+      "indirizzo": "SP26 - Via Garibaldi Km 5_76"
     },
     {
       "id": "610049",
@@ -47643,21 +48069,21 @@
       "indirizzo": "Via del Lavoro"
     },
     {
-      "id": "625015",
-      "nome": "Goro - Goro Cimitero [848]",
-      "tipo": "bus",
-      "zona": "619",
-      "lat": 44.82994,
-      "lon": 12.344377,
-      "indirizzo": "Strada Comunale per Gorino"
-    },
-    {
       "id": "691848",
       "nome": "Goro - Goro Cimitero [848]",
       "tipo": "bus",
       "zona": "619",
       "lat": 44.829947,
       "lon": 12.344441,
+      "indirizzo": "Strada Comunale per Gorino"
+    },
+    {
+      "id": "625015",
+      "nome": "Goro - Goro Cimitero [848]",
+      "tipo": "bus",
+      "zona": "619",
+      "lat": 44.82994,
+      "lon": 12.344377,
       "indirizzo": "Strada Comunale per Gorino"
     },
     {
@@ -49848,15 +50274,6 @@
       "indirizzo": "Via Lavino 443"
     },
     {
-      "id": "110110",
-      "nome": "Imola - Amendola",
-      "tipo": "bus",
-      "zona": "510",
-      "lat": 44.358403,
-      "lon": 11.70187,
-      "indirizzo": "Viale Amendola 95"
-    },
-    {
       "id": "131147",
       "nome": "Imola - Amendola",
       "tipo": "bus",
@@ -49873,6 +50290,15 @@
       "lat": 44.357924,
       "lon": 11.703065,
       "indirizzo": "Viale AMENDOLA89"
+    },
+    {
+      "id": "110110",
+      "nome": "Imola - Amendola",
+      "tipo": "bus",
+      "zona": "510",
+      "lat": 44.358403,
+      "lon": 11.70187,
+      "indirizzo": "Viale Amendola 95"
     },
     {
       "id": "110109",
@@ -51162,15 +51588,6 @@
       "indirizzo": "Via Selice Montanara Fr 334"
     },
     {
-      "id": "124509",
-      "nome": "Imola - Milana",
-      "tipo": "bus",
-      "zona": "510",
-      "lat": 44.363383,
-      "lon": 11.706341,
-      "indirizzo": "Via Pambera 41"
-    },
-    {
       "id": "124510",
       "nome": "Imola - Milana",
       "tipo": "bus",
@@ -51178,6 +51595,15 @@
       "lat": 44.363397,
       "lon": 11.706141,
       "indirizzo": "Via Pambera 22/D"
+    },
+    {
+      "id": "124509",
+      "nome": "Imola - Milana",
+      "tipo": "bus",
+      "zona": "510",
+      "lat": 44.363383,
+      "lon": 11.706341,
+      "indirizzo": "Via Pambera 41"
     },
     {
       "id": "151119",
@@ -51216,15 +51642,6 @@
       "indirizzo": "Via Selice Montanara Fr 49"
     },
     {
-      "id": "123101",
-      "nome": "Imola - Molino Vecchio",
-      "tipo": "bus",
-      "zona": "510",
-      "lat": 44.354284,
-      "lon": 11.725145,
-      "indirizzo": "Via Molino Vecchio 10"
-    },
-    {
       "id": "151124",
       "nome": "Imola - Molino Vecchio",
       "tipo": "bus",
@@ -51232,6 +51649,15 @@
       "lat": 44.354552,
       "lon": 11.725985,
       "indirizzo": "Via Benedetto Croce 1"
+    },
+    {
+      "id": "123101",
+      "nome": "Imola - Molino Vecchio",
+      "tipo": "bus",
+      "zona": "510",
+      "lat": 44.354284,
+      "lon": 11.725145,
+      "indirizzo": "Via Molino Vecchio 10"
     },
     {
       "id": "151123",
@@ -51828,15 +52254,6 @@
       "indirizzo": "Via Benelli Fr 8"
     },
     {
-      "id": "124113",
-      "nome": "Imola - Pontesanto",
-      "tipo": "bus",
-      "zona": "510",
-      "lat": 44.367243,
-      "lon": 11.698838,
-      "indirizzo": "Via Pambera Fr 118"
-    },
-    {
       "id": "124514",
       "nome": "Imola - Pontesanto",
       "tipo": "bus",
@@ -51844,6 +52261,15 @@
       "lat": 44.366865,
       "lon": 11.699235,
       "indirizzo": "Via Beccaria 4"
+    },
+    {
+      "id": "124113",
+      "nome": "Imola - Pontesanto",
+      "tipo": "bus",
+      "zona": "510",
+      "lat": 44.367243,
+      "lon": 11.698838,
+      "indirizzo": "Via Pambera Fr 118"
     },
     {
       "id": "151133",
@@ -54120,6 +54546,14 @@
       "lat": 44.368647,
       "lon": 11.21489,
       "indirizzo": "Via Porrettana Nord Fr 66"
+    },
+    {
+      "id": "TRN030",
+      "nome": "Lama di Reno - Stazione",
+      "tipo": "treno",
+      "zona": "582",
+      "lat": 44.3628324,
+      "lon": 11.214449
     },
     {
       "id": "80530",
@@ -65990,6 +66424,14 @@
       "indirizzo": "Via Provinciale 312"
     },
     {
+      "id": "TRN023",
+      "nome": "Muffa - Stazione",
+      "tipo": "treno",
+      "zona": "558",
+      "lat": 44.5104499,
+      "lon": 11.109404
+    },
+    {
       "id": "60613",
       "nome": "Mulino - Savignano S/panaro Mulino",
       "tipo": "bus",
@@ -66033,6 +66475,14 @@
       "lat": 44.406225,
       "lon": 11.346027,
       "indirizzo": "Via Nazionale 81"
+    },
+    {
+      "id": "TRN042",
+      "nome": "Musiano - Pian di Macina",
+      "tipo": "treno",
+      "zona": "509",
+      "lat": 44.400917,
+      "lon": 11.3439518
     },
     {
       "id": "660002",
@@ -67879,6 +68329,14 @@
       "indirizzo": "Via Porrettana Sud 21"
     },
     {
+      "id": "TRN031",
+      "nome": "Pian di Venola - Stazione",
+      "tipo": "treno",
+      "zona": "582",
+      "lat": 44.3331327,
+      "lon": 11.190203
+    },
+    {
       "id": "77622",
       "nome": "Pianaccio - Pianaccio",
       "tipo": "bus",
@@ -68559,7 +69017,7 @@
       "tipo": "treno",
       "zona": "509",
       "lat": 44.380563,
-      "lon": 11.340680
+      "lon": 11.34068
     },
     {
       "id": "90597",
@@ -68938,6 +69396,22 @@
       "lat": 44.946883,
       "lon": 11.291303,
       "indirizzo": "Via Virgiliana 152"
+    },
+    {
+      "id": "TRN017",
+      "nome": "Pilastrino - Stazione",
+      "tipo": "treno",
+      "zona": "571",
+      "lat": 44.488226,
+      "lon": 11.2294746
+    },
+    {
+      "id": "TRN032",
+      "nome": "Pioppe di Salvaro - Stazione",
+      "tipo": "treno",
+      "zona": "569",
+      "lat": 44.3107789,
+      "lon": 11.161913
     },
     {
       "id": "110101",
@@ -69678,15 +70152,6 @@
       "indirizzo": "Via Emilia 353/C"
     },
     {
-      "id": "66002",
-      "nome": "Ponte Samoggia - Ponte Samoggia",
-      "tipo": "bus",
-      "zona": "561",
-      "lat": 44.562919,
-      "lon": 11.143449,
-      "indirizzo": "Via Samoggia 90"
-    },
-    {
       "id": "60046",
       "nome": "Ponte Samoggia - Ponte Samoggia",
       "tipo": "bus",
@@ -69694,6 +70159,15 @@
       "lat": 44.563484,
       "lon": 11.142626,
       "indirizzo": "Via Nazionale Fr Via Gramsci"
+    },
+    {
+      "id": "66002",
+      "nome": "Ponte Samoggia - Ponte Samoggia",
+      "tipo": "bus",
+      "zona": "561",
+      "lat": 44.562919,
+      "lon": 11.143449,
+      "indirizzo": "Via Samoggia 90"
     },
     {
       "id": "607124",
@@ -69910,6 +70384,14 @@
       "lat": 44.42478,
       "lon": 11.266205,
       "indirizzo": "Via Porrettana 145"
+    },
+    {
+      "id": "TRN029",
+      "nome": "Pontecchio Marconi - Stazione",
+      "tipo": "treno",
+      "zona": "581",
+      "lat": 44.4231153,
+      "lon": 11.2692588
     },
     {
       "id": "600266",
@@ -71611,6 +72093,14 @@
       "indirizzo": "Via Comunale Fr 83"
     },
     {
+      "id": "TRN037",
+      "nome": "Porretta Terme - Stazione",
+      "tipo": "treno",
+      "zona": "573",
+      "lat": 44.1559659,
+      "lon": 10.9781072
+    },
+    {
       "id": "79109",
       "nome": "Porretta Terme - Vulcano",
       "tipo": "bus",
@@ -72573,6 +73063,14 @@
       "indirizzo": "Via Costa"
     },
     {
+      "id": "TRN041",
+      "nome": "Rastignano - Stazione",
+      "tipo": "treno",
+      "zona": "509",
+      "lat": 44.4432202,
+      "lon": 11.3574417
+    },
+    {
       "id": "600814",
       "nome": "Ravalle - Borgata Sabbioni",
       "tipo": "bus",
@@ -73472,6 +73970,14 @@
       "indirizzo": "Via Risorgimento"
     },
     {
+      "id": "TRN016",
+      "nome": "Riale - Stazione",
+      "tipo": "treno",
+      "zona": "571",
+      "lat": 44.4854155,
+      "lon": 11.2410254
+    },
+    {
       "id": "244002",
       "nome": "Riccardina - Riccardina",
       "tipo": "bus",
@@ -73506,6 +74012,14 @@
       "lat": 44.316802,
       "lon": 11.477635,
       "indirizzo": "Via Sillaro 28"
+    },
+    {
+      "id": "TRN035",
+      "nome": "Riola - Stazione",
+      "tipo": "treno",
+      "zona": "570",
+      "lat": 44.2298903,
+      "lon": 11.053558
     },
     {
       "id": "15509",
@@ -81271,21 +81785,21 @@
       "indirizzo": "Via Porrettana Fr 104"
     },
     {
-      "id": "70075",
-      "nome": "Sasso Marconi - Sasso Marconi Terminal",
-      "tipo": "bus",
-      "zona": "582",
-      "lat": 44.392361,
-      "lon": 11.246659,
-      "indirizzo": "Via Kennedy Piazzale Terminal"
-    },
-    {
       "id": "70078",
       "nome": "Sasso Marconi - Sasso Marconi Terminal",
       "tipo": "bus",
       "zona": "582",
       "lat": 44.392477,
       "lon": 11.246714,
+      "indirizzo": "Via Kennedy Piazzale Terminal"
+    },
+    {
+      "id": "70075",
+      "nome": "Sasso Marconi - Sasso Marconi Terminal",
+      "tipo": "bus",
+      "zona": "582",
+      "lat": 44.392361,
+      "lon": 11.246659,
       "indirizzo": "Via Kennedy Piazzale Terminal"
     },
     {
@@ -81538,6 +82052,22 @@
       "lat": 44.523408,
       "lon": 11.048778,
       "indirizzo": "Via Faloppie Fr 955"
+    },
+    {
+      "id": "TRN026",
+      "nome": "Savignano sul Panaro - Centro",
+      "tipo": "treno",
+      "zona": "444",
+      "lat": 44.4832914,
+      "lon": 11.0328685
+    },
+    {
+      "id": "TRN025",
+      "nome": "Savignano sul Panaro - Mulino",
+      "tipo": "treno",
+      "zona": "444",
+      "lat": 44.494138,
+      "lon": 11.0474736
     },
     {
       "id": "64622",
@@ -82447,6 +82977,14 @@
       "lat": 44.177739,
       "lon": 10.97862,
       "indirizzo": "Via 1` Maggio 161"
+    },
+    {
+      "id": "TRN036",
+      "nome": "Silla - Stazione",
+      "tipo": "treno",
+      "zona": "576",
+      "lat": 44.1776897,
+      "lon": 10.9806594
     },
     {
       "id": "86433",
@@ -84112,6 +84650,14 @@
       "lat": 44.29074,
       "lon": 11.101321,
       "indirizzo": "Via Provinciale 4"
+    },
+    {
+      "id": "TRN033",
+      "nome": "Vergato - Stazione",
+      "tipo": "treno",
+      "zona": "569",
+      "lat": 44.2828972,
+      "lon": 11.1144021
     },
     {
       "id": "73018",
@@ -85841,13 +86387,13 @@
       "indirizzo": "Presso La Stazione di Pilastrino"
     },
     {
-      "id": "62501",
+      "id": "62502",
       "nome": "Zola Predosa - Pilastrino di Zola",
       "tipo": "bus",
       "zona": "571",
-      "lat": 44.487365,
-      "lon": 11.226473,
-      "indirizzo": "Via Garibaldi 2"
+      "lat": 44.486438,
+      "lon": 11.22601,
+      "indirizzo": "Via Garibaldi"
     },
     {
       "id": "60521",
@@ -85868,13 +86414,21 @@
       "indirizzo": "Via Risorgimento Fr 210"
     },
     {
-      "id": "62502",
+      "id": "62501",
       "nome": "Zola Predosa - Pilastrino di Zola",
       "tipo": "bus",
       "zona": "571",
-      "lat": 44.486887,
-      "lon": 11.226518,
-      "indirizzo": "Via Garibaldi"
+      "lat": 44.486901,
+      "lon": 11.22628,
+      "indirizzo": "SP26 - Via Garibaldi 4"
+    },
+    {
+      "id": "TRN020",
+      "nome": "Zola Predosa - Ponte Ronca",
+      "tipo": "treno",
+      "zona": "571",
+      "lat": 44.5021261,
+      "lon": 11.1919396
     },
     {
       "id": "60544",
@@ -85911,6 +86465,14 @@
       "lat": 44.505068,
       "lon": 11.180577,
       "indirizzo": "Via Provinciale Km 34+230"
+    },
+    {
+      "id": "TRN021",
+      "nome": "Zola Predosa - Via Lunga",
+      "tipo": "treno",
+      "zona": "558",
+      "lat": 44.509866,
+      "lon": 11.1692096
     },
     {
       "id": "61529",
@@ -86102,6 +86664,22 @@
       "indirizzo": "Via Rosselli Fr 4"
     },
     {
+      "id": "TRN018",
+      "nome": "Zola Predosa - Zola Centro",
+      "tipo": "treno",
+      "zona": "571",
+      "lat": 44.4925206,
+      "lon": 11.2181143
+    },
+    {
+      "id": "TRN019",
+      "nome": "Zola Predosa - Zola Chiesa",
+      "tipo": "treno",
+      "zona": "571",
+      "lat": 44.4941412,
+      "lon": 11.2094261
+    },
+    {
       "id": "60533",
       "nome": "Zola Predosa - Zola Predosa",
       "tipo": "bus",
@@ -86142,17 +86720,17 @@
       "nome": "Zola Predosa - Zola Predosa Cimitero",
       "tipo": "bus",
       "zona": "571",
-      "lat": 44.484854,
-      "lon": 11.225045,
-      "indirizzo": "Via Garibaldi Fr Cimitero"
+      "lat": 44.484084,
+      "lon": 11.224839,
+      "indirizzo": "SP26 - Via Garibaldi Km 5_27"
     },
     {
       "id": "62506",
       "nome": "Zola Predosa - Zola Predosa Cimitero",
       "tipo": "bus",
       "zona": "571",
-      "lat": 44.484852,
-      "lon": 11.225145,
+      "lat": 44.484405,
+      "lon": 11.22499,
       "indirizzo": "Via Garibaldi Ang. Cimitero"
     },
     {
@@ -86289,254 +86867,6 @@
       "lat": 44.615604,
       "lon": 11.369659,
       "indirizzo": "Via Galliera SP4 Km 7+480"
-    },
-    {
-      "id": "TRN012",
-      "nome": "Bologna - Borgo Panigale",
-      "tipo": "treno",
-      "zona": "500",
-      "lat": 44.5151514,
-      "lon": 11.2849781
-    },
-    {
-      "id": "TRN013",
-      "nome": "Casteldebole - Stazione",
-      "tipo": "treno",
-      "zona": "500",
-      "lat": 44.5035645,
-      "lon": 11.2745798
-    },
-    {
-      "id": "TRN014",
-      "nome": "Casalecchio di Reno - Ceretolo",
-      "tipo": "treno",
-      "zona": "507",
-      "lat": 44.481463,
-      "lon": 11.2629212
-    },
-    {
-      "id": "TRN015",
-      "nome": "Casalecchio di Reno - Palasport",
-      "tipo": "treno",
-      "zona": "507",
-      "lat": 44.4846921,
-      "lon": 11.2475839
-    },
-    {
-      "id": "TRN016",
-      "nome": "Riale - Stazione",
-      "tipo": "treno",
-      "zona": "571",
-      "lat": 44.4854155,
-      "lon": 11.2410254
-    },
-    {
-      "id": "TRN017",
-      "nome": "Pilastrino - Stazione",
-      "tipo": "treno",
-      "zona": "571",
-      "lat": 44.488226,
-      "lon": 11.2294746
-    },
-    {
-      "id": "TRN018",
-      "nome": "Zola Predosa - Zola Centro",
-      "tipo": "treno",
-      "zona": "571",
-      "lat": 44.4925206,
-      "lon": 11.2181143
-    },
-    {
-      "id": "TRN019",
-      "nome": "Zola Predosa - Zola Chiesa",
-      "tipo": "treno",
-      "zona": "571",
-      "lat": 44.4941412,
-      "lon": 11.2094261
-    },
-    {
-      "id": "TRN020",
-      "nome": "Zola Predosa - Ponte Ronca",
-      "tipo": "treno",
-      "zona": "571",
-      "lat": 44.5021261,
-      "lon": 11.1919396
-    },
-    {
-      "id": "TRN021",
-      "nome": "Zola Predosa - Via Lunga",
-      "tipo": "treno",
-      "zona": "558",
-      "lat": 44.509866,
-      "lon": 11.1692096
-    },
-    {
-      "id": "TRN022",
-      "nome": "Crespellano - Stazione",
-      "tipo": "treno",
-      "zona": "558",
-      "lat": 44.5122597,
-      "lon": 11.1298768
-    },
-    {
-      "id": "TRN023",
-      "nome": "Muffa - Stazione",
-      "tipo": "treno",
-      "zona": "558",
-      "lat": 44.5104499,
-      "lon": 11.109404
-    },
-    {
-      "id": "TRN024",
-      "nome": "Bazzano - Stazione",
-      "tipo": "treno",
-      "zona": "558",
-      "lat": 44.5086013,
-      "lon": 11.0782074
-    },
-    {
-      "id": "TRN025",
-      "nome": "Savignano sul Panaro - Mulino",
-      "tipo": "treno",
-      "zona": "444",
-      "lat": 44.494138,
-      "lon": 11.0474736
-    },
-    {
-      "id": "TRN026",
-      "nome": "Savignano sul Panaro - Centro",
-      "tipo": "treno",
-      "zona": "444",
-      "lat": 44.4832914,
-      "lon": 11.0328685
-    },
-    {
-      "id": "TRN027",
-      "nome": "Casalecchio di Reno - Stazione",
-      "tipo": "treno",
-      "zona": "507",
-      "lat": 44.4743616,
-      "lon": 11.2762664
-    },
-    {
-      "id": "TRN028",
-      "nome": "Borgonuovo - Stazione",
-      "tipo": "treno",
-      "zona": "581",
-      "lat": 44.4436713,
-      "lon": 11.2751224
-    },
-    {
-      "id": "TRN029",
-      "nome": "Pontecchio Marconi - Stazione",
-      "tipo": "treno",
-      "zona": "581",
-      "lat": 44.4231153,
-      "lon": 11.2692588
-    },
-    {
-      "id": "TRN030",
-      "nome": "Lama di Reno - Stazione",
-      "tipo": "treno",
-      "zona": "582",
-      "lat": 44.3628324,
-      "lon": 11.214449
-    },
-    {
-      "id": "TRN031",
-      "nome": "Pian di Venola - Stazione",
-      "tipo": "treno",
-      "zona": "582",
-      "lat": 44.3331327,
-      "lon": 11.190203
-    },
-    {
-      "id": "TRN032",
-      "nome": "Pioppe di Salvaro - Stazione",
-      "tipo": "treno",
-      "zona": "569",
-      "lat": 44.3107789,
-      "lon": 11.161913
-    },
-    {
-      "id": "TRN033",
-      "nome": "Vergato - Stazione",
-      "tipo": "treno",
-      "zona": "569",
-      "lat": 44.2828972,
-      "lon": 11.1144021
-    },
-    {
-      "id": "TRN034",
-      "nome": "Carbona - Stazione",
-      "tipo": "treno",
-      "zona": "570",
-      "lat": 44.2470852,
-      "lon": 11.0963833
-    },
-    {
-      "id": "TRN035",
-      "nome": "Riola - Stazione",
-      "tipo": "treno",
-      "zona": "570",
-      "lat": 44.2298903,
-      "lon": 11.053558
-    },
-    {
-      "id": "TRN036",
-      "nome": "Silla - Stazione",
-      "tipo": "treno",
-      "zona": "576",
-      "lat": 44.1776897,
-      "lon": 10.9806594
-    },
-    {
-      "id": "TRN037",
-      "nome": "Porretta Terme - Stazione",
-      "tipo": "treno",
-      "zona": "573",
-      "lat": 44.1559659,
-      "lon": 10.9781072
-    },
-    {
-      "id": "TRN038",
-      "nome": "Bologna - San Vitale",
-      "tipo": "treno",
-      "zona": "500",
-      "lat": 44.496028,
-      "lon": 11.3730902
-    },
-    {
-      "id": "TRN039",
-      "nome": "Bologna - Mazzini",
-      "tipo": "treno",
-      "zona": "500",
-      "lat": 44.4826161,
-      "lon": 11.3762573
-    },
-    {
-      "id": "TRN040",
-      "nome": "Bologna - San Ruffillo",
-      "tipo": "treno",
-      "zona": "500",
-      "lat": 44.4626716,
-      "lon": 11.3730831
-    },
-    {
-      "id": "TRN041",
-      "nome": "Rastignano - Stazione",
-      "tipo": "treno",
-      "zona": "509",
-      "lat": 44.4432202,
-      "lon": 11.3574417
-    },
-    {
-      "id": "TRN042",
-      "nome": "Musiano - Pian di Macina",
-      "tipo": "treno",
-      "zona": "509",
-      "lat": 44.400917,
-      "lon": 11.3439518
     }
   ]
 }

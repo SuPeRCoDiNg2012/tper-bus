@@ -397,6 +397,10 @@ function dijkstra(grafo, da, a) {
 // per le forme mancanti: meglio nessuna linea che una linea sbagliata.
 const FORMA_RAPPORTO_MAX = 5;
 const SALTO_TRENO_MAX = 300;
+// Se una fermata della corsa resta oltre questa distanza dal punto del tracciato
+// che dovrebbe rappresentarla, la forma non copre quella corsa: diventa
+// assente e la mappa disegna la retta tratteggiata, come per le forme mancanti.
+const SCARTO_FERMATA_MAX = 300;
 
 function formaPlausibile(punti, treno) {
   if (!Array.isArray(punti) || punti.length < 2) return false;
@@ -450,6 +454,7 @@ async function main() {
   let formeCambiate = 0;
   let fermateSistemate = 0;
   let formeScartate = 0;
+  const formeLontane = [];
   const errori = [];
   const dettagli = [];
 
@@ -520,6 +525,21 @@ async function main() {
       continue;
     }
     const inserite = inserisciProiezioni(punti, ids, posizioni, coordinate);
+    // Una fermata a chilometri dal tracciato vuol dire che il GTFS ha dato a
+    // questa corsa la forma di un'altra linea: meglio la tratteggiata che una
+    // linea che passa altrove. La corsa resta, cambia solo la geometria.
+    const scarto = Math.max(...ids.map((id, i) => {
+      const c = coordinate.get(id);
+      const v = inserite.punti[inserite.posizioni[i]];
+      return c && v ? distanza(c, v) : Infinity;
+    }));
+    if (scarto > SCARTO_FERMATA_MAX) {
+      tracciati.forme[k] = '';
+      tracciati.posizioni[k] = [];
+      formeScartate += 1;
+      formeLontane.push('forma ' + k + ': fermata a ' + Math.round(scarto) + ' m dalla linea');
+      continue;
+    }
     tracciati.forme[k] = polilinea(inserite.punti);
     const tab = [];
     ids.forEach((id, i) => tab.push(vecchiaTab[i * 2], inserite.posizioni[i]));
@@ -552,7 +572,8 @@ async function main() {
       ' · fermate max ' + d.scartoFermate + ' m · snap max ' + d.snap + ' m · ' + d.fermate + ' fermate'));
   }
   console.log('fermate riproiettate: ' + fermateSistemate);
-  console.log('forme scartate (rapporto o salto): ' + formeScartate);
+  console.log('forme scartate (rapporto, salto o fermata lontana): ' + formeScartate);
+  formeLontane.slice(0, 14).forEach((riga) => console.log('  ' + riga));
   console.log('estremi oltre 80 m: ' + scarti + ' · scarto massimo ' + Math.round(scartoMassimo) + ' m');
   if (errori.length) {
     console.log('errori:');
