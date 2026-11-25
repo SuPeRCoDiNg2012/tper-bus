@@ -1504,8 +1504,46 @@
    * Navigazione guidata
    * ------------------------------------------------------------------ */
   const NAV_SOGLIA = 35;              // metri: sotto questa distanza il passo è raggiunto
+  const NAV_SOGLIA_SALITA = 45;       // metri: sotto questa distanza sei alla fermata di salita
   const NAV_VELOCITA_PIEDI = 1.25;    // m/s, passo medio di una persona
   const NAV_ZOOM = 16.4;
+  const NAV_ZOOM_GUIDA = 16.3;        // più vicino mentre si segue il percorso
+  const NAV_ROTAZIONE_VELOCITA = 2.2; // m/s: sotto questa soglia la mappa resta a nord
+  const NAV_INCLINAZIONE = 34;        // gradi di inclinazione durante la corsa
+
+  // Icona dell'arrivo: una spunta, non un mezzo.
+  const ICONA_FINE = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+
+  // Lo schermo deve restare acceso: senza wake lock il telefono si spegne e il
+  // GPS smette di aggiornare proprio mentre si cammina.
+  let svegliaNavigazione = null;
+
+  function accendiSveglia() {
+    if (!navigator.wakeLock || svegliaNavigazione) return;
+    navigator.wakeLock.request('screen').then((blocco) => {
+      svegliaNavigazione = blocco;
+      blocco.addEventListener('release', () => { svegliaNavigazione = null; });
+    }).catch(() => { /* browser che non lo consente: si prosegue */ });
+  }
+
+  function spegniSveglia() {
+    if (!svegliaNavigazione) return;
+    try { svegliaNavigazione.release(); } catch (errore) { /* già rilasciata */ }
+    svegliaNavigazione = null;
+  }
+
+  // Tornando sull'app la sveglia va richiesta di nuovo: il browser la scioglie
+  // quando la scheda va in background.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && navigazione.attiva) accendiSveglia();
+  });
+
+  // Scrive solo se il testo cambia: la barra è una live region e riscriverla a
+  // ogni fix GPS farebbe parlare lo screen reader senza motivo.
+  function scriviTesto(id, valore) {
+    const nodo = $(id);
+    if (nodo && nodo.textContent !== valore) nodo.textContent = valore;
+  }
 
   function coordinataDi(luogo) {
     return luogo && luogo.lat != null && luogo.lon != null ? [luogo.lon, luogo.lat] : null;
@@ -1527,36 +1565,40 @@
   // finale. Non rifà il routing: usa il percorso già calcolato.
   function passiNavigazione() {
     const passi = [];
+    const destinazione = coordinataDi(sel.destinazione);
+    const nomeDestinazione = sel.destinazione ? sel.destinazione.nome : '';
     if (routing.stato === 'piedi') {
-      const punto = coordinataDi(sel.destinazione);
-      if (punto) {
-        passi.push({ modo: 'piedi', titolo: 'A piedi', etichetta: 'fino a', nome: sel.destinazione.nome, punto: punto });
+      if (destinazione) {
+        passi.push({ modo: 'piedi', azione: 'cammina', nome: nomeDestinazione, punto: destinazione });
       }
       return passi;
     }
     const esito = routing.esito;
     if (!esito || !esito.tappe || !esito.tappe.length) return passi;
     if (esito.camminoIniziale > 0) {
-      const prima = coordinateFermata(esito.tappe[0].da);
+      const prima = esito.tappe[0].da ? coordinateFermata(esito.tappe[0].da) : null;
       if (prima) {
-        passi.push({ modo: 'piedi', titolo: 'A piedi', etichetta: 'fino a', nome: nomeFermata(esito.tappe[0].da), punto: prima });
+        passi.push({ modo: 'piedi', azione: 'cammina', fermata: true, nome: nomeFermata(esito.tappe[0].da), punto: prima });
       }
     }
     esito.tappe.forEach((tappa) => {
-      const punto = coordinateFermata(tappa.a);
-      if (!punto) return;
+      const arrivo = coordinateFermata(tappa.a);
+      if (!arrivo) return;
+      const salita = tappa.da ? coordinateFermata(tappa.da) : null;
       const treno = tappa.tipo === 1 || tappa.tipo === 2;
       passi.push({
         modo: treno ? 'treno' : 'bus',
-        titolo: (treno ? 'Treno ' : 'Bus ') + tappa.linea,
-        etichetta: 'scendi a',
+        azione: 'corsa',
+        linea: tappa.linea,
+        fermate: tappa.fermate,
+        salita: salita,
+        nomeSalita: tappa.da != null ? nomeFermata(tappa.da) : '',
         nome: nomeFermata(tappa.a),
-        punto: punto
+        punto: arrivo
       });
     });
-    const fine = coordinataDi(sel.destinazione);
-    if (esito.camminoFinale > 0 && fine) {
-      passi.push({ modo: 'piedi', titolo: 'A piedi', etichetta: 'fino a', nome: sel.destinazione.nome, punto: fine });
+    if (esito.camminoFinale > 0 && destinazione) {
+      passi.push({ modo: 'piedi', azione: 'cammina', nome: nomeDestinazione, punto: destinazione });
     }
     return passi;
   }
@@ -1670,55 +1712,149 @@
     if (centro) centro.hidden = navigazione.follow;
   }
 
+  // Segue il punto GPS. Se ci si muove abbastanza velocemente la mappa si
+  // orienta nella direzione di marcia e si inclina, come nelle app di mappe;
+  // a passo d'uomo resta a nord, così i nomi delle strade non girano.
+  function inquadraNavigazione(punto, coords) {
+    if (!mappa || !punto) return;
+    const velocita = coords && isFinite(coords.speed) ? coords.speed : 0;
+    const direzione = coords && coords.heading != null && isFinite(coords.heading) ? coords.heading : null;
+    const guida = velocita > NAV_ROTAZIONE_VELOCITA && direzione != null;
+    mappa.easeTo({
+      center: [punto.lon, punto.lat],
+      zoom: navigazione.inquadrato ? mappa.getZoom() : NAV_ZOOM_GUIDA,
+      bearing: guida ? direzione : 0,
+      pitch: guida ? NAV_INCLINAZIONE : 0,
+      duration: navigazione.inquadrato ? 850 : 650
+    });
+    navigazione.inquadrato = true;
+    navigazione.ultimoVolo = Date.now();
+  }
+
   function centraNavigazione() {
     navigazione.follow = true;
     navigazione.inquadrato = false;
     navigazione.ultimoVolo = 0;
     aggiornaNavFollow();
-    if (navigazione.ultima && mappa) {
-      mappa.easeTo({ center: [navigazione.ultima.lon, navigazione.ultima.lat], zoom: NAV_ZOOM, duration: durataMovimento(600) });
-      navigazione.inquadrato = true;
-      navigazione.ultimoVolo = Date.now();
-    }
+    if (navigazione.ultima) inquadraNavigazione(navigazione.ultima, null);
     disegnaNavigazione();
   }
 
+  // Segmenti del percorso sotto la barra: quanti passi sono fatti e quanti ne
+  // restano, senza inventare una progressione metrica che non conosciamo.
+  function segmentiProgresso() {
+    const barra = $('nav-progresso');
+    if (!barra) return;
+    const passi = navigazione.passi || [];
+    if (passi.length < 2) { barra.hidden = true; barra.innerHTML = ''; return; }
+    const fatti = navigazione.arrivato ? passi.length : navigazione.indice;
+    barra.hidden = false;
+    if (barra.childElementCount !== passi.length) {
+      barra.innerHTML = passi.map(() => '<i></i>').join('');
+    }
+    Array.prototype.forEach.call(barra.children, (segmento, i) => {
+      const fatto = i < fatti;
+      if (segmento.classList.contains('fatto') !== fatto) segmento.classList.toggle('fatto', fatto);
+    });
+  }
+
+  // La barra in alto parla come un navigatore: cosa fare adesso, dove, quanto
+  // manca. Per i mezzi il numero di fermate conta più dei metri in linea d'aria.
   function disegnaNavigazione() {
     if (!navigazione.attiva) return;
     const passi = navigazione.passi;
-    const passo = passi[Math.min(navigazione.indice, passi.length - 1)];
+    const indice = Math.min(navigazione.indice, passi.length - 1);
+    const passo = passi[indice];
     if (!passo) return;
     const distanza = distanzaInMetri(navigazione.ultima, passo.punto);
-    const arrivato = navigazione.indice >= passi.length - 1 && distanza != null && distanza < NAV_SOGLIA;
-    const icone = { piedi: ICONA_PIEDANA, bus: ICONA_BUS, treno: ICONA_TRENO };
-    const icona = $('nav-ico');
-    if (icona) {
-      icona.className = 'nav-ico ' + passo.modo;
-      icona.innerHTML = icone[passo.modo] || ICONA_BUS;
+    const ultimo = indice >= passi.length - 1;
+    const arrivato = ultimo && navigazione.ultima != null && distanza != null && distanza < NAV_SOGLIA;
+    const inCorsa = passo.azione === 'corsa';
+    const distanzaSalita = inCorsa && passo.salita && navigazione.ultima
+      ? distanzaInMetri(navigazione.ultima, passo.salita)
+      : null;
+    const allaSalita = distanzaSalita != null && distanzaSalita < NAV_SOGLIA_SALITA;
+
+    let titolo;
+    let sotto;
+    let destra;
+    let icona;
+    if (arrivato) {
+      titolo = 'Sei arrivato';
+      sotto = nomeBreve(passo.nome);
+      destra = '0 m';
+      icona = ICONA_FINE;
+      if (!navigazione.arrivato) {
+        navigazione.arrivato = true;
+        if (navigator.vibrate) { try { navigator.vibrate([90, 60, 90]); } catch (errore) { /* niente */ } }
+      }
+    } else if (!inCorsa) {
+      titolo = passo.fermata ? 'Cammina fino alla fermata' : 'A piedi fino a';
+      sotto = nomeBreve(passo.nome);
+      destra = navigazione.ultima ? metriTesto(distanza) : '…';
+      icona = ICONA_PIEDANA;
+    } else if (allaSalita) {
+      titolo = 'Sali sul ' + (passo.modo === 'treno' ? 'treno ' : '') + passo.linea;
+      sotto = 'Fermata ' + nomeBreve(passo.nomeSalita);
+      destra = 'Ora';
+      icona = passo.modo === 'treno' ? ICONA_TRENO : ICONA_BUS;
+    } else {
+      titolo = 'Scendi a ' + nomeBreve(passo.nome);
+      const conto = passo.fermate > 1 ? passo.fermate + ' fermate' : '1 fermata';
+      // La fermata di salita resta nel sottotitolo: se si è saliti da poco
+      // aiuta a riconoscere la corsa giusta, senza ripetere "4 fermate".
+      sotto = (passo.modo === 'treno' ? 'Treno ' : 'Bus ') + passo.linea +
+        (passo.nomeSalita ? ' · da ' + nomeBreve(passo.nomeSalita) : '');
+      destra = conto;
+      icona = passo.modo === 'treno' ? ICONA_TRENO : ICONA_BUS;
     }
-    $('nav-titolo').textContent = arrivato ? 'Sei arrivato' : passo.titolo;
-    $('nav-sotto').textContent = arrivato
-      ? nomeBreve(passo.nome)
-      : passo.etichetta + ' ' + nomeBreve(passo.nome);
-    $('nav-distanza').textContent = !navigazione.ultima
-      ? '…'
-      : (arrivato ? '0 m' : metriTesto(distanza));
-    $('nav-passo').textContent = passi.length > 1
-      ? (navigazione.indice + 1) + '/' + passi.length
-      : '';
-    $('nav-eta').textContent = navigazione.arrivo || '—';
+
+    const nodoIcona = $('nav-ico');
+    if (nodoIcona) {
+      nodoIcona.className = 'nav-ico ' + (arrivato ? 'fine' : passo.modo);
+      nodoIcona.innerHTML = icona;
+    }
+    scriviTesto('nav-titolo', titolo);
+    scriviTesto('nav-sotto', sotto);
+    scriviTesto('nav-distanza', destra);
+    scriviTesto('nav-passo', passi.length > 1 ? (indice + 1) + ' di ' + passi.length : '');
+    segmentiProgresso();
+
+    // Arrivo previsto: a piedi si ricalcola dal punto in cui sei, con i mezzi
+    // resta l'orario del viaggio scelto (è quello che conta per non perderlo).
+    let minuti = null;
+    if (routing.stato === 'piedi' && navigazione.ultima && distanza != null) {
+      minuti = Math.max(1, Math.round(distanza / NAV_VELOCITA_PIEDI / 60));
+      const adesso = new Date();
+      const arrivoOra = new Date(adesso.getTime() + minuti * 60000);
+      navigazione.arrivo = hhmm(arrivoOra.getHours() * 3600 + arrivoOra.getMinutes() * 60);
+    } else if (routing.stato === 'ok' && routing.esito && routing.esito.arrivo != null) {
+      const adesso = new Date();
+      const ora = adesso.getHours() * 3600 + adesso.getMinutes() * 60 + adesso.getSeconds();
+      minuti = Math.max(0, Math.round((routing.esito.arrivo + (routing.esito.camminoFinale || 0) - ora) / 60));
+    }
+    // A piedi si sa anche quanto manca: utile quando l'arrivo è vicino e il
+    // tempo da solo non dice nulla.
+    const resto = routing.stato === 'piedi' ? distanzaInMetri(navigazione.ultima, coordinataDi(sel.destinazione)) : null;
+    const quando = minuti == null ? '' : ' · ' + (minuti < 1 ? 'meno di 1 min' : minuti + ' min');
+    const quanto = resto == null ? '' : ' · ' + metriTesto(resto);
+    scriviTesto('nav-eta', arrivato ? 'Arrivato' : (navigazione.arrivo || '—'));
+    scriviTesto('nav-restanti', arrivato
+      ? nomeBreve(sel.destinazione ? sel.destinazione.nome : '')
+      : 'arrivo previsto' + quando + quanto);
   }
 
+  // Un passo alla volta: un fix solo non deve bruciare due istruzioni come
+  // faceva il ciclo precedente, che poteva saltare una tappa intera.
   function avanzaPassi(punto) {
     const passi = navigazione.passi;
-    for (let i = navigazione.indice; i < passi.length; i += 1) {
-      const distanza = distanzaInMetri(punto, passi[i].punto);
-      if (distanza == null || distanza > NAV_SOGLIA) {
-        navigazione.indice = i;
-        return;
-      }
-      navigazione.indice = Math.min(i + 1, passi.length - 1);
-      if (i + 1 >= passi.length) return;
+    const passo = passi[navigazione.indice];
+    if (!passo) return;
+    const distanza = distanzaInMetri(punto, passo.punto);
+    if (distanza == null || distanza > NAV_SOGLIA) return;
+    if (navigazione.indice < passi.length - 1) {
+      navigazione.indice += 1;
+      navigazione.arrivato = false;
     }
   }
 
@@ -1746,13 +1882,7 @@
       // La mappa si muove solo quando serve: un easeTo a ogni fix GPS
       // renderebbe il trascinamento impossibile.
       if (!navigazione.inquadrato || adesso - navigazione.ultimoVolo > 1200) {
-        navigazione.ultimoVolo = adesso;
-        mappa.easeTo({
-          center: [punto.lon, punto.lat],
-          zoom: navigazione.inquadrato ? mappa.getZoom() : NAV_ZOOM,
-          duration: navigazione.inquadrato ? 900 : 700
-        });
-        navigazione.inquadrato = true;
+        inquadraNavigazione(punto, posizione.coords);
       }
     }
     disegnaNavigazione();
@@ -1790,8 +1920,11 @@
     navigazione.indice = 0;
     navigazione.follow = true;
     navigazione.inquadrato = false;
-    navigazione.ultima = null;
+    // Se il GPS ha già un fix si parte da lì, senza aspettare il primo
+    // aggiornamento per vedere la mappa centrata e la distanza giusta.
+    navigazione.ultima = posizioneUtente ? { lat: posizioneUtente.lat, lon: posizioneUtente.lon } : null;
     navigazione.ultimoVolo = 0;
+    navigazione.arrivato = false;
     navigazione.arrivo = arrivoPrevisto(passi);
     chiudiOverlay();
     document.body.classList.add('in-navigazione');
@@ -1801,7 +1934,9 @@
     $('nav-fondo').hidden = false;
     aggiornaNavFollow();
     disegnaNavigazione();
+    if (navigazione.ultima) inquadraNavigazione(navigazione.ultima, null);
     aggiornaVisibilitaFermate();
+    accendiSveglia();
     navigazione.watchId = navigator.geolocation.watchPosition(aggiornaNavigazione, erroreNavigazione, {
       enableHighAccuracy: true, timeout: 15000, maximumAge: 2000
     });
@@ -1810,6 +1945,7 @@
   function fermaNavigazione(silenzioso) {
     if (!navigazione.attiva) return;
     navigazione.attiva = false;
+    spegniSveglia();
     if (navigazione.watchId != null) {
       try { navigator.geolocation.clearWatch(navigazione.watchId); } catch (e) { /* già fermo */ }
       navigazione.watchId = null;
@@ -1818,9 +1954,17 @@
       markerUtente.remove();
       markerUtente = null;
     }
+    navigazione.passi = [];
+    navigazione.indice = 0;
+    navigazione.arrivato = false;
+    navigazione.inquadrato = false;
     document.body.classList.remove('in-navigazione');
     $('nav').hidden = true;
     $('nav-fondo').hidden = true;
+    segmentiProgresso();
+    // La mappa torna piana e a nord: inclinazione e rotazione erano solo per
+    // la guida.
+    if (mappa) mappa.easeTo({ bearing: 0, pitch: 0, duration: durataMovimento(400) });
     impostaSheet(statoSheet);
     aggiornaVisibilitaFermate();
     if (!silenzioso) mostraToast('Navigazione terminata');
