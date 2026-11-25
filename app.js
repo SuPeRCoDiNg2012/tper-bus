@@ -49,6 +49,10 @@
   const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
   const NOMINATIM_PAUSA = 1100;      // ms tra due richieste: è la policy d'uso di OSM
   const LUOGHI_MIN = 3;              // caratteri minimi prima di cercare un luogo o indirizzo
+  // Meteo attuale per la zona di partenza: open-meteo non chiede chiavi e
+  // risponde in JSON. Si chiede una volta ogni quarto d'ora, mai bloccante.
+  const METEO_URL = 'https://api.open-meteo.com/v1/forecast';
+  const METEO_TTL = 15 * 60 * 1000;
 
 
   const FERMATE_FALLBACK = [
@@ -163,6 +167,14 @@
   let stopLiveRuolo = 'partenza';
   let miniFermata = null;
   let posizioneUtente = null;
+  // Ultimo meteo letto: `camminoPesante` è quello che passa al motore.
+  const meteo = {
+    ts: 0, pioggia: false, neve: 0, mm: 0, vento: 0, codice: null,
+    temperatura: null, luogo: '', camminoPesante: false, caricamento: false, errore: null
+  };
+  // Codici WMO che significano strada bagnata (pioggia, rovesci, temporale,
+  // neve): con questi il cammino pesa il doppio.
+  const METEO_BAGNATO = [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99];
   // Navigazione guidata: posizione continua, passo corrente, mappa in follow.
   const navigazione = {
     attiva: false, watchId: null, ultima: null, precisione: null,
@@ -3934,10 +3946,81 @@
     return testo ? '<p class="criterio-spiega">' + esc(testo) + '</p>' : '';
   }
 
+  // Meteo attuale sulla zona di partenza. Non blocca mai il calcolo: se il
+  // servizio non risponde, restano i pesi normali e nessuna nota.
+  async function caricaMeteo() {
+    if (meteo.caricamento) return;
+    if (meteo.ts && Date.now() - meteo.ts < METEO_TTL) return;
+    const punto = sel.partenza && sel.partenza.lat != null
+      ? sel.partenza
+      : { lat: 44.4949, lon: 11.3426, nome: 'Bologna' };
+    meteo.caricamento = true;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    try {
+      const risposta = await fetch(METEO_URL +
+        '?latitude=' + Number(punto.lat).toFixed(3) +
+        '&longitude=' + Number(punto.lon).toFixed(3) +
+        '&current=temperature_2m,precipitation,rain,snowfall,weather_code,wind_speed_10m' +
+        '&timezone=auto', { signal: controller.signal });
+      if (!risposta.ok) throw new Error('meteo ' + risposta.status);
+      const dati = await risposta.json();
+      const ora = (dati && dati.current) || {};
+      const codice = Number(ora.weather_code);
+      const mm = Number(ora.precipitation) || 0;
+      const neve = Number(ora.snowfall) || 0;
+      const vento = Number(ora.wind_speed_10m) || 0;
+      const bagnato = mm > 0.1 || neve > 0 || METEO_BAGNATO.indexOf(codice) >= 0;
+      const pesante = bagnato || vento >= 40;
+      const cambiato = pesante !== meteo.camminoPesante;
+      meteo.ts = Date.now();
+      meteo.pioggia = bagnato;
+      meteo.neve = neve;
+      meteo.mm = mm;
+      meteo.vento = vento;
+      meteo.codice = isFinite(codice) ? codice : null;
+      meteo.temperatura = isFinite(Number(ora.temperature_2m)) ? Number(ora.temperature_2m) : null;
+      meteo.luogo = String(punto.nome || 'Bologna').split(' - ')[0];
+      meteo.camminoPesante = pesante;
+      meteo.errore = null;
+      // Se il tempo è cambiato il percorso già mostrato non è più quello
+      // scelto con i pesi giusti: si ricalcola una volta sola.
+      if (cambiato && sel.partenza && sel.destinazione && routing.stato === 'ok') {
+        routing.chiave = null;
+        calcolaPercorso();
+      } else {
+        renderPercorso();
+      }
+    } catch (errore) {
+      meteo.errore = errore;
+      // Non si ritenta a ogni ricalcolo: il meteo è un extra, non un requisito.
+      meteo.ts = Date.now();
+    } finally {
+      clearTimeout(timer);
+      meteo.caricamento = false;
+    }
+  }
+
+  function descrizioneMeteo() {
+    if (!meteo.camminoPesante) return '';
+    const dove = meteo.luogo ? ' a ' + meteo.luogo : '';
+    const mm = meteo.mm > 0
+      ? ' (' + String(meteo.mm.toFixed(1)).replace('.', ',') + ' mm)'
+      : '';
+    let testo;
+    if (meteo.neve > 0) testo = 'Nevica' + dove + mm;
+    else if (meteo.pioggia) testo = 'Piove' + dove + mm;
+    else testo = 'Vento forte' + dove;
+    if (meteo.vento >= 40 && meteo.pioggia) testo += ' e vento forte';
+    return testo + ': do più peso ai tratti a piedi.';
+  }
+
   // Due righe di testo, non una scheda: la corsa scartata perché in forte
   // ritardo e il consiglio di camminare alla fermata dopo.
   function htmlSuggerimenti() {
     let html = '';
+    const testoMeteo = descrizioneMeteo();
+    if (testoMeteo) html += '<p class="criterio-spiega">' + esc(testoMeteo) + '</p>';
     if (routing.avvisoRitardo) {
       html += '<p class="criterio-spiega">' + esc(routing.avvisoRitardo) + '</p>';
     }
@@ -4202,6 +4285,12 @@
       routing.errore = 'motore dei percorsi non disponibile';
       disegnaPercorso();
       return;
+    }
+    // Il meteo si chiede in sottofondo e, quando è noto, decide quanto pesa il
+    // cammino: con pioggia o vento forte un minuto a piedi vale il doppio.
+    caricaMeteo();
+    if (typeof TPERRouting.impostaPesoCammino === 'function') {
+      TPERRouting.impostaPesoCammino(meteo.camminoPesante ? 2 : 1);
     }
     assicuraQuando();
     const chiave = sel.partenza.id + '|' + sel.destinazione.id + '|' + routing.giorno + '|' + routing.orario + '|' + routing.modo;

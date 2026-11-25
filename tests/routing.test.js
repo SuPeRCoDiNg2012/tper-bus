@@ -421,3 +421,27 @@ test('partenzeFermata elenca tutte le corse del giorno, senza i capolinea', asyn
   assert.deepEqual(aB.map((p) => p.orario), [29100, 29400, 33000]);
   assert.deepEqual(routing.partenzeFermata('Z', GIORNO), []);
 });
+
+test('il peso del cammino cambia solo il costo ottimizzato', async () => {
+  const routing = await caricaRouting(dati([
+    [0, 0, 0, 28800, 1, 600],       // L1 A 08:00 → B 08:10
+    [1, 0, 1, 29700, 1, 600]        // L2 B 08:15 → C 08:25
+  ]));
+  // Cammino finale di 300 s: l'arrivo non cambia, il costo sì.
+  const destinazioni = [{ id: 'C', cammino: 300 }];
+
+  routing.impostaPesoCammino(1);
+  const asciutto = routing.calcola('A', destinazioni, GIORNO, { maxCambi: 3 });
+  routing.impostaPesoCammino(2);
+  const pioggia = routing.calcola('A', destinazioni, GIORNO, { maxCambi: 3 });
+
+  assert.equal(pioggia.arrivo, asciutto.arrivo);
+  assert.equal(pioggia.punteggio.costoVeloce, asciutto.punteggio.costoVeloce);
+  assert.ok(pioggia.punteggio.costoOttimizzato > asciutto.punteggio.costoOttimizzato);
+
+  // Fuori scala e valori non numerici tornano ai pesi normali.
+  routing.impostaPesoCammino(99);
+  assert.ok(routing.calcola('A', destinazioni, GIORNO, { maxCambi: 3 }).punteggio);
+  routing.impostaPesoCammino('boh');
+  assert.ok(routing.calcola('A', destinazioni, GIORNO, { maxCambi: 3 }).punteggio);
+});

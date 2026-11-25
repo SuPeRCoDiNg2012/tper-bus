@@ -38,6 +38,10 @@
     PENALITA_CAMBI_2PLUS: 2400    // più di due cambi
   };
   const PASSO_PEDONALE = 1.25;    // m/s, la stessa stima usata per i cammini brevi
+  // Quanto pesa un metro a piedi nel criterio "ottimizzato". L'app lo alza
+  // quando piove o tira vento: il motore non sa niente di meteo, riceve solo
+  // un moltiplicatore.
+  let pesoCammino = 1;
   const CAMBIO_CORTO = 120;       // secondi sotto i quali un cambio è a rischio
   const ATTESA_LUNGA = 45 * 60;   // secondi oltre i quali l'attesa è "lunga"
 
@@ -643,7 +647,7 @@
     const p = PESI_OTTIMIZZATO;
     let costoOttimizzato = tempoTotale +
       numeroCambi * p.PESO_CAMBIO +
-      metriCammino * p.PESO_CAMMINO +
+      metriCammino * p.PESO_CAMMINO * pesoCammino +
       numeroFermate * p.PESO_FERMATA +
       tempoAttesa * p.PESO_ATTESA +
       Math.max(0, numeroLinee - 1) * p.PESO_LINEA_DIVERSA;
@@ -908,6 +912,11 @@
     confronta: confronta,
     valuta: valuta,
     PESI_OTTIMIZZATO: PESI_OTTIMIZZATO,
+    /** Moltiplicatore del peso del cammino (1 = tempo asciutto, 2 = pioggia). */
+    impostaPesoCammino: function (valore) {
+      const numero = Number(valore);
+      pesoCammino = isFinite(numero) && numero > 0 ? Math.min(4, Math.max(0.5, numero)) : 1;
+    },
     disponibile: function () { return !!dati; },
     fermateDisponibili: function () { return indiceFermate ? Array.from(indiceFermate.keys()) : []; },
     etichettaTreno: etichettaTreno
