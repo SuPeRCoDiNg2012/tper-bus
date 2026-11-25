@@ -38,6 +38,7 @@
   const K_INSTALL_VISTO = 'tperzc_install_visto_v1';
   const K_ONBOARDING = 'tperzc_onboarding_visto_v1';
   const K_ULTIMA = 'tperzc_ultima_v1';
+  const K_PREFERITI = 'tperzc_preferiti_v1';
   const K_ERRORI = 'tperzc_errori_v1';
   const URL_UFFICIALE = 'https://solweb.tper.it/web/tools/zone-calculator.aspx';
   const HELLOBUS = 'https://hellobuswsweb.tper.it/web-services/hellobus.asmx/QueryHellobus';
@@ -2392,6 +2393,7 @@
   }
 
   function chiudiOverlay() {
+    preferitoInCorso = null;
     const schermo = $('cerca');
     if (schermo) schermo.hidden = true;
     const input = $('cerca-input');
@@ -2584,14 +2586,145 @@
     return luogoRipristinato(salvata);
   }
 
+  /* --- Preferiti ----------------------------------------------------- */
+  // Casa e lavoro sono gli unici due posti che si ripetono ogni giorno: due
+  // scorciatoie, non un elenco da gestire. Restano sul dispositivo.
+  const PREFERITI = [
+    { slot: 'casa', etichetta: 'Casa', icona: 'house', domanda: 'Dove è casa?' },
+    { slot: 'lavoro', etichetta: 'Lavoro', icona: 'briefcase', domanda: 'Dove è il lavoro?' }
+  ];
+  let preferitoInCorso = null;
+
+  function preferitiSalvati() {
+    const salvati = leggiJSON(K_PREFERITI);
+    return salvati && typeof salvati === 'object' ? salvati : {};
+  }
+
+  // Solo quelli ancora risolvibili: una fermata sparita dal dataset non deve
+  // lasciare un pulsante che non porta da nessuna parte.
+  function preferitiValidi() {
+    const salvati = preferitiSalvati();
+    return PREFERITI
+      .map((voce) => ({ slot: voce.slot, etichetta: voce.etichetta, icona: voce.icona, luogo: luogoRipristinato(salvati[voce.slot]) }))
+      .filter((voce) => voce.luogo && voce.luogo.lat != null);
+  }
+
+  function salvaPreferito(slot, luogo) {
+    if (!PREFERITI.some((voce) => voce.slot === slot)) return false;
+    const compatto = luogo ? luogoSalvato(luogo) : null;
+    if (luogo && !compatto) {
+      mostraToast('La posizione attuale cambia: scegli una fermata o un indirizzo');
+      return false;
+    }
+    const salvati = preferitiSalvati();
+    if (compatto) salvati[slot] = compatto;
+    else delete salvati[slot];
+    scrivi(K_PREFERITI, JSON.stringify(salvati));
+    renderPreferiti();
+    return true;
+  }
+
+  // Il menu mostra sempre lo stato vero: nessun preferito "fantasma" se il
+  // posto è stato rimosso o non si risolve più.
+  function renderPreferiti() {
+    const riquadro = $('menu-preferiti');
+    if (riquadro) {
+      const validi = preferitiValidi();
+      riquadro.innerHTML = PREFERITI.map((voce) => {
+        const scelto = validi.find((v) => v.slot === voce.slot);
+        return '<div class="menu-pref-riga">' +
+          '<button type="button" class="menu-pref" data-azione="pref-scegli" data-slot="' + voce.slot + '">' +
+          Icone.svg(voce.icona, 20) +
+          '<span class="spazio">' + voce.etichetta + '</span>' +
+          '<span class="nota' + (scelto ? '' : ' vuoto') + '">' +
+          esc(scelto ? nomeBreve(scelto.luogo.nome) : 'Imposta') + '</span>' +
+          '</button>' +
+          (scelto
+            ? '<button type="button" class="menu-pref-rimuovi" data-azione="pref-rimuovi" data-slot="' + voce.slot +
+              '" aria-label="Rimuovi ' + voce.etichetta + '">' + ICONA_X + '</button>'
+            : '') +
+          '</div>';
+      }).join('');
+    }
+    if (vistaAttiva === 'percorso' && !(sel.partenza && sel.destinazione)) renderPercorso();
+  }
+
+  function apriCercaPreferito(slot) {
+    const voce = PREFERITI.find((p) => p.slot === slot);
+    if (!voce) return;
+    chiudiMenu();
+    preferitoInCorso = slot;
+    apriCerca('destinazione');
+    const input = $('cerca-input');
+    if (!input) return;
+    input.value = '';
+    input.placeholder = voce.domanda;
+    aggiornaPulisci();
+    apriSuggerimenti('destinazione', '');
+  }
+
+  // Azioni dei preferiti: le usano sia il pannello sia il menu, che hanno due
+  // gestori diversi. Restituisce true quando l'azione è stata gestita qui.
+  function azionePreferito(azione, pulsante) {
+    if (azione === 'pref-vai') {
+      const scelto = preferitiValidi().find((v) => v.slot === pulsante.getAttribute('data-slot'));
+      if (scelto) selezionaFermata('destinazione', scelto.luogo);
+      return true;
+    }
+    if (azione === 'pref-scegli') {
+      apriCercaPreferito(pulsante.getAttribute('data-slot'));
+      return true;
+    }
+    if (azione === 'pref-rimuovi') {
+      const slot = pulsante.getAttribute('data-slot');
+      const voce = PREFERITI.find((p) => p.slot === slot);
+      if (salvaPreferito(slot, null)) mostraToast((voce ? voce.etichetta : 'Preferito') + ' rimosso');
+      return true;
+    }
+    if (azione === 'apri-preferiti') {
+      apriMenu();
+      const riquadro = $('menu-preferiti');
+      if (riquadro) riquadro.scrollIntoView({ block: 'center' });
+      return true;
+    }
+    return false;
+  }
+
+  // Scegliere una voce nella ricerca serve sia al percorso sia ai preferiti:
+  // cambia solo cosa se ne fa.
+  function scegliLuogo(ruolo, luogo) {
+    if (!preferitoInCorso) {
+      selezionaFermata(ruolo, luogo);
+      return;
+    }
+    const slot = preferitoInCorso;
+    preferitoInCorso = null;
+    if (!salvaPreferito(slot, luogo)) return;
+    chiudiOverlay();
+    const voce = PREFERITI.find((p) => p.slot === slot);
+    mostraToast((voce ? voce.etichetta : 'Preferito') + ' salvato');
+  }
+
   // Stato vuoto con azioni: tre chip che riempiono la ricerca in un tocco.
   function bloccoVuotoHTML() {
     if (sel.partenza && sel.destinazione) return '';
     const bentornato = ultimaDestinazione();
+    const preferiti = preferitiValidi();
     let html = '<div class="vuoto-block">';
     if (bentornato && !sel.destinazione) {
       html += '<button type="button" class="bentornato" data-azione="riprendi-ultima">' +
         '<span>Di nuovo a ' + esc(nomeBreve(bentornato.nome)) + '?</span>' + ICONA_PIU + '</button>';
+    }
+    // Prima ciò che è tuo (casa, lavoro), poi le mete generiche.
+    if (preferiti.length) {
+      html += '<div class="pref-chips">' + preferiti.map((voce) =>
+        '<button type="button" class="chip-pref" data-azione="pref-vai" data-slot="' + voce.slot + '">' +
+        Icone.svg(voce.icona, 16) + '<span>' + voce.etichetta + ' · ' + esc(nomeBreve(voce.luogo.nome)) + '</span></button>'
+      ).join('') + '</div>';
+    } else {
+      // Una riga sola, e sparisce appena ci sono i preferiti: serve a far
+      // scoprire la funzione, non a occupare spazio per sempre.
+      html += '<button type="button" class="pref-aggiungi" data-azione="apri-preferiti">Salva casa e lavoro</button>';
     }
     html += '<p class="vuoto-testo">Dove vuoi andare?</p><div>' +
       '<button type="button" class="chip-vuoto" data-azione="chip-cerca" data-testo="Piazza Maggiore">Piazza Maggiore</button>' +
@@ -5038,6 +5171,7 @@
   }
 
   function sincronizzaMenu() {
+    renderPreferiti();
     const check = $('menu-abbonamento');
     if (check) check.checked = abbonamento;
     const voceErrori = $('menu-errori');
@@ -5273,6 +5407,7 @@
       const pulsante = evento.target.closest('[data-azione]');
       if (!pulsante) return;
       const azione = pulsante.getAttribute('data-azione');
+      if (azionePreferito(azione, pulsante)) return;
       if (azione === 'salva-proxy') {
         const valore = ($('input-proxy').value || '').trim();
         if (valore) scrivi(K_PROXY, valore); else localStorage.removeItem(K_PROXY);
@@ -5376,7 +5511,7 @@
       if (miaPosizione) {
         if (!posizioneUtente) return;
         const vicina = fermateVicine(posizioneUtente.lat, posizioneUtente.lon, 1)[0];
-        selezionaFermata('partenza', {
+        scegliLuogo('partenza', {
           id: 'geo:' + posizioneUtente.lat.toFixed(5) + ',' + posizioneUtente.lon.toFixed(5),
           nome: 'La mia posizione',
           indirizzo: '',
@@ -5397,7 +5532,7 @@
         if (!isFinite(lat) || !isFinite(lon)) return;
         const vicina = fermateVicine(lat, lon, 1)[0];
         const ruolo = indirizzo.getAttribute('data-ruolo') || campoAttivo || 'destinazione';
-        selezionaFermata(ruolo, {
+        scegliLuogo(ruolo, {
           id: 'geo:' + lat.toFixed(5) + ',' + lon.toFixed(5),
           nome: indirizzo.getAttribute('data-nome') || 'Luogo',
           indirizzo: indirizzo.getAttribute('data-dettaglio') || '',
@@ -5415,7 +5550,7 @@
       const fermata = fermataPerId(voce.getAttribute('data-voce'));
       if (!fermata) return;
       const ruolo = voce.getAttribute('data-ruolo') || campoAttivo || 'destinazione';
-      selezionaFermata(ruolo, fermata);
+      scegliLuogo(ruolo, fermata);
     });
 
     // ---- Pannello ----
@@ -5495,6 +5630,7 @@
             apriSuggerimenti('destinazione', testo);
           }
         }
+        if (azionePreferito(azione, pulsante)) return;
         if (azione === 'usa-posizione') vaiVicino();
         if (azione === 'riprendi-ultima') {
           const ultima = ultimaDestinazione();

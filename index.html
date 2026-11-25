@@ -288,6 +288,19 @@
   .menu-sezione{font-size:11px;font-weight:600;color:var(--testo-2);padding:16px 16px 6px;}
   .menu-recente{display:block;width:100%;border:0;background:transparent;text-align:left;padding:8px 16px;cursor:pointer;font-size:14px;}
   .menu-recente small{display:block;font-size:12px;color:var(--testo-2);margin-top:2px;}
+  /* Preferiti: una riga per posto, con la X accanto alla voce da cambiare. */
+  .menu-pref-riga{display:flex;align-items:center;gap:2px;}
+  .menu-pref{flex:1;min-width:0;display:flex;align-items:center;gap:12px;min-height:48px;border:0;background:transparent;padding:0 4px 0 16px;text-align:left;font-size:14px;color:var(--testo);cursor:pointer;}
+  .menu-pref .spazio{flex:1;min-width:0;}
+  .menu-pref .nota{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%;}
+  .menu-pref .nota.vuoto{color:var(--testo-2);}
+  .menu-pref svg{color:var(--testo-2);flex:0 0 auto;}
+  .menu-pref-rimuovi{width:44px;height:44px;flex:0 0 auto;border:0;background:transparent;color:var(--testo-2);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .pref-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .chip-pref{display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:0 14px;border:1px solid var(--bordo-2);border-radius:999px;background:var(--sup);color:var(--testo);font-size:13px;font-weight:600;cursor:pointer;max-width:100%;}
+  .chip-pref svg{color:var(--rosso);flex:0 0 auto;}
+  .chip-pref span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pref-aggiungi{display:inline-flex;align-items:center;min-height:44px;border:0;background:transparent;padding:0;font-size:13px;font-weight:600;color:var(--testo-2);text-decoration:underline;text-underline-offset:3px;cursor:pointer;}
   .drawer details{border-top:1px solid var(--bordo);margin-top:8px;}
   .drawer details summary{list-style:none;min-height:48px;display:flex;align-items:center;gap:8px;padding:0 16px;font-size:14px;font-weight:500;cursor:pointer;}
   .drawer details summary svg{flex:0 0 auto;color:var(--testo-2);}
@@ -614,6 +627,8 @@
     <div class="menu-sezione">Percorsi recenti</div>
     <button class="menu-recente" id="menu-recente" hidden></button>
     <p class="menu-sezione" id="menu-recente-vuoto">Nessun percorso ancora.</p>
+    <div class="menu-sezione">Preferiti</div>
+    <div id="menu-preferiti"></div>
     <details id="menu-info">
       <summary><span class="spazio">Informazioni e fonti dati</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
       <div class="info" id="menu-info-corpo"></div>
