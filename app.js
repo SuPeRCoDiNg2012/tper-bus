@@ -1586,6 +1586,15 @@
       livePercorsoAbort.abort();
       livePercorsoAbort = null;
     }
+    // Anche i ritardi delle altre tappe sono del viaggio appena chiuso.
+    liveTappe.chiave = null;
+    liveTappe.stato = 'idle';
+    liveTappe.valori = [];
+    liveTappe.esito = null;
+    if (liveTappeAbort) {
+      liveTappeAbort.abort();
+      liveTappeAbort = null;
+    }
     ultimeFeatures = [];
     inquadratoPerFermate = null;
     if (mappa) {
@@ -4126,6 +4135,7 @@
     box.innerHTML = htmlRiepilogo(r) + htmlStatoPercorso();
     collegaRisultato();
     caricaLivePercorso();
+    caricaLiveTappe();
     avviaTimerPercorso();
     disegnaTracciato();
     aggiornaScrim();
@@ -4311,6 +4321,14 @@
   let livePercorsoAbort = null;
   let timerPercorso = null;
 
+  // Ritardi di tutte le tappe, non solo della prima: un bus in ritardo sulla
+  // seconda gamba sposta l'arrivo o fa perdere il cambio, e la scheda deve
+  // dirlo. `valori` è allineato a `routing.esito.tappe` (secondi, null = ignoto).
+  const liveTappe = {
+    chiave: null, ts: 0, stato: 'idle', valori: [], caricamento: false, esito: null
+  };
+  let liveTappeAbort = null;
+
   function primaCorsaPercorso() {
     if (routing.stato !== 'ok' || !routing.esito) return null;
     const tappe = routing.esito.tappe || [];
@@ -4330,6 +4348,29 @@
     return ((secondi - adesso + 43200 + 86400) % 86400) - 43200;
   }
 
+  /**
+   * L'arrivo di HelloBus che corrisponde alla corsa dell'itinerario: stessa
+   * linea e orario entro 12 minuti. Oltre è un'altra corsa, e mostrarla come
+   * "la nostra" produceva avvisi tipo "24 min di anticipo" su un bus diverso.
+   */
+  function arrivoDellaCorsa(arrivi, tappa) {
+    const lineaCorsa = String(tappa.linea).toUpperCase();
+    const dellaLinea = arrivi.filter((arrivo) => arrivo.linea === lineaCorsa);
+    const candidati = dellaLinea.length ? dellaLinea : arrivi;
+    const pianificato = minutiDaAdesso(tappa.partenza);
+    let migliore = null;
+    let scarto = Infinity;
+    candidati.forEach((arrivo) => {
+      const delta = minutiA(arrivo.ora) * 60 - pianificato;
+      if (Math.abs(delta) > 12 * 60) return;
+      if (Math.abs(delta) < Math.abs(scarto)) {
+        migliore = arrivo;
+        scarto = delta;
+      }
+    });
+    return migliore ? { corsa: migliore, scarto: scarto } : null;
+  }
+
   function disegnaLivePercorso() {
     const contenitore = $('live-percorso');
     if (!contenitore) return;
@@ -4344,9 +4385,9 @@
     const linea = esc(tappa.linea);
     const programmato = hhmmDaSecondi(tappa.partenza);
     let html;
+    let tag = '<span class="tag-orario">ORARIO</span>';
     if (treno) {
-      html = '<span class="tag-orario">ORARIO</span><span>Treno <b>' + linea + '</b> alle <b>' + programmato +
-        '</b>.</span>';
+      html = '<span>Treno <b>' + linea + '</b> alle <b>' + programmato + '</b>.</span>';
     } else if (livePercorso.caricamento) {
       html = '<span class="punto off"></span><span>Controllo se il bus <b>' + linea +
         '</b> è in orario…</span>';
@@ -4355,20 +4396,35 @@
       const quando = minutiAttesa <= 0 ? 'in arrivo' : 'tra ' + minutiAttesa + ' min';
       const scarto = Math.round(livePercorso.ritardo / 60);
       const vivo = corsa.tipo === 'live';
-      html = '<span class="' + (vivo ? 'tag-live' : 'tag-orario') + '">' + (vivo ? 'LIVE' : 'ORARIO') + '</span>' +
-        '<span>Bus <b>' + linea + '</b> · <b>' + quando + '</b> · ore ' + esc(corsa.ora) +
+      tag = '<span class="' + (vivo ? 'tag-live' : 'tag-orario') + '">' + (vivo ? 'LIVE' : 'ORARIO') + '</span>';
+      html = '<span>Bus <b>' + linea + '</b> · <b>' + quando + '</b> · ore ' + esc(corsa.ora) +
         (vivo && Math.abs(scarto) >= 2
           ? ' · ' + (scarto > 0 ? scarto + ' min di ritardo' : Math.abs(scarto) + ' min di anticipo')
           : '') +
         (vivo ? '' : ' · orario programmato') + '</span>';
     } else if (livePercorso.stato === 'errore') {
-      html = '<span class="tag-orario">ORARIO</span><span>Bus <b>' + linea + '</b> alle <b>' + programmato +
+      html = '<span>Bus <b>' + linea + '</b> alle <b>' + programmato +
         '</b> · tempo reale non raggiungibile.</span>';
     } else {
-      html = '<span class="tag-orario">ORARIO</span><span>Bus <b>' + linea + '</b> alle <b>' + programmato +
+      html = '<span>Bus <b>' + linea + '</b> alle <b>' + programmato +
         '</b> · orario programmato.</span>';
     }
-    contenitore.innerHTML = html;
+    // Le altre tappe: solo quando HelloBus ha risposto per almeno una.
+    const info = ritardiPercorso();
+    if (info && info.noti) {
+      if (info.cambioPerso) {
+        html += '<span><b>Cambio perso:</b> con questo ritardo la corsa per ' +
+          esc(info.lineaPersa) + ' non ti aspetta. Scegli un\'altra soluzione.</span>';
+      } else if (info.cambioRischioso) {
+        html += '<span><b>Cambio a rischio:</b> al ritardo attuale restano meno di 2 minuti per la coincidenza.</span>';
+      } else if (info.ultimo >= 120) {
+        html += '<span>Arrivo previsto con <b>' + Math.round(info.ultimo / 60) + ' min</b> di ritardo.</span>';
+      }
+      if (info.totale > 1) {
+        html += '<span class="live-nota">Tempo reale su ' + info.noti + ' di ' + info.totale + ' corse.</span>';
+      }
+    }
+    contenitore.innerHTML = tag + '<span class="live-testo">' + html + '</span>';
     contenitore.hidden = false;
   }
 
@@ -4406,24 +4462,9 @@
     try {
       const testo = await queryHellobus(tappa.da, tappa.linea, segnale);
       if (segnale.aborted) return;
-      const tutti = parseHellobus(testo);
-      const lineaCorsa = String(tappa.linea).toUpperCase();
-      const dellaLinea = tutti.filter((arrivo) => arrivo.linea === lineaCorsa);
-      const candidati = dellaLinea.length ? dellaLinea : tutti;
-      const pianificato = minutiDaAdesso(tappa.partenza);
-      let migliore = null;
-      let scarto = Infinity;
-      candidati.forEach((arrivo) => {
-        const delta = minutiA(arrivo.ora) * 60 - pianificato;
-        // Oltre 12 minuti di scarto è un'altra corsa: mostrarla come "la
-        // nostra" produceva avvisi tipo "24 min di anticipo" su un bus che
-        // non è quello dell'itinerario (capitava con "arriva entro").
-        if (Math.abs(delta) > 12 * 60) return;
-        if (Math.abs(delta) < Math.abs(scarto)) {
-          migliore = arrivo;
-          scarto = delta;
-        }
-      });
+      const trovato = arrivoDellaCorsa(parseHellobus(testo), tappa);
+      const migliore = trovato ? trovato.corsa : null;
+      const scarto = trovato ? trovato.scarto : 0;
       livePercorso.corsa = migliore;
       livePercorso.ritardo = migliore ? scarto : 0;
       livePercorso.stato = migliore ? 'ok' : 'nessuna-corsa';
@@ -4442,25 +4483,132 @@
 
   const RITARDO_MAX = 10 * 60;
 
+  /**
+   * Ritardi del percorso scelto, con quello che cambia davvero: un ritardo
+   * sull'ultima corsa sposta l'arrivo, un ritardo su una corsa intermedia può
+   * far perdere il cambio (il margine è la differenza con la partenza dopo).
+   */
+  function ritardiPercorso() {
+    const esito = routing.esito;
+    const tappe = esito && Array.isArray(esito.tappe) ? esito.tappe : [];
+    const valori = liveTappe.valori || [];
+    // I valori sono allineati alle tappe di un esito preciso: cambiando
+    // soluzione o criterio non valgono più.
+    if (!tappe.length || !valori.length || liveTappe.esito !== esito) return null;
+    let noti = 0;
+    let ultimo = 0;
+    let cambioRischioso = false;
+    let cambioPerso = false;
+    let lineaPersa = '';
+    tappe.forEach((tappa, indice) => {
+      const scarto = valori[indice];
+      if (scarto == null) return;
+      noti += 1;
+      const successiva = tappe[indice + 1];
+      if (successiva) {
+        const margine = successiva.partenza - tappa.arrivo;
+        if (scarto > margine) {
+          cambioPerso = true;
+          lineaPersa = successiva.linea;
+        } else if (margine - scarto < 120) {
+          cambioRischioso = true;
+        }
+      } else if (scarto > 0) {
+        ultimo = scarto;
+      }
+    });
+    return {
+      noti: noti, totale: tappe.length, ultimo: ultimo,
+      cambioRischioso: cambioRischioso, cambioPerso: cambioPerso, lineaPersa: lineaPersa
+    };
+  }
+
   // Il GTFS non sa se una corsa è cancellata o venti minuti indietro: quando
   // HelloBus lo dice, quella proposta non è più la migliore e si passa alla
   // successiva del pool (una volta sola: niente cicli di scarto).
   function scartaCorsaInRitardo() {
     if (routing.avvisoRitardo) return false;
-    if (livePercorso.stato !== 'ok' || !livePercorso.corsa) return false;
-    if (!(livePercorso.ritardo > RITARDO_MAX)) return false;
     const opzioni = routing.opzioni || [];
     const indice = opzioni.indexOf(routing.esito);
     if (indice < 0 || indice + 1 >= opzioni.length) return false;
-    const prossimo = opzioni[indice + 1];
-    if (!prossimo) return false;
-    const scarto = Math.round(livePercorso.ritardo / 60);
-    routing.avvisoRitardo = 'Bus ' + (livePercorso.corsa.linea || '') +
-      ' in ritardo di ' + scarto + ' min: propongo la corsa successiva.';
-    routing.esito = prossimo;
+    const info = ritardiPercorso();
+    let motivo = '';
+    if (info && info.cambioPerso) {
+      motivo = 'Il ritardo fa perdere il cambio per ' + info.lineaPersa;
+    } else if (info && info.ultimo > RITARDO_MAX) {
+      motivo = 'Arrivo in ritardo di ' + Math.round(info.ultimo / 60) + ' min';
+    } else if (livePercorso.stato === 'ok' && livePercorso.corsa &&
+      livePercorso.ritardo > RITARDO_MAX) {
+      motivo = 'Bus ' + (livePercorso.corsa.linea || '') +
+        ' in ritardo di ' + Math.round(livePercorso.ritardo / 60) + ' min';
+    }
+    if (!motivo) return false;
+    routing.avvisoRitardo = motivo + ': propongo la soluzione successiva.';
+    routing.esito = opzioni[indice + 1];
     routing.aperto = indice + 1;
+    // I ritardi erano della soluzione precedente: si richiedono per la nuova.
+    liveTappe.valori = [];
+    liveTappe.chiave = null;
     disegnaPercorso();
     return true;
+  }
+
+  // Ritardo live su ogni tappa bus: una richiesta per palina+linea (due tappe
+  // sulla stessa linea alla stessa fermata sono la stessa domanda), in
+  // parallelo e con lo stesso relay della prima corsa.
+  async function caricaLiveTappe(forza) {
+    const esito = routing.stato === 'ok' ? routing.esito : null;
+    const tappe = esito && Array.isArray(esito.tappe) ? esito.tappe : [];
+    if (!tappe.length) {
+      if (liveTappeAbort) liveTappeAbort.abort();
+      liveTappe.chiave = null;
+      liveTappe.stato = 'idle';
+      liveTappe.valori = [];
+      return;
+    }
+    const chiave = tappe.map((tappa) => [tappa.da, tappa.linea, tappa.partenza].join('|')).join(';');
+    if (!forza && liveTappe.chiave === chiave && Date.now() - liveTappe.ts < 60000) {
+      disegnaLivePercorso();
+      return;
+    }
+    if (liveTappeAbort) liveTappeAbort.abort();
+    liveTappeAbort = new AbortController();
+    const segnale = liveTappeAbort.signal;
+    liveTappe.chiave = chiave;
+    liveTappe.caricamento = true;
+
+    const richieste = new Map();
+    tappe.forEach((tappa) => {
+      if (tappa.tipo === 1 || tappa.tipo === 2) return;
+      const k = tappa.da + '|' + tappa.linea;
+      if (!richieste.has(k)) {
+        richieste.set(k, queryHellobus(tappa.da, tappa.linea, segnale).catch(() => ''));
+      }
+    });
+    const testi = new Map();
+    await Promise.all(Array.from(richieste.entries()).map(async (voce) => {
+      testi.set(voce[0], await voce[1]);
+    }));
+    if (segnale.aborted || routing.esito !== esito) return;
+
+    let noti = 0;
+    const valori = tappe.map((tappa) => {
+      if (tappa.tipo === 1 || tappa.tipo === 2) return null;
+      const testo = testi.get(tappa.da + '|' + tappa.linea);
+      if (!testo || /NON GESTITA/i.test(testo)) return null;
+      const trovato = arrivoDellaCorsa(parseHellobus(testo), tappa);
+      if (!trovato) return null;
+      noti += 1;
+      return Math.round(trovato.scarto);
+    });
+    liveTappe.valori = valori;
+    liveTappe.esito = esito;
+    liveTappe.ts = Date.now();
+    liveTappe.stato = noti ? 'ok' : 'nessuna-corsa';
+    liveTappe.caricamento = false;
+    if (esito) esito.ritardi = valori;
+    if (scartaCorsaInRitardo()) return;
+    disegnaLivePercorso();
   }
 
   function avviaTimerPercorso() {
@@ -4470,6 +4618,7 @@
       if (vistaAttiva !== 'percorso') return;
       if (!primaCorsaPercorso()) return;
       caricaLivePercorso(true);
+      caricaLiveTappe(true);
     }, 30000);
   }
 

@@ -81,6 +81,15 @@
     return pezzi.slice(0, 9).join('');
   }
 
+  // Ritardo live della singola corsa (secondi, calcolato dall'app). Sotto i due
+  // minuti non si scrive niente: è rumore, non informazione.
+  function ritardoHTML(e, indice) {
+    const scarto = e && e.ritardi ? e.ritardi[indice] : null;
+    if (scarto == null || Math.abs(scarto) < 120) return '';
+    const segno = scarto > 0 ? '+' : '−';
+    return ' · <b>' + segno + Math.round(Math.abs(scarto) / 60) + ' min</b>';
+  }
+
   /** Itinerario completo di una singola opzione. */
   function dettaglioHTML(e, etichetta) {
     let html = '<div class="viaggio">';
@@ -107,7 +116,8 @@
         '<span class="corsa-badge' + (treno ? ' treno' : '') + '"' + colore + '>' + esc(tappa.linea) + '</span>' +
         '<div class="corsa-corpo">' +
         '<div class="corsa-riga"><span class="corsa-ora">' + hhmm(tappa.partenza) + '</span><span class="corsa-fermata">' + esc(etichetta(tappa.da)) + '</span></div>' +
-        '<div class="corsa-info">' + (treno ? 'Treno' : tappa.fermate + ' ' + (tappa.fermate === 1 ? 'fermata' : 'fermate')) + ' · ' + durata + ' min</div>' +
+        '<div class="corsa-info">' + (treno ? 'Treno' : tappa.fermate + ' ' + (tappa.fermate === 1 ? 'fermata' : 'fermate')) + ' · ' + durata + ' min' +
+        ritardoHTML(e, indice) + '</div>' +
         '<div class="corsa-riga"><span class="corsa-ora">' + hhmm(tappa.arrivo) + '</span><span class="corsa-fermata">' + esc(etichetta(tappa.a)) + '</span></div>' +
         '</div></div>';
     });
