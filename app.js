@@ -34,10 +34,7 @@
   const K_CRITERIO_PROPOSTO = 'tperzc_criterio_proposto_v1';
   const K_PROXY = 'tperzc_proxy';
   const K_RELAY = 'tperzc_relay';
-  const K_USI = 'tperzc_usi_v1';
-  const K_INSTALL_VISTO = 'tperzc_install_visto_v1';
   const K_ONBOARDING = 'tperzc_onboarding_visto_v1';
-  const K_ULTIMA = 'tperzc_ultima_v1';
   const K_PREFERITI = 'tperzc_preferiti_v1';
   const K_AVVISI = 'tperzc_avvisi_v1';
   const K_ERRORI = 'tperzc_errori_v1';
@@ -2569,45 +2566,6 @@
       '</div></div>';
   }
 
-  /* ------------------------------------------------------------------ *
-   * Inviti: installazione, prima apertura, tratta di ieri
-   * ------------------------------------------------------------------ */
-  let usiApp = 0;
-
-  function contaUso() {
-    usiApp = (parseInt(leggi(K_USI), 10) || 0) + 1;
-    scrivi(K_USI, String(usiApp));
-  }
-
-  function appInstallata() {
-    return !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
-      navigator.standalone === true;
-  }
-
-  function sistemaIOS() {
-    return /iPad|iPhone|iPod/.test(navigator.userAgent);
-  }
-
-  // Invito discreto dentro il pannello: niente banner a tutta larghezza.
-  function invitoInstallazioneHTML() {
-    const visto = leggi(K_INSTALL_VISTO) === '1';
-    if (!Utilita.deveMostrareInvito(usiApp, visto, appInstallata())) return '';
-    const ios = sistemaIOS();
-    return '<div class="invito-installa">' +
-      '<span class="invito-testo">Installa Muovi Bologna sulla home' +
-      (ios ? '<span class="voce-motivo">Safari → Condividi → Aggiungi a Home</span>' : '') + '</span>' +
-      (ios ? '' : '<button type="button" class="btn btn-tenue" data-azione="installa-app">Installa</button>') +
-      '<button type="button" class="icona" data-azione="chiudi-invito" aria-label="Non ora">' + ICONA_X + '</button>' +
-      '</div>';
-  }
-
-  // L'ultima destinazione scelta serve al chip "Di nuovo a …?".
-  function ultimaDestinazione() {
-    const salvata = leggiJSON(K_ULTIMA);
-    if (!salvata) return null;
-    return luogoRipristinato(salvata);
-  }
-
   /* --- Preferiti ----------------------------------------------------- */
   // Casa e lavoro sono gli unici due posti che si ripetono ogni giorno: due
   // scorciatoie, non un elenco da gestire. Restano sul dispositivo.
@@ -2867,13 +2825,8 @@
   // Stato vuoto con azioni: tre chip che riempiono la ricerca in un tocco.
   function bloccoVuotoHTML() {
     if (sel.partenza && sel.destinazione) return '';
-    const bentornato = ultimaDestinazione();
     const preferiti = preferitiValidi();
     let html = '<div class="vuoto-block">';
-    if (bentornato && !sel.destinazione) {
-      html += '<button type="button" class="bentornato" data-azione="riprendi-ultima">' +
-        '<span>Di nuovo a ' + esc(nomeBreve(bentornato.nome)) + '?</span>' + ICONA_PIU + '</button>';
-    }
     // Prima ciò che è tuo (casa, lavoro), poi le mete generiche.
     if (preferiti.length) {
       html += '<div class="pref-chips">' + preferiti.map((voce) =>
@@ -2976,25 +2929,31 @@
     if (!vista) return;
     const tratta = !!(sel.partenza && sel.destinazione);
     vista.classList.toggle('con-percorso', tratta);
+    // Una sola superficie: partenza, destinazione e quando nella stessa
+    // scheda. La riga del quando separata aggiungeva un blocco e uno stacco
+    // inutili tra i campi e l'orario.
     vista.innerHTML =
-      '<div class="campi">' + rigaCampoHTML('partenza') + rigaCampoHTML('destinazione') + '</div>' +
-      '<div class="riga-quando">' +
+      '<div class="campi">' + rigaCampoHTML('partenza') + rigaCampoHTML('destinazione') +
+      '<div class="campo-riga campo-quando">' +
       '<button type="button" class="quando-btn" id="btn-quando" aria-expanded="' + (quandoAperto ? 'true' : 'false') + '">' +
       ICONA_OROLOGIO + '<span>' + esc(quandoEtichetta()) + '</span>' + ICONA_GIU + '</button>' +
       (sel.partenza && sel.destinazione
         ? '<button type="button" class="icona" data-azione="inverti" aria-label="Inverti partenza e destinazione">' + ICONA_SCAMBIA + '</button>'
         : '') +
       '</div>' +
+      '</div>' +
       (quandoAperto ? pannelloQuandoHTML() : '') +
       (tratta ? '' : bloccoVuotoHTML()) +
       // Niente pulsante "Cerca percorso" senza destinazione: sarebbe un vicolo
       // cieco, e copriva le fermate vicine che sono il vero punto di partenza.
-      '<div id="vista-risultato"></div>' +
-      // L'invito a installare sta in fondo: tra orario e riepilogo spingeva
-      // fuori dalla piega i dati del percorso.
-      invitoInstallazioneHTML();
+      '<div id="vista-risultato"></div>';
     collegaCampi();
     disegnaPercorso();
+    // La riga del quando sta dentro la scheda: se il contenuto cambia mentre il
+    // pannello è ridotto, il PEEK va rimisurato o taglia l'ultima riga.
+    if (statoSheet === 'peek' && !trascinando) {
+      requestAnimationFrame(() => applicaTrasformazione(traslazionePer('peek'), false));
+    }
   }
 
   function collegaCampi() {
@@ -4208,7 +4167,6 @@
         // Ultima destinazione e voce di storia: la prima serve al chip
         // "Di nuovo a …?", la seconda al tasto indietro del telefono.
         if (sel.destinazione && !sel.destinazione.gps) {
-          scrivi(K_ULTIMA, JSON.stringify(luogoSalvato(sel.destinazione)));
         }
         segnalaStoriaPercorso();
         // Le geometrie arrivano dopo il calcolo: appena pronte il tracciato
@@ -4924,7 +4882,6 @@
       } else {
         html += arriviHTML();
       }
-      html += '<p class="micro">LIVE = posizione reale del bus. ORARIO = orario programmato.</p>';
     }
     html += orariGiornoHTML(fermata);
     box.innerHTML = html;
@@ -4984,10 +4941,13 @@
     const vista = $('vista-percorso');
     // Solo i primi tre blocchi contano: la lista delle fermate vicine e il
     // risultato del percorso stanno sotto e non devono allungare il PEEK.
+    // Il contenuto si misura dal bordo del pannello, non dall'inizio della
+    // vista: tra i due ci sono maniglia e padding, e il PEEK tagliava la
+    // scheda proprio di quella misura.
     let contenuto = PEEK_VISIBILE - 28;
     if (vista && !vista.hidden) {
       const ultimo = vista.querySelector('[data-azione="cerca"]') || $('btn-quando');
-      if (ultimo) contenuto = Math.max(0, ultimo.getBoundingClientRect().bottom - vista.getBoundingClientRect().top);
+      if (ultimo) contenuto = Math.max(0, ultimo.getBoundingClientRect().bottom - sheet.getBoundingClientRect().top);
     }
     const peekVisibile = Math.max(120, Math.min(altezza - 96, contenuto + 28));
     const peek = Math.max(0, altezza - peekVisibile);
@@ -5785,15 +5745,6 @@
           else { routing.chiave = null; impostaSheet('meta'); calcolaPercorso(); }
         }
         if (azione === 'dettagli') impostaSheet('piena');
-        if (azione === 'chiudi-invito') {
-          scrivi(K_INSTALL_VISTO, '1');
-          renderPercorso();
-        }
-        if (azione === 'installa-app') {
-          scrivi(K_INSTALL_VISTO, '1');
-          if (window.installaApp) window.installaApp();
-          renderPercorso();
-        }
         if (azione === 'chip-cerca') {
           const testo = pulsante.getAttribute('data-testo') || '';
           apriCerca('destinazione');
@@ -5806,10 +5757,6 @@
         }
         if (azionePreferito(azione, pulsante)) return;
         if (azione === 'usa-posizione') vaiVicino();
-        if (azione === 'riprendi-ultima') {
-          const ultima = ultimaDestinazione();
-          if (ultima) selezionaFermata('destinazione', ultima);
-        }
         if (azione === 'altre') {
           alternativeAperte = !alternativeAperte;
           if (alternativeAperte) impostaSheet('piena');
@@ -5980,7 +5927,6 @@
     // Spazio, errori e conteggio degli usi vanno sistemati prima di tutto:
     // la pulizia deve avvenire quando le cache sono ancora scrivibili.
     pulisciCacheSeNecessario();
-    contaUso();
     collegaErrori();
     initMappa();
     collegaEventi();
@@ -6007,6 +5953,15 @@
     chiudiAvvio();
     mostraOnboarding();
     avviaAvvisi();
+    // I font arrivano dopo il primo disegno: cambiano l'altezza delle righe e
+    // il PEEK va rimisurato, altrimenti taglia il bordo della scheda.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => {
+        if (trascinando) return;
+        adattaAltezzaSheet();
+        applicaTrasformazione(traslazionePer(statoSheet), false);
+      });
+    }
     // Notifica toccata: apre gli orari della fermata che l'ha generata.
     const fermataAvviso = new URLSearchParams(location.search).get('fermata');
     if (fermataAvviso) {

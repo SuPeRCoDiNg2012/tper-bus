@@ -127,6 +127,7 @@
   .campi{display:flex;flex-direction:column;gap:0;border:1px solid var(--bordo);border-radius:14px;padding:2px 12px;background:var(--sup);}
   .campo-riga{display:flex;align-items:center;gap:10px;min-height:48px;}
   .campo-riga + .campo-riga{border-top:1px solid var(--bordo);}
+  .campo-quando{padding:0;}
   .pallino{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
   .pallino-p{background:var(--rosso);}
   .pallino-d{background:var(--testo);}
@@ -162,8 +163,8 @@
   /* Selettore del criterio: due chip, una attiva. Sta dentro il riepilogo,
      quindi sparisce quando il pannello passa al dettaglio. */
   .criteri{display:flex;gap:8px;margin:2px 0 2px;}
-  .chip-criterio{min-height:32px;padding:0 12px;border:1px solid #E8E8E8;border-radius:999px;background:var(--sup);color:var(--testo);font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;}
-  .chip-criterio.attiva{background:var(--rosso);border-color:var(--rosso);color:#fff;}
+  .chip-criterio{min-height:32px;padding:0 12px;border:0;border-radius:999px;background:#F2F2F2;color:var(--testo);font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;}
+  .chip-criterio.attiva{background:var(--rosso);color:#fff;}
   .criterio-spiega{margin:0;font-size:12px;font-weight:500;color:var(--testo-2);}
   .criterio-riga{margin:8px 0 0;font-size:12px;font-weight:500;color:var(--testo-2);}
   .badge-piano{display:inline-block;margin-left:8px;padding:2px 6px;border-radius:6px;background:#F2F2F2;color:var(--testo-2);font-size:11px;font-weight:600;vertical-align:middle;letter-spacing:0;}
@@ -287,7 +288,7 @@
   /* Filtro per linea: una fila di chip che scorre in orizzontale. */
   .chips-linea{display:flex;gap:6px;overflow-x:auto;margin:8px 0 4px;padding-bottom:2px;scrollbar-width:none;}
   .chips-linea::-webkit-scrollbar{display:none;}
-  .chip-filtro{flex:0 0 auto;min-height:32px;padding:0 12px;border:1px solid var(--bordo);border-radius:999px;background:var(--sup);color:var(--testo);font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer;}
+  .chip-filtro{flex:0 0 auto;min-height:32px;padding:0 12px;border:0;border-radius:999px;background:#F2F2F2;color:var(--testo);font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer;}
   .chip-filtro.attivo{background:var(--rosso);border-color:var(--rosso);color:#fff;}
 
   /* ---------- Drawer menu ---------- */
@@ -315,7 +316,7 @@
   .menu-pref-avviso{width:44px;height:44px;flex:0 0 auto;border:0;background:transparent;color:var(--testo-2);display:flex;align-items:center;justify-content:center;cursor:pointer;}
   .menu-pref-avviso.acceso{color:var(--rosso);}
   .pref-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
-  .chip-pref{display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:0 14px;border:1px solid var(--bordo-2);border-radius:999px;background:var(--sup);color:var(--testo);font-size:13px;font-weight:600;cursor:pointer;max-width:100%;}
+  .chip-pref{display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:0 14px;border:0;border-radius:999px;background:#F4F4F4;color:var(--testo);font-size:13px;font-weight:600;cursor:pointer;max-width:100%;}
   .chip-pref svg{color:var(--rosso);flex:0 0 auto;}
   .chip-pref span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .pref-aggiungi{display:inline-flex;align-items:center;min-height:44px;border:0;background:transparent;padding:0;font-size:13px;font-weight:600;color:var(--testo-2);text-decoration:underline;text-underline-offset:3px;cursor:pointer;}
@@ -470,11 +471,6 @@
   .vuoto-testo{font-size:13px;color:var(--testo-2);margin:0;}
   .chip-vuoto{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border:1px solid var(--bordo);border-radius:999px;background:var(--sup);font-size:13px;font-weight:600;white-space:nowrap;color:var(--testo);cursor:pointer;margin:0 6px 6px 0;}
   .chip-vuoto:active{background:#F4F4F4;}
-  .invito-installa{display:flex;align-items:center;gap:10px;border:1px solid var(--bordo);border-radius:var(--r-card);padding:10px 12px;margin-top:4px;}
-  .invito-testo{flex:1;min-width:0;font-size:13px;font-weight:600;display:flex;flex-direction:column;gap:2px;}
-  .invito-installa .btn{min-height:44px;padding:0 14px;flex:0 0 auto;}
-  .bentornato{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--bordo);border-radius:var(--r-card);padding:10px 12px;background:var(--sup);font-size:13px;font-weight:600;text-align:left;cursor:pointer;}
-  .bentornato span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .log-errori{display:flex;flex-direction:column;gap:8px;padding:0 16px 12px;font-size:11px;color:var(--testo-2);}
   .log-errori .voce-log{border-top:1px solid var(--bordo);padding-top:6px;white-space:pre-wrap;overflow-wrap:anywhere;}
 
