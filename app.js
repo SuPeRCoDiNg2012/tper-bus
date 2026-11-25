@@ -866,7 +866,7 @@
       filter: ['has', 'point_count'],
       paint: {
         'circle-color': '#C1121F',
-        'circle-radius': ['step', ['get', 'point_count'], 15, 25, 19, 120, 24],
+        'circle-radius': ['step', ['get', 'point_count'], 17, 25, 21, 120, 26],
         'circle-stroke-color': '#FFFFFF',
         'circle-stroke-width': 2
       }
@@ -900,10 +900,12 @@
       layout: {
         'icon-image': ICONA_PIN_FERMATA,
         'icon-anchor': 'bottom',
-        // Piccoli da lontano ma mai nascosti: sono anche il bersaglio del tocco.
+        // Crescono con lo zoom ma restano leggibili da lontano: sono anche il
+        // bersaglio del tocco, quindi il pin è più grande di un simbolo
+        // decorativo.
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 12.5, 0.34, 14, 0.5, 16, 0.72]
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 12.5, 0.5, 14, 0.78, 16, 1.12]
       }
     } : {
       id: 'fermate-punti',
@@ -912,10 +914,10 @@
       minzoom: 12.5,
       filter: ['!', ['has', 'point_count']],
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 12.5, 2.4, 16, 5],
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 12.5, 3.2, 16, 7],
         'circle-color': ['case', ['==', ['get', 'treno'], 1], '#1A1A1A', '#FFFFFF'],
         'circle-stroke-color': ['case', ['==', ['get', 'treno'], 1], '#FFFFFF', '#1A1A1A'],
-        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 12.5, 1, 16, 1.6]
+        'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 12.5, 1.4, 16, 2]
       }
     });
     mappa.addLayer({
@@ -5446,11 +5448,25 @@
           return;
         }
         if (sopprimiTapMappa) { sopprimiTapMappa = false; return; }
+        // Il dito non è una croce: si cerca in un quadrato attorno al tocco e
+        // si prende la fermata più vicina, non la prima che capita.
+        const raggioTocco = 16;
+        const area = [
+          [evento.point.x - raggioTocco, evento.point.y - raggioTocco],
+          [evento.point.x + raggioTocco, evento.point.y + raggioTocco]
+        ];
         const colpi = mappa.getLayer('fermate-punti')
-          ? mappa.queryRenderedFeatures(evento.point, { layers: ['fermate-punti'] })
+          ? mappa.queryRenderedFeatures(area, { layers: ['fermate-punti'] })
           : null;
         if (colpi && colpi.length) {
-          const fermata = fermataPerId(colpi[0].properties.id);
+          let scelta = null;
+          let minore = Infinity;
+          colpi.forEach((colpo) => {
+            const proiettato = mappa.project(colpo.geometry.coordinates);
+            const distanza = Math.hypot(proiettato.x - evento.point.x, proiettato.y - evento.point.y);
+            if (distanza < minore) { minore = distanza; scelta = colpo; }
+          });
+          const fermata = scelta ? fermataPerId(scelta.properties.id) : null;
           if (fermata) { apriMini(fermata); return; }
         }
         chiudiMini();
