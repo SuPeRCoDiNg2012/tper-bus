@@ -6928,8 +6928,12 @@
     // Il GPS non sta nell'URL: se prima c'era una partenza scelta a mano, la
     // sostituzione deve sparire anche dall'indirizzo, non restare come residuo.
     aggiornaUrl('replace');
-    if (sel.destinazione) calcolaPercorso();
-    else {
+    if (sel.destinazione) {
+      calcolaPercorso();
+      // All'avvio con uno shortcut (?vai=casa) il pannello era ancora in peek:
+      // appena arriva la posizione il percorso deve essere visibile.
+      if (statoSheet === 'peek') impostaSheet('meta');
+    } else {
       impostaSheet('peek');
       inquadra(false);
     }
