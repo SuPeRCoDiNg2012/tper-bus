@@ -15,11 +15,15 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 - Ritardi live su tutte le tappe, con cambio «a rischio» e corsa «persa».
 
 ### Cambiato
+- Pannello orari: tempo reale e orari programmati in un **unico elenco** ordinato per quanto manca. Entro 50 minuti si legge «tra N min», oltre compare l'orario. La sezione sotto resta la giornata completa, senza ripetere le corse già in elenco.
+- La stessa corsa arrivata da HelloBus (`13A`) e dal GTFS (`13`) non compare due volte e mostra la direzione.
 - `euro(0)` restituisce «Incluso»: «0,00 €» non compare più da nessuna parte.
 - `senzaDoppioni` distingue le fermate omonime di comuni diversi (chiave nome + comune).
 - Service worker: installazione con `Promise.allSettled` (un asset mancante non blocca più tutto), `cache.put` solo per risposte `ok`, navigazioni sconosciute in rete prima del fallback offline, potatura dei file non più presenti.
 
 ### Corretto
+- Dopo mezzanotte la modalità «adesso» riparte dal giorno corrente: prima il pannello orari restava sulla data di ieri, quindi vuoto.
+- Un elenco partenze vuoto non viene più messo in cache: se gli orari non erano ancora caricati, la giornata restava vuota per tutta la sessione.
 - Margine di 5 minuti su «arriva entro», con avviso «poco margine» sotto i 2.
 - Buffer di cambio: 180 s bus-bus (30 s se è la stessa linea), 240 s con treno, 360 s treno-treno.
 - Badge «tempi a piedi stimati» quando la geometria OSRM non è ancora arrivata.

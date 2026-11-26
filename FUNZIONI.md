@@ -1,6 +1,6 @@
 # Tutte le funzioni di Muovi Bologna
 
-Indice completo del codice: **363 funzioni** — 291 in `app.js` e 72 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
+Indice completo del codice: **368 funzioni** — 293 in `app.js` e 75 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
 
 Nessun framework e nessun bundler: `index.html` carica gli script con `<script>` normali, `app.js` è l'unico file grande e gli altri moduli sono oggetti globali (`Utilita`, `Tariffe`, `Piedi`, `Routing`, `VistaPercorso`, `Icone`).
 
@@ -81,7 +81,7 @@ Il motore: orari GTFS, rete, cambi, criteri, tracciati delle linee.
 | `caricaTracciati(urlGz, urlRaw)` | Carica i tracciati delle linee su richiesta. |
 | `impostaCammini(coppie)` | Lunghezze a piedi fra fermate, calcolate una volta. |
 
-## vista-percorso.js — 13 funzioni
+## vista-percorso.js — 16 funzioni
 
 Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 
@@ -100,6 +100,9 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `dettaglioHTML(e, etichetta)` | Itinerario completo di una singola opzione. |
 | `opzioneHTML(e, indice, vista, etichetta)` | Riga compatta di un'opzione, si apre al clic. |
 | `esito(vista, etichetta)` | Tutta la scheda percorso: righe, dettaglio, criteri. |
+| `minutiA(ora, adessoMinuti)` | Minuti a un orario `HH:MM`, circolari sulla mezzanotte. |
+| `chiaveLinea(linea)` | Linea base: `13A` e `13` sono la stessa corsa. |
+| `arriviUniti(realtime, programmati, adessoMinuti, opzioni)` | Un solo elenco di arrivi: live + programmati, deduplicati e ordinati. |
 
 ## icone.js — 1 funzione
 
@@ -130,7 +133,7 @@ Il backend delle segnalazioni (Worker + D1).
 
 ---
 
-# app.js — 291 funzioni
+# app.js — 293 funzioni
 
 ## Stato locale e preferenze — 11
 
@@ -458,7 +461,7 @@ Il backend delle segnalazioni (Worker + D1).
 | `caricaLiveTappe(forza)` | Arrivi live di tutte le tappe, in parallelo. |
 | `avviaTimerPercorso()` | Timer del live e delle segnalazioni. |
 
-## HelloBus e orari — 19
+## HelloBus e orari — 21
 
 | Funzione | Cosa fa |
 | --- | --- |
@@ -472,7 +475,9 @@ Il backend delle segnalazioni (Worker + D1).
 | `palinaConLinee(fermata)` | Palina con l'elenco delle linee. |
 | `caricaLive(forza)` | Carica arrivi live della fermata. |
 | `statoLiveHTML()` | Stato del live: attesa, errore, aggiornato. |
-| `arriviHTML()` | Righe degli arrivi in tempo reale. |
+| `arriviHTML()` | Elenco unico di arrivi: live e programmati, minuti relativi entro 50. |
+| `arriviUniti(f)` | Adatta la fermata e il GTFS e chiama `VistaPercorso.arriviUniti`. |
+| `chiaveLinea(linea)` | Linea base condivisa con la vista (`13A` → `13`). |
 | `partenzeDelGiorno(f)` | Partenze programmate del giorno. |
 | `chipFiltroLinea(valore, testo)` | Chip per filtrare una linea. |
 | `filtraOrariLinea(valore)` | Filtra gli orari per linea senza nuove chiamate. |

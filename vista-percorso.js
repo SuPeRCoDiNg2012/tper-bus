@@ -26,6 +26,70 @@
 
   function minuti(secondi) { return Math.max(1, Math.round(secondi / 60)); }
 
+  /** Minuti a un orario HH:MM rispetto a un'ora del giorno, in -720..720. */
+  function minutiA(ora, adessoMinuti) {
+    const parti = String(ora || '').split(':');
+    const ore = parseInt(parti[0], 10);
+    const min = parseInt(parti[1], 10);
+    if (!isFinite(ore) || !isFinite(min)) return 0;
+    const target = ((ore % 24) * 60 + min) % 1440;
+    const adesso = ((adessoMinuti % 1440) + 1440) % 1440;
+    return ((target - adesso + 720 + 1440) % 1440) - 720;
+  }
+
+  // HelloBus aggiunge la variante alla linea (13A, 19C) mentre il GTFS colora
+  // e numera la linea base (13, 19): per confrontarle serve la stessa chiave.
+  function chiaveLinea(linea) {
+    const testo = String(linea == null ? '' : linea).trim().toUpperCase();
+    const variante = /^(\d+)[A-Z]+$/.exec(testo);
+    return variante ? variante[1] : testo;
+  }
+
+  /**
+   * Un solo elenco di arrivi: corse in tempo reale e orari programmati,
+   * ordinati per quanto manca. Se la stessa corsa (linea + ora) arriva da
+   * entrambe le fonti vince quella con la posizione reale.
+   * `realtime`: [{ linea, ora, tipo, bus }], `programmati`: [{ linea, ora, destinazione }].
+   */
+  function arriviUniti(realtime, programmati, adessoMinuti, opzioni) {
+    const minimo = opzioni && opzioni.minimo != null ? opzioni.minimo : -1;
+    // Sei ore: oltre, l'elenco smetterebbe di essere «i prossimi arrivi» e
+    // diventerebbe l'orario del giorno, che sta nella sezione sotto.
+    const massimo = opzioni && opzioni.massimo != null ? opzioni.massimo : 360;
+    const visti = new Set();
+    const elenco = [];
+    const aggiungi = (voce) => {
+      const chiave = chiaveLinea(voce.linea) + '|' + voce.ora;
+      if (visti.has(chiave)) return;
+      visti.add(chiave);
+      elenco.push(voce);
+    };
+    (realtime || []).forEach((arrivo) => aggiungi({
+      linea: String(arrivo.linea),
+      ora: arrivo.ora,
+      tipo: arrivo.tipo === 'live' ? 'live' : 'orario',
+      bus: arrivo.bus || null,
+      destinazione: arrivo.destinazione || ''
+    }));
+    // Il capolinea si prende dal GTFS anche per le corse che restano fuori
+    // dalla finestra: una riga live senza direzione non dice dove va il bus.
+    const destinazioni = new Map();
+    (programmati || []).forEach((p) => {
+      const chiave = chiaveLinea(p.linea) + '|' + p.ora;
+      if (p.destinazione) destinazioni.set(chiave, p.destinazione);
+      const minuti = minutiA(p.ora, adessoMinuti);
+      if (minuti < minimo || minuti > massimo) return;
+      aggiungi({ linea: String(p.linea), ora: p.ora, tipo: 'orario', bus: null, destinazione: p.destinazione || '' });
+    });
+    elenco.forEach((voce) => {
+      if (!voce.destinazione) {
+        voce.destinazione = destinazioni.get(chiaveLinea(voce.linea) + '|' + voce.ora) || '';
+      }
+      voce.minuti = minutiA(voce.ora, adessoMinuti);
+    });
+    return elenco.filter((voce) => voce.minuti >= minimo).sort((a, b) => a.minuti - b.minuti);
+  }
+
   function cambiTesto(n) {
     return n === 0 ? 'diretto' : (n === 1 ? '1 cambio' : n + ' cambi');
   }
@@ -209,6 +273,9 @@
     controlli: controlli,
     esito: esito,
     dettaglio: dettaglioHTML,
+    arriviUniti: arriviUniti,
+    chiaveLinea: chiaveLinea,
+    minutiA: minutiA,
     ICONA_PEDANA: ICONA_PEDANA
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
