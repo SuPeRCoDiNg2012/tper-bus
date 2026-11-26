@@ -1,14 +1,14 @@
 # Tutte le funzioni di Muovi Bologna
 
-Indice completo del codice: **381 funzioni** — 300 in `app.js` e 81 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
+Indice completo del codice: **387 funzioni** — 304 in `app.js` e 83 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
 
 Nessun framework e nessun bundler: `index.html` carica gli script con `<script>` normali, `app.js` è l'unico file grande e gli altri moduli sono oggetti globali (`Utilita`, `Tariffe`, `Piedi`, `Routing`, `VistaPercorso`, `Icone`).
 
 ---
 
-## utilita.js — 9 funzioni
+## utilita.js — 11 funzioni
 
-Colori, contrasto, cache e timeout: roba che non sa niente di bus.
+Colori, contrasto, cache, tempi e geometria: roba che non sa niente di bus.
 
 | Funzione | Cosa fa |
 | --- | --- |
@@ -21,6 +21,8 @@ Colori, contrasto, cache e timeout: roba che non sa niente di bus.
 | `timeoutPer(tipo)` | Millisecondi di attesa per ogni tipo di richiesta. |
 | `semplifica(punti, tolleranza)` | Douglas-Peucker: toglie i vertici inutili da una linea. |
 | `involucro(punti)` | Poligono convesso che contiene tutte le fermate di una zona. |
+| `raggruppa(punti, metri)` | Gruppi di punti vicini, uniti a catena. |
+| `centroide(punti)` | Punto medio di un gruppo di coordinate. |
 
 ## tariffe.js — 6 funzioni
 
@@ -215,7 +217,7 @@ Il backend delle segnalazioni (Worker + D1).
 | `recenti()` | Fermate cercate di recente. |
 | `aggiungiRecente(f)` | Aggiunge una fermata ai recenti. |
 
-## Mappa — 21
+## Mappa — 24
 
 | Funzione | Cosa fa |
 | --- | --- |
@@ -230,9 +232,13 @@ Il backend delle segnalazioni (Worker + D1).
 | `caricaFormeLinee()` | Carica i tracciati delle linee quando servono. |
 | `decodificaPolilinea(testo)` | Polilinea `[lat, lon]` come vuole GeoJSON. |
 | `mostraLineeTutte(attivo)` | Mostra tutte le linee sulla mappa. |
-| `datiZone()` | Un'area per zona tariffaria, dalle sue fermate. |
-| `mostraZone(attivo)` | Accende o spegne le aree delle zone. |
-| `mostraZonaToccata(feature, punto)` | Scheda della zona toccata. |
+| `datiZone()` | Aree locali delle zone, dai gruppi di fermate vicine, più le etichette. |
+| `evidenziaZona(zona)` | Riempie la sorgente con le aree della zona scelta. |
+| `spegniZonaScelta()` | Toglie l'evidenziazione e la scheda della zona. |
+| `zonaAlCentro()` | Zona della fermata più vicina al centro della mappa. |
+| `aggiornaZonaIndicatore()` | Pillola sotto la barra con la zona che si sta guardando. |
+| `mostraZone(attivo)` | Accende o spegne aree, confini ed etichette delle zone. |
+| `mostraZonaToccata(feature, punto)` | Evidenzia la zona toccata e ne mostra la scheda. |
 | `immaginePinFermata(treno)` | Pin della fermata, variante scura per i treni. |
 | `creaLivelliPercorso()` | Livelli e sorgenti del percorso. |
 | `immagineFreccia()` | Freccia disegnata su canvas e ruotata da MapLibre. |

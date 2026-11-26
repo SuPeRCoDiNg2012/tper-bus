@@ -84,6 +84,33 @@ test('i timeout sono diversi per tipo di chiamata', () => {
   assert.equal(Utilita.timeoutPer('boh'), 10000);
 });
 
+test('raggruppa tiene insieme le fermate vicine e separa quelle lontane', () => {
+  // Tre fermate entro un paio di chilometri: una sola area.
+  const vicine = Utilita.raggruppa([[11.34, 44.49], [11.35, 44.50], [11.36, 44.50]], 3500);
+  assert.equal(vicine.length, 1);
+  assert.equal(vicine[0].length, 3);
+  // Una fermata a 80 km non appartiene alla stessa zona.
+  const lontane = Utilita.raggruppa([[11.34, 44.49], [11.35, 44.50], [12.50, 44.80]], 3500);
+  assert.equal(lontane.length, 2);
+  assert.deepEqual(lontane.map((g) => g.length).sort(), [1, 2]);
+});
+
+test('raggruppa lavora a catena e regge elenchi vuoti o sporchi', () => {
+  // Il primo e l'ultimo distano più del raggio, ma il punto in mezzo li unisce.
+  const catena = Utilita.raggruppa([[11.30, 44.5], [11.32, 44.5], [11.34, 44.5]], 2000);
+  assert.equal(catena.length, 1);
+  assert.deepEqual(Utilita.raggruppa([], 3500), []);
+  assert.deepEqual(Utilita.raggruppa(null, 3500), []);
+  // Coordinate non valide: si scartano, non fanno saltare il disegno.
+  assert.equal(Utilita.raggruppa([[11.34, 44.49], ['x', 1]], 3500).length, 1);
+});
+
+test('il centroide è la media dei punti validi', () => {
+  assert.deepEqual(Utilita.centroide([[0, 0], [2, 0], [1, 3]]), [1, 1]);
+  assert.deepEqual(Utilita.centroide([[1, 2], ['x', 3]]), [1, 2]);
+  assert.equal(Utilita.centroide([]), null);
+});
+
 test('l\'involucro tiene solo i vertici esterni e scarta quelli interni', () => {
   const anello = Utilita.involucro([[0, 0], [1, 0], [1, 1], [0, 1], [0.5, 0.5], [0.2, 0.8]]);
   assert.equal(anello.length, 4);

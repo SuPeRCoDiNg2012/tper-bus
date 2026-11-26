@@ -86,6 +86,13 @@
   .barra .spazio{flex:1;}
   .pill-offline{font-size:11px;font-weight:600;color:var(--testo-2);background:#F2F2F2;border-radius:999px;padding:4px 10px;}
 
+  /* Zona tariffaria al centro della mappa: una pillola sotto la barra, così
+     non serve colorare tutto lo schermo per sapere dove si è. */
+  .zona-indicatore{position:fixed;top:calc(var(--barra) + env(safe-area-inset-top,0px) + 8px);left:12px;z-index:900;display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:0 12px;border:0;border-radius:999px;background:rgba(255,255,255,.94);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:var(--ombra);font:600 12px/1 system-ui,sans-serif;color:var(--testo);cursor:pointer;}
+  .zona-indicatore:active{background:#F4F4F4;}
+  .zona-punto{width:8px;height:8px;border-radius:50%;background:var(--rosso);flex:0 0 auto;}
+  .zona-indicatore.extra .zona-punto{background:var(--testo-2);}
+
   /* Pulsante mappa: inquadra il percorso */
   .mappa-btn{position:fixed;right:12px;z-index:900;width:44px;height:44px;border:0;border-radius:14px;background:var(--sup);box-shadow:var(--ombra);display:flex;align-items:center;justify-content:center;color:var(--testo);cursor:pointer;bottom:calc(var(--h-sheet,168px) + 12px);}
 
@@ -553,6 +560,8 @@
   </button>
   <span class="pill-offline" id="pill-offline" hidden>Offline</span>
 </header>
+
+<button type="button" class="zona-indicatore" id="zona-indicatore" aria-label="Zona tariffaria al centro della mappa" hidden></button>
 
 <div class="mappa-comandi" id="mappa-comandi">
 <button class="mappa-btn" id="btn-geo" aria-label="Centra la mappa sulla mia posizione">

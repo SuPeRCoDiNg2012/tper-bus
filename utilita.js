@@ -170,6 +170,84 @@
     });
   }
 
+  /**
+   * Raggruppa punti [lon, lat] vicini: due punti stanno nello stesso gruppo se
+   * una catena di distanze li collega entro `metri`. Serve alle aree delle zone
+   * tariffarie: una zona con fermate sparse non deve diventare un unico
+   * triangolo che attraversa mezza provincia.
+   */
+  function raggruppa(punti, metri) {
+    const elenco = (punti || [])
+      .filter((p) => Array.isArray(p) && isFinite(p[0]) && isFinite(p[1]))
+      .map((p) => [Number(p[0]), Number(p[1])]);
+    const n = elenco.length;
+    if (!n) return [];
+    if (n < 2) return [elenco];
+    const raggio = Math.max(1, Number(metri) || 0);
+    // Una cella è un quadrato di `raggio` metri in latitudine; la longitudine
+    // viene schiacciata di cos(lat) così anche lì la cella misura lo stesso.
+    const lato = raggio / 111320;
+    const lat0 = elenco.reduce((somma, p) => somma + p[1], 0) / n;
+    const compressione = Math.max(0.2, Math.cos((lat0 * Math.PI) / 180));
+    const piatte = elenco.map((p) => [p[0] * compressione, p[1]]);
+    const padre = elenco.map((_, i) => i);
+    const radice = (i) => {
+      let r = i;
+      while (padre[r] !== r) r = padre[r];
+      while (padre[i] !== r) {
+        const dopo = padre[i];
+        padre[i] = r;
+        i = dopo;
+      }
+      return r;
+    };
+    const unisci = (a, b) => {
+      const ra = radice(a);
+      const rb = radice(b);
+      if (ra !== rb) padre[rb] = ra;
+    };
+    const chiave = (x, y) => x + ':' + y;
+    const celle = new Map();
+    piatte.forEach((p, i) => {
+      const k = chiave(Math.floor(p[0] / lato), Math.floor(p[1] / lato));
+      if (!celle.has(k)) celle.set(k, []);
+      celle.get(k).push(i);
+    });
+    piatte.forEach((p, i) => {
+      const x = Math.floor(p[0] / lato);
+      const y = Math.floor(p[1] / lato);
+      for (let dx = -1; dx <= 1; dx += 1) {
+        for (let dy = -1; dy <= 1; dy += 1) {
+          const lista = celle.get(chiave(x + dx, y + dy));
+          if (!lista) continue;
+          lista.forEach((j) => {
+            if (j <= i) return;
+            const ddx = piatte[j][0] - p[0];
+            const ddy = piatte[j][1] - p[1];
+            if (ddx * ddx + ddy * ddy <= lato * lato) unisci(i, j);
+          });
+        }
+      }
+    });
+    const gruppi = new Map();
+    elenco.forEach((p, i) => {
+      const r = radice(i);
+      if (!gruppi.has(r)) gruppi.set(r, []);
+      gruppi.get(r).push(p);
+    });
+    return Array.from(gruppi.values());
+  }
+
+  /** Punto medio di coordinate [lon, lat]; null se non ce ne sono di valide. */
+  function centroide(punti) {
+    const elenco = (punti || [])
+      .filter((p) => Array.isArray(p) && isFinite(p[0]) && isFinite(p[1]))
+      .map((p) => [Number(p[0]), Number(p[1])]);
+    if (!elenco.length) return null;
+    const somma = elenco.reduce((acc, p) => [acc[0] + p[0], acc[1] + p[1]], [0, 0]);
+    return [somma[0] / elenco.length, somma[1] / elenco.length];
+  }
+
   const API = {
     TIMEOUT: TIMEOUT,
     CACHE_RIGENERABILI: CACHE_RIGENERABILI,
@@ -181,7 +259,9 @@
     deveMostrareInvito: deveMostrareInvito,
     timeoutPer: timeoutPer,
     semplifica: semplifica,
-    involucro: involucro
+    involucro: involucro,
+    raggruppa: raggruppa,
+    centroide: centroide
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

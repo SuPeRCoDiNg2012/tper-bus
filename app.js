@@ -1009,10 +1009,16 @@
   /* --- Zone tariffarie ----------------------------------------------------
    * I confini ufficiali TPER non sono pubblicati: l'area di ogni zona è
    * l'involucro delle fermate che le appartengono, calcolato dai dati reali.
-   * È un'approssimazione, e il popup lo dice con il nome della zona.
+   * Una zona però può avere fermate lontane tra loro (una valle, un comune
+   * sparso): l'involucro unico diventava un triangolo che copriva mezza
+   * provincia e si sovrapponeva a tutte le altre. Qui le fermate si dividono
+   * prima nei gruppi che stanno davvero vicini, così ogni area resta locale.
    */
 
+  const RAGGIO_ZONA = 3500;        // metri: oltre, sono due aree della stessa zona
   let popupZona = null;
+  let zonaScelta = null;           // zona evidenziata, se c'è
+  let zonePerZona = new Map();     // zona → feature delle sue aree
 
   function datiZone() {
     const perZona = new Map();
@@ -1022,32 +1028,122 @@
       if (!perZona.has(zona)) perZona.set(zona, []);
       perZona.get(zona).push([f.lon, f.lat]);
     });
-    const features = [];
+    const aree = [];
+    const etichette = [];
+    zonePerZona = new Map();
     perZona.forEach((punti, zona) => {
-      if (punti.length < 3) return;      // due fermate non fanno un'area
-      const anello = Utilita.involucro(punti);
-      if (anello.length < 3) return;
       const etichetta = Tariffe.etichettaZona(zona);
-      features.push({
+      const famiglia = zona === '500' ? 'urbana' : (Tariffe.isZonaUrbana(zona) ? 'neutra' : 'extraurbana');
+      const gruppi = Utilita.raggruppa(punti, RAGGIO_ZONA)
+        .filter((gruppo) => gruppo.length >= 3)   // due fermate non fanno un'area
+        .sort((a, b) => b.length - a.length);
+      const forme = [];
+      gruppi.forEach((gruppo, indice) => {
+        const anello = Utilita.involucro(gruppo);
+        if (anello.length < 3) return;
+        const forma = {
+          type: 'Feature',
+          id: 'zona-' + zona + '-' + indice,
+          properties: {
+            zona: zona,
+            famiglia: famiglia,
+            titolo: etichetta.titolo,
+            nota: etichetta.nota
+          },
+          geometry: { type: 'Polygon', coordinates: [anello.concat([anello[0]])] }
+        };
+        forme.push(forma);
+        aree.push(forma);
+      });
+      zonePerZona.set(zona, forme);
+      // Il numero della zona sta sull'area più grande; se la zona è troppo
+      // sparsa per avere un'area, resta comunque il numero sulle sue fermate.
+      const centro = Utilita.centroide(gruppi.length ? gruppi[0] : punti);
+      if (!centro) return;
+      etichette.push({
         type: 'Feature',
         properties: {
           zona: zona,
-          famiglia: !Tariffe.isZonaUrbana(zona) ? 'extraurbana' : (zona === '500' ? 'urbana' : 'neutra'),
+          famiglia: famiglia,
           titolo: etichetta.titolo,
           nota: etichetta.nota
         },
-        geometry: { type: 'Polygon', coordinates: [anello.concat([anello[0]])] }
+        geometry: { type: 'Point', coordinates: centro }
       });
     });
-    return { type: 'FeatureCollection', features: features };
+    return {
+      aree: { type: 'FeatureCollection', features: aree },
+      etichette: { type: 'FeatureCollection', features: etichette }
+    };
+  }
+
+  // L'evidenziazione è una sorgente a parte con le sole aree della zona
+  // scelta: si svuota e si riempie, senza feature-state (che con le aree
+  // annidate di MapLibre lasciava espressioni a metà).
+  function evidenziaZona(zona) {
+    if (!mappa || !mappa.getSource('zone-scelta')) return;
+    mappa.getSource('zone-scelta').setData({
+      type: 'FeatureCollection',
+      features: (zona != null && zonePerZona.get(zona)) || []
+    });
+  }
+
+  // Toglie l'evidenziazione e la scheda: si torna a vedere la mappa com'era.
+  function spegniZonaScelta() {
+    evidenziaZona(null);
+    zonaScelta = null;
+    if (popupZona) { popupZona.remove(); popupZona = null; }
+  }
+
+  // Zona della fermata più vicina al centro della mappa: è lo stesso criterio
+  // con cui l'app assegna la zona a un indirizzo, quindi i due non si
+  // contraddicono.
+  function zonaAlCentro() {
+    if (!mappa) return null;
+    const centro = mappa.getCenter();
+    const vicina = fermateVicine(centro.lat, centro.lng, 1)[0];
+    return vicina && vicina.zona != null ? String(vicina.zona) : null;
+  }
+
+  // Pillola sotto la barra: dice che zona si sta guardando senza aprire nulla.
+  function aggiornaZonaIndicatore() {
+    const riga = $('zona-indicatore');
+    const voce = $('menu-zone');
+    if (!riga) return;
+    if (!mappa || !voce || !voce.checked) { riga.hidden = true; riga.textContent = ''; return; }
+    const zona = zonaAlCentro();
+    riga.hidden = false;
+    if (!zona) {
+      riga.className = 'zona-indicatore extra';
+      riga.dataset.zona = '';
+      riga.textContent = 'Fuori zona';
+      return;
+    }
+    const famiglia = zona === '500' ? 'urbana' : (Tariffe.isZonaUrbana(zona) ? 'neutra' : 'extraurbana');
+    riga.className = 'zona-indicatore' + (famiglia === 'urbana' ? '' : ' extra');
+    riga.dataset.zona = zona;
+    riga.innerHTML = '<span class="zona-punto"></span>Zona ' + esc(zona) + ' · ' + famiglia;
   }
 
   function mostraZone(attivo) {
     if (!mappa) return;
+    // Interruttore premuto prima che la mappa fosse pronta: si riprova al
+    // primo disegno invece di perdere il tocco.
+    if (!mappa.isStyleLoaded()) {
+      if (attivo) {
+        mappa.once('load', () => {
+          const voce = $('menu-zone');
+          if (voce && voce.checked) mostraZone(true);
+        });
+      }
+      return;
+    }
     if (mappa.getLayer('zone-fill')) {
-      ['zone-fill', 'zone-bordo'].forEach((id) => {
+      ['zone-fill', 'zone-bordo', 'zone-fill-scelta', 'zone-bordo-scelta', 'zone-etichette'].forEach((id) => {
         if (mappa.getLayer(id)) mappa.setLayoutProperty(id, 'visibility', attivo ? 'visible' : 'none');
       });
+      if (!attivo) spegniZonaScelta();
+      aggiornaZonaIndicatore();
       return;
     }
     if (!attivo) return;
@@ -1055,29 +1151,80 @@
       // Sopra la cartografia ma sotto i livelli dell'app (partendo dall'alone
       // del GPS, che è il più in basso): fermate e percorso restano leggibili.
       const sotto = mappa.getLayer('utente-precisione') ? 'utente-precisione' : undefined;
-      mappa.addSource('zone', { type: 'geojson', data: datiZone() });
+      const dati = datiZone();
+      mappa.addSource('zone', { type: 'geojson', data: dati.aree });
+      mappa.addSource('zone-etichette', { type: 'geojson', data: dati.etichette });
       mappa.addLayer({
         id: 'zone-fill',
         type: 'fill',
         source: 'zone',
+        // A scala regionale l'area diventa un colore solo: si parte dal
+        // confine, e il riempimento arriva quando si vede il quartiere.
+        minzoom: 9.5,
         paint: {
-          'fill-color': ['match', ['get', 'famiglia'], 'urbana', '#C1121F', 'neutra', '#6B6B6B', '#6B6B6B'],
-          // Quasi trasparente ma leggibile su una cartografia chiara.
-          'fill-opacity': ['match', ['get', 'famiglia'], 'urbana', 0.22, 'neutra', 0.16, 0.10]
+          'fill-color': ['match', ['get', 'famiglia'], 'urbana', '#C1121F', '#6B6B6B'],
+          // Quasi niente: l'area si riconosce dal confine e dal numero, non
+          // da un velo che copre il quartiere.
+          'fill-opacity': ['match', ['get', 'famiglia'], 'urbana', 0.05, 'neutra', 0.03, 0.03]
         }
       }, sotto);
       mappa.addLayer({
         id: 'zone-bordo',
         type: 'line',
         source: 'zone',
+        minzoom: 8.5,
         layout: { 'line-join': 'round' },
         paint: {
           'line-color': ['match', ['get', 'famiglia'], 'urbana', '#C1121F', '#6B6B6B'],
-          'line-width': 2,
-          'line-opacity': 0.7,
-          'line-dasharray': [2, 2]
+          'line-width': 1,
+          'line-opacity': ['match', ['get', 'famiglia'], 'urbana', 0.55, 'neutra', 0.40, 0.35]
         }
       }, sotto);
+      // La zona toccata, sopra le altre e sotto le etichette.
+      mappa.addSource('zone-scelta', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+      mappa.addLayer({
+        id: 'zone-fill-scelta',
+        type: 'fill',
+        source: 'zone-scelta',
+        paint: {
+          'fill-color': ['match', ['get', 'famiglia'], 'urbana', '#C1121F', '#6B6B6B'],
+          'fill-opacity': 0.16
+        }
+      }, sotto);
+      mappa.addLayer({
+        id: 'zone-bordo-scelta',
+        type: 'line',
+        source: 'zone-scelta',
+        layout: { 'line-join': 'round' },
+        paint: {
+          'line-color': ['match', ['get', 'famiglia'], 'urbana', '#C1121F', '#6B6B6B'],
+          'line-width': 2.5,
+          'line-opacity': 0.95
+        }
+      }, sotto);
+      mappa.addLayer({
+        id: 'zone-etichette',
+        type: 'symbol',
+        source: 'zone-etichette',
+        minzoom: 9,
+        layout: {
+          'text-field': ['get', 'zona'],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 9, 10, 14, 12],
+          'text-allow-overlap': false,
+          'text-padding': 6
+        },
+        paint: {
+          'text-color': ['match', ['get', 'famiglia'], 'urbana', '#C1121F', '#6B6B6B'],
+          'text-halo-color': '#FFFFFF',
+          'text-halo-width': 1.4,
+          'text-halo-blur': 0.4
+        }
+      }, sotto);
+      aggiornaZonaIndicatore();
     } catch (errore) {
       mostraToast('Zone non disponibili con questi dati');
       const voce = $('menu-zone');
@@ -1085,13 +1232,19 @@
     }
   }
 
-  // Popup della zona toccata: due righe, senza aprire il pannello.
+  // Scheda della zona toccata: due righe, senza aprire il pannello. L'area si
+  // accende e resta accesa finché non si tocca altrove.
   function mostraZonaToccata(feature, punto) {
     if (!mappa || !feature) return;
     const proprieta = feature.properties || {};
+    const zona = String(proprieta.zona || '');
+    if (!zona) return;
+    if (zonaScelta !== zona) spegniZonaScelta();
+    zonaScelta = zona;
+    evidenziaZona(zona);
     const nodo = document.createElement('div');
     nodo.className = 'zona-scheda';
-    nodo.innerHTML = '<b>' + esc(proprieta.titolo || ('Zona ' + proprieta.zona)) + '</b>' +
+    nodo.innerHTML = '<b>' + esc(proprieta.titolo || ('Zona ' + zona)) + '</b>' +
       '<span>' + esc(proprieta.nota || '') + '</span>';
     if (popupZona) { popupZona.remove(); popupZona = null; }
     popupZona = new maplibregl.Popup({ closeButton: false, closeOnClick: true, offset: 6, className: 'zona-popup' })
@@ -6208,6 +6361,7 @@
     });
     $('menu-zone').addEventListener('change', (evento) => {
       mostraZone(evento.target.checked);
+      if (evento.target.checked) mostraToast('Tocca un’area o un numero per la zona');
     });
     $('menu-recente').addEventListener('click', () => {
       chiudiMenu();
@@ -6543,6 +6697,9 @@
 
     // ---- Mappa: un tap chiude il pannello espanso e la mini-card ----
     if (mappa) {
+      // La pillola della zona segue la mappa, non il dito: si aggiorna quando
+      // il trascinamento è finito.
+      mappa.on('moveend', aggiornaZonaIndicatore);
       // Una fermata toccata apre la sua mini-card; un tocco sul vuoto chiude.
       // Un raggruppamento toccato si apre: lo zoom sale al punto in cui le
       // fermate che contiene si separano.
@@ -6586,18 +6743,33 @@
           const fermata = scelta ? fermataPerId(scelta.properties.id) : null;
           if (fermata) { apriMini(fermata); return; }
         }
-        // Zone tariffarie: un tocco sull'area dice che zona è. Le fermate
-        // hanno la precedenza, quindi si arriva qui solo sul vuoto.
-        const zone = mappa.getLayer('zone-fill')
-          ? mappa.queryRenderedFeatures(evento.point, { layers: ['zone-fill'] })
+        // Zone tariffarie: un tocco sull'area o sul numero dice che zona è.
+        // Le fermate hanno la precedenza, quindi si arriva qui solo sul vuoto.
+        const livelliZone = ['zone-etichette', 'zone-fill'].filter((id) => mappa.getLayer(id));
+        const zone = livelliZone.length
+          ? mappa.queryRenderedFeatures(evento.point, { layers: livelliZone })
           : null;
         if (zone && zone.length) { mostraZonaToccata(zone[0], evento.lngLat); return; }
+        spegniZonaScelta();
         chiudiMini();
         if (statoSheet === 'piena' && !navigazione.attiva) impostaSheet('meta');
       });
       mappa.on('mouseenter', 'fermate-punti', () => { mappa.getCanvas().style.cursor = 'pointer'; });
       mappa.on('mouseleave', 'fermate-punti', () => { mappa.getCanvas().style.cursor = ''; });
     }
+
+    // La pillola della zona apre la scheda della zona che sta indicando.
+    $('zona-indicatore').addEventListener('click', () => {
+      const riga = $('zona-indicatore');
+      const zona = riga ? riga.dataset.zona : '';
+      if (!zona || !mappa) return;
+      const etichetta = Tariffe.etichettaZona(zona);
+      const forme = zonePerZona.get(zona) || [];
+      mostraZonaToccata(
+        forme[0] || { properties: { zona: zona, titolo: etichetta.titolo, nota: etichetta.nota } },
+        mappa.getCenter()
+      );
+    });
 
     $('nav-fondo').addEventListener('click', (evento) => {
       const pulsante = evento.target.closest('[data-azione]');
