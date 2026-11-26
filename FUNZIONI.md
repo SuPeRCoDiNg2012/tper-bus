@@ -1,6 +1,6 @@
 # Tutte le funzioni di Muovi Bologna
 
-Indice completo del codice: **373 funzioni** — 294 in `app.js` e 79 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
+Indice completo del codice: **378 funzioni** — 299 in `app.js` e 79 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
 
 Nessun framework e nessun bundler: `index.html` carica gli script con `<script>` normali, `app.js` è l'unico file grande e gli altri moduli sono oggetti globali (`Utilita`, `Tariffe`, `Piedi`, `Routing`, `VistaPercorso`, `Icone`).
 
@@ -137,9 +137,9 @@ Il backend delle segnalazioni (Worker + D1).
 
 ---
 
-# app.js — 294 funzioni
+# app.js — 299 funzioni
 
-## Stato locale e preferenze — 11
+## Stato locale e preferenze — 16
 
 | Funzione | Cosa fa |
 | --- | --- |
@@ -153,6 +153,11 @@ Il backend delle segnalazioni (Worker + D1).
 | `vietatePer(extra)` | Linee vietate per una ricerca, più l'eccezione. |
 | `renderEvitate()` | Disegna l'elenco delle linee evitate nel menu. |
 | `impostaLineeEvitate(elenco)` | Salva le linee evitate e aggiorna subito il percorso. |
+| `apriAdmin()` | Apre le impostazioni tecniche (solo da «admin» nella ricerca). |
+| `chiudiAdmin()` | Chiude le impostazioni tecniche. |
+| `rimuoviLineaEvitata(linea)` | Torna a proporre una linea, dal menu o dal pannello tecnico. |
+| `aggiungiLineaEvitata()` | Legge il campo e aggiunge una linea alle evitate. |
+| `salvaProxy()` | Salva o azzera il relay HelloBus. |
 | `durataMovimento(ms)` | Zero se «riduci movimento» è attivo, altrimenti `ms`. |
 
 ## Testo, numeri, colori — 21

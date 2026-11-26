@@ -2639,6 +2639,56 @@
     if (input) input.blur();
   }
 
+  /* --- Impostazioni tecniche ---------------------------------------------
+   * Non stanno nel menu: si aprono solo scrivendo «admin» nella ricerca, che
+   * è la stessa per partenza e destinazione.
+   */
+  function apriAdmin() {
+    const pannello = $('admin');
+    if (!pannello) return;
+    campoAttivo = null;
+    const proxy = $('input-proxy');
+    if (proxy) proxy.value = leggi(K_PROXY) || '';
+    renderEvitate();
+    pannello.hidden = false;
+    const chiudi = $('admin-chiudi');
+    if (chiudi) chiudi.focus();
+  }
+
+  function chiudiAdmin() {
+    const pannello = $('admin');
+    if (pannello) pannello.hidden = true;
+  }
+
+  // Le stesse azioni servono al menu e al pannello tecnico: una sola copia.
+  function rimuoviLineaEvitata(linea) {
+    if (!linea) return;
+    impostaLineeEvitate(lineeEvitate().filter((voce) => voce !== linea));
+    mostraToast('Linea ' + linea + ' di nuovo proposta');
+  }
+
+  function aggiungiLineaEvitata() {
+    const campo = $('input-evita');
+    const valore = (campo && campo.value ? campo.value : '').trim().toUpperCase();
+    if (!valore) return;
+    if (!/^[A-Z0-9]{1,5}$/.test(valore)) {
+      mostraToast('Numero di linea non valido');
+      return;
+    }
+    impostaLineeEvitate(lineeEvitate().concat(valore));
+    if (campo) campo.value = '';
+    mostraToast('Linea ' + valore + ' esclusa dai percorsi');
+  }
+
+  function salvaProxy() {
+    const campo = $('input-proxy');
+    const valore = (campo && campo.value ? campo.value : '').trim();
+    if (valore) scrivi(K_PROXY, valore); else localStorage.removeItem(K_PROXY);
+    live.items = []; live.ts = 0; live.stato = 'idle';
+    mostraToast(valore ? 'Relay salvato' : 'Relay predefinito ripristinato');
+    caricaLive(true);
+  }
+
   function aggiornaPulisci() {
     const pulsante = $('cerca-pulisci');
     const input = $('cerca-input');
@@ -6144,8 +6194,20 @@
     $('input-evita').addEventListener('keydown', (evento) => {
       if (evento.key !== 'Enter') return;
       evento.preventDefault();
-      const aggiungi = $('drawer').querySelector('[data-azione="evita-aggiungi"]');
+      const aggiungi = document.querySelector('[data-azione="evita-aggiungi"]');
       if (aggiungi) aggiungi.click();
+    });
+    // Pannello tecnico: le stesse azioni delle preferenze, più il relay.
+    $('admin-chiudi').addEventListener('click', chiudiAdmin);
+    $('admin').addEventListener('click', (evento) => {
+      if (evento.target === $('admin')) { chiudiAdmin(); return; }
+      const togli = evento.target.closest('[data-evita-rimuovi]');
+      if (togli) { rimuoviLineaEvitata(togli.getAttribute('data-evita-rimuovi')); return; }
+      const pulsante = evento.target.closest('[data-azione]');
+      if (!pulsante) return;
+      const azione = pulsante.getAttribute('data-azione');
+      if (azione === 'evita-aggiungi') aggiungiLineaEvitata();
+      if (azione === 'salva-proxy') salvaProxy();
     });
     $('menu-criterio').addEventListener('click', () => {
       scrivi(K_CRITERIO_DEFAULT, 'ottimizzato');
@@ -6157,35 +6219,15 @@
     $('drawer').addEventListener('click', (evento) => {
       const togli = evento.target.closest('[data-evita-rimuovi]');
       if (togli) {
-        const linea = togli.getAttribute('data-evita-rimuovi');
-        impostaLineeEvitate(lineeEvitate().filter((voce) => voce !== linea));
-        mostraToast('Linea ' + linea + ' di nuovo proposta');
+        rimuoviLineaEvitata(togli.getAttribute('data-evita-rimuovi'));
         return;
       }
       const pulsante = evento.target.closest('[data-azione]');
       if (!pulsante) return;
       const azione = pulsante.getAttribute('data-azione');
       if (azionePreferito(azione, pulsante)) return;
-      if (azione === 'evita-aggiungi') {
-        const campo = $('input-evita');
-        const valore = (campo && campo.value ? campo.value : '').trim().toUpperCase();
-        if (!valore) return;
-        if (!/^[A-Z0-9]{1,5}$/.test(valore)) {
-          mostraToast('Numero di linea non valido');
-          return;
-        }
-        impostaLineeEvitate(lineeEvitate().concat(valore));
-        if (campo) campo.value = '';
-        mostraToast('Linea ' + valore + ' esclusa dai percorsi');
-        return;
-      }
-      if (azione === 'salva-proxy') {
-        const valore = ($('input-proxy').value || '').trim();
-        if (valore) scrivi(K_PROXY, valore); else localStorage.removeItem(K_PROXY);
-        live.items = []; live.ts = 0; live.stato = 'idle';
-        mostraToast(valore ? 'Relay salvato' : 'Relay predefinito ripristinato');
-        caricaLive(true);
-      }
+      if (azione === 'evita-aggiungi') { aggiungiLineaEvitata(); return; }
+      if (azione === 'salva-proxy') salvaProxy();
       if (azione === 'cancella-log') {
         localStorage.removeItem(K_ERRORI);
         renderLogErrori();
@@ -6210,6 +6252,7 @@
     });
     document.addEventListener('keydown', (evento) => {
       if (evento.key !== 'Escape') return;
+      if (!$('admin').hidden) { chiudiAdmin(); return; }
       if ($('drawer').classList.contains('aperto')) { chiudiMenu(); return; }
       if (!$('cerca').hidden) { chiudiOverlay(); return; }
       if (miniFermata) { chiudiMini(); return; }
@@ -6221,7 +6264,19 @@
       if (!campoAttivo) return;
       apriSuggerimenti(campoAttivo, inputCerca.value);
     }, 260);
-    inputCerca.addEventListener('input', () => { aggiornaPulisci(); cercaTesto(); });
+    inputCerca.addEventListener('input', () => {
+      aggiornaPulisci();
+      // Porta di servizio: «admin» apre le impostazioni tecniche, sia dal
+      // campo della partenza sia da quello della destinazione.
+      if (inputCerca.value.trim().toLowerCase() === 'admin') {
+        inputCerca.value = '';
+        aggiornaPulisci();
+        chiudiOverlay();
+        apriAdmin();
+        return;
+      }
+      cercaTesto();
+    });
     inputCerca.addEventListener('keydown', (evento) => {
       if (evento.key === 'Enter') {
         evento.preventDefault();

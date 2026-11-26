@@ -354,6 +354,18 @@
   .cerca-lista{flex:1;overflow-y:auto;padding:4px 16px calc(20px + env(safe-area-inset-bottom,0px));}
   .cerca-lista .gruppo-titolo,.gruppo-titolo{font-size:11px;font-weight:600;color:var(--testo-2);margin:14px 0 2px;}
 
+  /* ---------- Impostazioni tecniche (porta di servizio: «admin») ---------- */
+  .admin{position:fixed;inset:0;z-index:1350;background:rgba(26,26,26,.32);display:flex;align-items:flex-end;}
+  .admin[hidden]{display:none;}
+  .admin-foglio{width:100%;max-width:560px;margin:0 auto;max-height:82dvh;background:var(--sup);border-radius:var(--r-sheet) var(--r-sheet) 0 0;box-shadow:var(--ombra-su);display:flex;flex-direction:column;}
+  .admin-testa{display:flex;align-items:center;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--bordo);}
+  .admin-testa h2{flex:1;margin:0;font-size:15px;font-weight:700;}
+  .admin-corpo{overflow-y:auto;padding:6px 0 calc(14px + env(safe-area-inset-bottom,0px));}
+  .admin details summary{list-style:none;min-height:48px;display:flex;align-items:center;gap:8px;padding:0 16px;font-size:14px;font-weight:500;cursor:pointer;}
+  .admin details summary::-webkit-details-marker{display:none;}
+  .admin details summary svg{flex:0 0 auto;color:var(--testo-2);}
+  .admin details[open] summary svg{transform:rotate(180deg);}
+
   /* ---------- Navigazione ---------- */
   .nav{position:fixed;left:12px;right:12px;top:calc(10px + env(safe-area-inset-top,0px));max-width:536px;margin:0 auto;z-index:1200;background:var(--sup);border-radius:18px;box-shadow:var(--ombra-su);padding:13px 16px 16px;display:flex;align-items:center;gap:13px;overflow:hidden;}
   .nav-ico{width:46px;height:46px;border-radius:14px;background:var(--rosso);color:#fff;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
@@ -657,27 +669,11 @@
       <span class="spazio">Zone tariffarie</span>
       <span class="interruttore"><input type="checkbox" id="menu-zone"><span class="binario"></span></span>
     </label>
-    <button class="voce-menu" id="menu-errori" hidden>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-      <span class="spazio">Log errori</span>
-      <span class="nota" id="menu-errori-conteggio"></span>
-    </button>
-    <div class="log-errori" id="log-errori" hidden></div>
     <div class="menu-sezione">Percorsi recenti</div>
     <button class="menu-recente" id="menu-recente" hidden></button>
     <p class="menu-sezione" id="menu-recente-vuoto">Nessun percorso ancora.</p>
     <div class="menu-sezione">Preferiti</div>
     <div id="menu-preferiti"></div>
-    <details id="menu-evitate">
-      <summary><span class="spazio">Linee da evitare</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
-      <div class="info">
-        <div class="pref-chips" id="menu-evitate-lista"></div>
-        <div class="campo-relay">
-          <input id="input-evita" type="text" inputmode="numeric" maxlength="5" placeholder="Numero di linea" aria-label="Linea da non proporre pi\u00f9">
-          <button type="button" class="btn btn-tenue" data-azione="evita-aggiungi">Aggiungi</button>
-        </div>
-      </div>
-    </details>
     <details id="menu-info">
       <summary><span class="spazio">Informazioni e fonti dati</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
       <div class="info" id="menu-info-corpo"></div>
@@ -697,6 +693,48 @@
   </div>
   <div class="drawer-piede"><span id="drawer-aggiornato"></span> · <a href="privacy.html">Privacy</a> · <span>App non ufficiale TPER</span></div>
 </aside>
+
+<!-- Impostazioni tecniche: non stanno nel menu, si aprono scrivendo «admin»
+     nella ricerca (partenza e destinazione usano lo stesso campo). -->
+<div class="admin" id="admin" hidden>
+  <div class="admin-foglio" role="dialog" aria-modal="true" aria-label="Impostazioni tecniche">
+    <div class="admin-testa">
+      <h2>Impostazioni tecniche</h2>
+      <button class="icona" id="admin-chiudi" aria-label="Chiudi le impostazioni tecniche">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="admin-corpo">
+      <details id="menu-evitate" open>
+        <summary><span class="spazio">Linee da evitare</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+        <div class="info">
+          <div class="pref-chips" id="menu-evitate-lista"></div>
+          <div class="campo-relay">
+            <input id="input-evita" type="text" inputmode="numeric" maxlength="5" placeholder="Numero di linea" aria-label="Linea da non proporre pi\u00f9">
+            <button type="button" class="btn btn-tenue" data-azione="evita-aggiungi">Aggiungi</button>
+          </div>
+        </div>
+      </details>
+      <details id="admin-relay">
+        <summary><span class="spazio">Relay HelloBus</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+        <div class="info">
+          <div class="campo-relay">
+            <input id="input-proxy" type="url" placeholder="Indirizzo del relay" aria-label="Indirizzo del relay HelloBus">
+            <button type="button" class="btn btn-tenue" data-azione="salva-proxy">Salva</button>
+          </div>
+          <p class="nota-piccola" style="margin:6px 0 0">Vuoto = relay predefinito. Serve solo se hai un proxy tuo.</p>
+        </div>
+      </details>
+      <button class="voce-menu" id="menu-errori" hidden>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        <span class="spazio">Log errori</span>
+        <span class="nota" id="menu-errori-conteggio"></span>
+      </button>
+      <div class="log-errori" id="log-errori" hidden></div>
+      <p class="nota-piccola" style="padding:6px 16px 0;margin:0">Il pannello non compare nel menu: si apre scrivendo «admin» nella ricerca.</p>
+    </div>
+  </div>
+</div>
 
 <div class="cerca" id="cerca" hidden role="dialog" aria-modal="true" aria-label="Cerca fermata, luogo o indirizzo">
   <div class="cerca-testa">
