@@ -4,6 +4,8 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- Pulizia: via le regole CSS della vecchia sezione «Resto della giornata» (`.orari-giorno`, `.ora-riga`, `.ora-lista`, `.orari-passate` e i loro figli). L'azzeramento del filtro per linea non sta più nella funzione che legge gli orari: è passato a `renderLive`, dove si sa quando cambiano fermata o giorno.
+
 - Filtro dell'elenco fermata: le chip usano la **linea base** come la deduplica, quindi «13» tiene anche le 13A e al posto di tre chip 97/97A/97C ne compare una sola, «97».
 
 - Pacchetto legale completo: informativa privacy (art. 13 GDPR), termini e condizioni d'uso, cookie policy con l'elenco delle chiavi locali, note legali con fonti, licenze e marchi. Le pagine condividono `legale.css`, si aprono dal piè del menu e restano consultabili offline. Nessun banner cookie: l'app non usa cookie, solo memoria tecnica esente da consenso.

@@ -5463,8 +5463,6 @@
     if (!elenco.length) return elenco;
     orariGiorno.chiave = chiave;
     orariGiorno.elenco = elenco;
-    // Il filtro vale per la fermata e il giorno che si stanno guardando.
-    orariGiorno.linea = null;
     return elenco;
   }
 
@@ -5487,6 +5485,13 @@
     const box = $('vista-orari');
     if (!box) return;
     const fermata = fermataLive();
+    // Il filtro per linea vale per la fermata e il giorno che si stanno
+    // guardando: cambiando l'uno o l'altro si riparte da «Tutte». La chiave
+    // della cache è fermata|giorno, quindi basta confrontarla.
+    const chiaveVista = fermata ? fermata.id + '|' + routing.giorno : null;
+    if (orariGiorno.chiave && chiaveVista && orariGiorno.chiave !== chiaveVista) {
+      orariGiorno.linea = null;
+    }
     if (fermata && live.stopId !== fermata.id) {
       live.stopId = fermata.id;
       live.items = [];
