@@ -4,6 +4,8 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- Barra superiore ridisegnata: niente banda bianca, i comandi galleggiano sulla mappa. In alto a sinistra c'è **un solo tasto**: hamburger nella schermata iniziale, freccia indietro quando c'è un percorso o gli orari di una fermata aperti. La freccia risale di un gradino (pannello aperto → ridotto → home) senza perdere la tratta.
+
 - Le impostazioni tecniche (linee da evitare, relay HelloBus, log errori) non stanno più nel menu: si aprono scrivendo **«admin»** nella ricerca, sia da «Dove parti?» sia da «Dove vai?». Chi non lo sa non le trova, e il menu resta corto.
 
 - Mappa: interruttore **Zone tariffarie** nel menu. Ogni zona è un'area appena colorata (rossa la 500, grigie le altre) e toccandola si legge il suo nome e se è urbana, neutra o extraurbana. I confini ufficiali TPER non sono pubblicati: l'area è l'involucro delle fermate della zona, quindi è una stima dichiarata.

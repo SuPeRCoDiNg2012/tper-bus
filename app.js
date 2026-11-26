@@ -3562,18 +3562,22 @@
     }
   }
 
-  // La barra superiore è ridotta a una freccia quando c'è un percorso.
+  // Un solo tasto in alto a sinistra: indietro quando c'è qualcosa da chiudere
+  // (percorso o orari di una fermata), hamburger nella schermata iniziale.
   function aggiornaBarra() {
-    const attivo = !!(sel.partenza && sel.destinazione) || vistaAttiva === 'orari';
+    const haPercorso = !!(sel.partenza && sel.destinazione);
+    const torna = haPercorso || vistaAttiva === 'orari';
     const barra = $('barra');
     if (!barra) return;
-    barra.classList.toggle('percorso', attivo);
-    const indietro = $('btn-indietro');
-    const menu = $('btn-menu');
-    if (indietro) indietro.hidden = !attivo;
-    if (menu) menu.hidden = attivo;
+    barra.classList.toggle('torna', torna);
+    const tasto = $('btn-menu');
+    if (tasto) {
+      tasto.setAttribute('aria-label', torna ? 'Torna indietro' : 'Apri il menu');
+      if (torna) tasto.removeAttribute('aria-controls');
+      else tasto.setAttribute('aria-controls', 'drawer');
+    }
     const inquadra = $('btn-inquadra');
-    if (inquadra) inquadra.hidden = !(attivo && routing.stato === 'ok');
+    if (inquadra) inquadra.hidden = !(haPercorso && routing.stato === 'ok');
     // Il titolo si compone solo con entrambi i capi scelti: aprendo gli orari
     // di una fermata senza percorso il vecchio codice leggeva null.nome.
     document.title = (sel.partenza && sel.destinazione)
@@ -5552,7 +5556,18 @@
       fermaTimerLive();
     }
     aggiornaScrim();
+    aggiornaBarra();
   }
+
+  // Freccia in alto a sinistra: si risale di un gradino, senza perdere il
+  // percorso finché non si torna davvero alla schermata iniziale.
+  function tornaIndietro() {
+    if (vistaAttiva === 'orari') { mostraVista('percorso'); impostaSheet('meta'); return; }
+    if (statoSheet === 'piena') { impostaSheet('meta'); return; }
+    if (statoSheet === 'meta') { impostaSheet('peek'); return; }
+    if (sel.destinazione) azzeraNavigazione();
+  }
+
   // Quanto pannello si vede davvero: aggiorna --h-sheet e restituisce il valore,
   // così chi lo usa non deve rileggerlo dal DOM.
   // Il bordo del pannello si calcola dalla sua altezza e dalla traslazione che
@@ -5671,6 +5686,7 @@
     if (pannello) pannello.setAttribute('data-stato', stato);
     adattaAltezzaSheet();
     applicaTrasformazione(traslazionePer(stato), true);
+    aggiornaBarra();
     aggiornaBarra();
     // Lo spazio visibile cambia con il pannello: il percorso si reinquadra, ma
     // solo quando il pannello si muove davvero (prima anche un semplice resize
@@ -6127,7 +6143,6 @@
    * ------------------------------------------------------------------ */
   function collegaEventi() {
     // ---- Barra superiore ----
-    $('btn-menu').addEventListener('click', apriMenu);
     $('drawer-chiudi').addEventListener('click', chiudiMenu);
     $('drawer-velo').addEventListener('click', chiudiMenu);
     // ---- Prima apertura e tasto indietro ----
@@ -6150,13 +6165,11 @@
       if (routing.stato === 'ok' && ultimeFeatures.length) inquadraPercorso(400);
       else inquadra();
     });
-    $('btn-indietro').addEventListener('click', () => {
-      if (vistaAttiva === 'orari') { mostraVista('percorso'); impostaSheet('meta'); return; }
-      if (statoSheet === 'piena') { impostaSheet('meta'); return; }
-      if (statoSheet === 'meta') { impostaSheet('peek'); return; }
-      // Dalla posizione ridotta si torna al menu principale: qui la navigazione
-      // si azzera del tutto, non resta solo il campo destinazione svuotato.
-      if (sel.destinazione) azzeraNavigazione();
+    // Un tasto, due mestieri: torna indietro oppure apre il menu.
+    $('btn-menu').addEventListener('click', () => {
+      const barra = $('barra');
+      if (barra && barra.classList.contains('torna')) { tornaIndietro(); return; }
+      apriMenu();
     });
 
     // ---- Mini-card fermata ----

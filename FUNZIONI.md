@@ -1,6 +1,6 @@
 # Tutte le funzioni di Muovi Bologna
 
-Indice completo del codice: **378 funzioni** — 299 in `app.js` e 79 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
+Indice completo del codice: **379 funzioni** — 300 in `app.js` e 79 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
 
 Nessun framework e nessun bundler: `index.html` carica gli script con `<script>` normali, `app.js` è l'unico file grande e gli altri moduli sono oggetti globali (`Utilita`, `Tariffe`, `Piedi`, `Routing`, `VistaPercorso`, `Icone`).
 
@@ -137,7 +137,7 @@ Il backend delle segnalazioni (Worker + D1).
 
 ---
 
-# app.js — 299 funzioni
+# app.js — 300 funzioni
 
 ## Stato locale e preferenze — 16
 
@@ -377,7 +377,8 @@ Il backend delle segnalazioni (Worker + D1).
 | `listaViciniHTML()` | Fermate vicine come alternative. |
 | `aggiornaCardBiglietto()` | Ridisegna la card del biglietto. |
 | `collegaRisultato()` | Aggancia i clic dentro il risultato. |
-| `aggiornaBarra()` | Barra superiore ridotta a una freccia. |
+| `aggiornaBarra()` | Un solo tasto in alto: freccia o hamburger secondo la vista. |
+| `tornaIndietro()` | Risale di un gradino: orari, pannello, percorso. |
 | `apriMini(f)` | Mini-card di una fermata. |
 | `chiudiMini()` | Chiude la mini-card. |
 | `apriOrari(f)` | Apre la vista orari di una fermata. |
