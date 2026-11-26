@@ -14,6 +14,9 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 - **Cache locale degli indirizzi** Nominatim (sette giorni, massimo quaranta voci) e **copia del log errori** dal pannello admin.
 - **Avvio più leggero**: non si riscrivono più fermate e linee in `localStorage` a ogni apertura se il dataset non è cambiato; il tempo di caricamento viene misurato e incluso nel log copiato.
 - **Tastiera**: frecce su e giù nei suggerimenti, Invio sul primo risultato, focus visibile.
+- **Tasto indietro del browser**: ogni scelta di fermata, linea o orari crea una voce di cronologia con i parametri del viaggio; l'indietro ripristina la ricerca precedente (solo partenza, viaggio prima, linea, orari) e non si limita a riscrivere l'URL. Anche la freccia dell'app usa la stessa cronologia.
+- **Tracciato della linea** disegnato appena la mappa ha lo stile, anche se al momento dell'apertura non era ancora pronta: si riprova finché la vista linea resta aperta, senza perdersi il percorso.
+- **Avviso «scendi alla prossima»** azzerato a ogni nuova navigazione: la vibrazione si ripete anche se la fermata di discesa è la stessa del viaggio precedente.
 - **Scorciatoie nel manifest** per Casa e Lavoro.
 - Non implementati e dichiarati come limiti: notifiche push (servono chiavi VAPID, un deploy del Worker e la crittografia Web Push), S1 Porretta (nessun GTFS verificabile con le fermate intermedie) e filtro «fermate accessibili» (il dataset non espone `wheelchair_boarding`).
 

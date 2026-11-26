@@ -209,6 +209,9 @@
   const lineaVista = { nome: null, capolinea: null };
   let vistaRitorno = null;
   const diagnostica = { caricamentoMs: null };
+  // Durante il ripristino da un tasto indietro non si aggiungono altre voci.
+  let ripristinandoStoria = false;
+  let lineeInCaricamento = false;
 
   const live = { items: [], ts: 0, stato: 'idle', caricamento: false, errore: null, stopId: null, avviso: '', fermata: null, aperto: -1, avvisa: null };
 
@@ -2000,6 +2003,7 @@
     renderPercorso();
     impostaSheet('peek');
     inquadra();
+    aggiornaUrl('replace');
   }
 
   /* ------------------------------------------------------------------ *
@@ -2438,6 +2442,9 @@
     navigazione.attiva = true;
     navigazione.passi = passi;
     navigazione.indice = 0;
+    // Navigazione nuova, avviso nuovo: anche se la fermata di discesa è la
+    // stessa del viaggio precedente, la vibrazione deve rifarsi sentire.
+    navigazione.discesaAvvisata = null;
     navigazione.follow = true;
     navigazione.inquadrato = false;
     // Se il GPS ha già un fix si parte da lì, senza aspettare il primo
@@ -2476,6 +2483,7 @@
     }
     navigazione.passi = [];
     navigazione.indice = 0;
+    navigazione.discesaAvvisata = null;
     navigazione.arrivato = false;
     navigazione.inquadrato = false;
     document.body.classList.remove('in-navigazione');
@@ -2943,12 +2951,18 @@
 
   function selezionaFermata(ruolo, f) {
     if (navigazione.attiva) fermaNavigazione(true);
+    // Se si sceglie una fermata dagli orari o dalla linea, si torna al
+    // percorso: l'URL non deve portarsi dietro la vista precedente.
+    if (vistaAttiva !== 'percorso') mostraVista('percorso');
     sel[ruolo] = f;
     impostaInput(ruolo);
     if (!eIndirizzo(f)) aggiungiRecente(f);
     chiudiOverlay();
     aggiornaMarker();
     salvaTratta();
+    // Una voce di cronologia per ogni scelta: il tasto indietro ripristina la
+    // ricerca di prima (solo partenza, oppure il viaggio precedente).
+    aggiornaUrl('push');
     live.fermata = null;
     live.items = [];
     live.ts = 0;
@@ -3380,21 +3394,25 @@
    * ------------------------------------------------------------------ */
   // Lo stato della storia può sopravvivere a un ricaricamento: il flag parte
   // da lì invece che sempre da false.
-  let statoPercorsoInStoria = !!(window.history && history.state && history.state.muovi === 'percorso');
+  let statoPercorsoInStoria = !!(window.history && history.state && history.state.tper);
 
+  // Il viaggio appena calcolato deve avere una voce con i suoi parametri: se
+  // l'URL non li contiene ancora (tratta ripristinata dal salvataggio) si
+  // aggiunge qui. Se li contiene, la voce è già stata creata alla scelta
+  // della fermata e non se ne aggiunge una doppia.
   function segnalaStoriaPercorso() {
-    if (statoPercorsoInStoria || !window.history || !history.pushState) return;
-    try {
-      history.pushState({ muovi: 'percorso' }, '');
-      statoPercorsoInStoria = true;
-    } catch (errore) { /* Safari vecchio: si resta senza voce */ }
+    if (!window.history || !history.pushState) return;
+    const p = new URLSearchParams(location.search);
+    if (p.get('da') && p.get('a')) { statoPercorsoInStoria = true; return; }
+    aggiornaUrl('push');
+    statoPercorsoInStoria = true;
   }
 
   // La voce consumata dall'indietro non esiste più: senza riallineare il flag
   // il percorso successivo non aggiungeva la sua voce e il tasto indietro
   // usciva dall'app.
   function aggiornaVoceStoria() {
-    statoPercorsoInStoria = !!(window.history && history.state && history.state.muovi === 'percorso');
+    statoPercorsoInStoria = !!(window.history && history.state && history.state.tper);
   }
 
   // C'è ancora qualcosa che l'indietro può chiudere?
@@ -3407,6 +3425,12 @@
   }
 
   function indietroBrowser() {
+    // Voce nostra con i parametri: si ripristina la ricerca precedente (solo
+    // partenza, viaggio prima, linea o orari), non solo un livello di pannello.
+    if (window.history && history.state && history.state.tper) {
+      applicaStatoUrl();
+      return;
+    }
     try {
       indietroLivelli();
     } finally {
@@ -3923,7 +3947,7 @@
     if (comandi) comandi.hidden = false;
   }
 
-  function apriOrari(f) {
+  function apriOrari(f, opzioni) {
     if (!f) return;
     chiudiMini();
     live.fermata = f;
@@ -3944,6 +3968,7 @@
     }
     mostraVista('orari');
     impostaSheet('piena');
+    if (!opzioni || opzioni.storia !== false) aggiornaUrl('push');
     caricaLive(true);
   }
   /* ------------------------------------------------------------------ *
@@ -4038,7 +4063,10 @@
     return [luogo.lat.toFixed(5), luogo.lon.toFixed(5), nomeBreve(luogo.nome || '')].join(',');
   }
 
-  function aggiornaUrl() {
+  // `push` crea una voce vera di cronologia quando la ricerca cambia (scelta
+  // di una fermata, linea o orari): il tasto indietro del browser torna al
+  // viaggio precedente, non soltanto riscrive l'URL.
+  function aggiornaUrl(modo) {
     if (!window.history || !history.replaceState) return;
     const p = new URLSearchParams();
     const da = parametroLuogo(sel.partenza);
@@ -4048,10 +4076,18 @@
     if (routing.giorno) p.set('g', routing.giorno);
     if (!routing.adesso && routing.orario) p.set('o', routing.orario);
     if (routing.modo === 'arrivo') p.set('m', 'arrivo');
-    if (vistaAttiva === 'linea' && lineaVista.nome) p.set('linea', lineaVista.nome);
+    if (lineaVista.nome) p.set('linea', lineaVista.nome);
+    if (vistaAttiva === 'orari' && live.fermata) p.set('fermata', live.fermata.id);
     const q = p.toString();
+    const indirizzo = location.pathname + (q ? '?' + q : '') + location.hash;
     try {
-      history.replaceState(history.state, '', location.pathname + (q ? '?' + q : '') + location.hash);
+      if (modo === 'push' && !ripristinandoStoria) {
+        const profondita = (history.state && history.state.tper ? history.state.profondita : 0) + 1;
+        history.pushState({ tper: true, profondita: profondita }, '', indirizzo);
+      } else {
+        const stato = history.state && history.state.tper ? history.state : { tper: true, profondita: 0 };
+        history.replaceState(stato, '', indirizzo);
+      }
     } catch (errore) { /* alcuni browser limitano replaceState */ }
   }
 
@@ -4089,7 +4125,70 @@
     if (/^\d{2}:\d{2}$/.test(o || '')) { routing.orario = o; routing.adesso = false; usato = true; }
     if (p.get('m') === 'arrivo') { routing.modo = 'arrivo'; usato = true; }
     if (usato) { routing.chiave = null; salvaQuando(); }
+    // La voce corrente è nostra ma non ha un «prima»: all'avvio il tasto
+    // indietro non deve riaprire un viaggio che non esiste.
+    try { history.replaceState({ tper: true, profondita: 0 }, '', location.href); } catch (errore) { /* niente */ }
     return p;
+  }
+
+  // Stato completo ricostruito dall'URL: serve al tasto indietro del browser.
+  // A differenza di leggiUrl, che all'avvio lascia la tratta salvata quando i
+  // parametri mancano, qui l'assenza di un capo significa che non c'era.
+  function applicaStatoUrl() {
+    const p = new URLSearchParams(location.search);
+    ripristinandoStoria = true;
+    try {
+      if (navigazione.attiva) fermaNavigazione(true);
+      if (!$('cerca').hidden) chiudiOverlay();
+      if ($('drawer').classList.contains('aperto')) chiudiMenu();
+      if (miniFermata) chiudiMini();
+      sel.partenza = luogoDaParam(p.get('da'));
+      sel.destinazione = luogoDaParam(p.get('a'));
+      impostaInput('partenza');
+      impostaInput('destinazione');
+      const g = p.get('g');
+      routing.giorno = /^\d{4}-\d{2}-\d{2}$/.test(g || '') ? g : oggiISO();
+      const o = p.get('o');
+      routing.adesso = !/^\d{2}:\d{2}$/.test(o || '');
+      routing.orario = routing.adesso ? oraAdesso() : o;
+      routing.modo = p.get('m') === 'arrivo' ? 'arrivo' : 'partenza';
+      // Una risposta ancora in volo per lo stato precedente non deve
+      // sovrascrivere quello che il tasto indietro ha appena ripristinato.
+      routing.richiesta += 1;
+      routing.chiave = null;
+      routing.stato = 'idle';
+      routing.esito = null;
+      routing.opzioni = [];
+      routing.opzioniVeloce = [];
+      routing.opzioniOttimizzato = [];
+      routing.confronto = null;
+      routing.piedi = null;
+      routing.opzionePiedi = null;
+      routing.suggerimento = null;
+      routing.avvisoRitardo = '';
+      routing.aperto = -1;
+      salvaQuando();
+      aggiornaMarker();
+      salvaTratta();
+      const linea = p.get('linea');
+      const fermata = fermataPerId(p.get('fermata'));
+      lineaVista.nome = linea ? linea.toUpperCase() : null;
+      lineaVista.capolinea = null;
+      vistaRitorno = linea ? 'linea' : null;
+      if (fermata) {
+        apriOrari(fermata, { storia: false });
+      } else if (lineaVista.nome) {
+        apriLinea(lineaVista.nome, { storia: false });
+      } else {
+        vistaRitorno = null;
+        mostraVista('percorso');
+        if (sel.partenza && sel.destinazione) calcolaPercorso();
+        else { renderPercorso(); impostaSheet('peek'); }
+      }
+    } finally {
+      ripristinandoStoria = false;
+    }
+    aggiornaUrl('replace');
   }
 
   // Prima di disegnare o calcolare, data e ora devono avere un valore. In
@@ -4955,7 +5054,7 @@
   }
   function calcolaPercorso() {
     if (!sel.partenza || !sel.destinazione) return;
-    aggiornaUrl();
+    aggiornaUrl('replace');
     if (typeof TPERRouting === 'undefined') {
       routing.stato = 'errore';
       routing.errore = 'motore dei percorsi non disponibile';
@@ -5047,6 +5146,9 @@
         if (sel.destinazione && !sel.destinazione.gps) {
         }
         segnalaStoriaPercorso();
+        // Gli orari completi non stanno all'avvio: si caricano in sottofondo
+        // appena c'è un percorso, per poter segnalare l'ultima corsa.
+        if (typeof TPERRouting !== 'undefined' && !TPERRouting.disponibile()) preparaLinee();
         // Le geometrie arrivano dopo il calcolo: appena pronte il tracciato
         // viene ridisegnato con il percorso reale della linea.
         if (typeof TPERRouting !== 'undefined' && TPERRouting.caricaTracciati) {
@@ -5990,7 +6092,8 @@
 
   function preparaLinee() {
     if (typeof TPERRouting === 'undefined' || !TPERRouting.carica) return;
-    if (TPERRouting.disponibile()) return;
+    if (TPERRouting.disponibile() || lineeInCaricamento) return;
+    lineeInCaricamento = true;
     TPERRouting.carica(URL_ORARI_GZ, URL_ORARI).then(() => {
       if (suggerimenti.query) {
         suggerimenti.linee = lineeSuggerite(suggerimenti.query);
@@ -5998,7 +6101,15 @@
       }
       // Le fermate fissate mostrano i prossimi passaggi solo con gli orari.
       if (fermateFisse().length) renderPercorso();
-    }).catch(() => { /* la ricerca delle fermate funziona lo stesso */ });
+      // Il badge «ultima corsa» ha bisogno dell'indice delle linee: appena gli
+      // orari sono pronti si annotano le opzioni già calcolate e si ridisegna.
+      if (routing.esito && routing.opzioni.length) {
+        routing.opzioni.forEach((esito) => segnaUltimaCorsa(esito));
+        segnaUltimaCorsa(routing.esito);
+        if (vistaAttiva === 'percorso') disegnaPercorso();
+      }
+    }).catch(() => { /* la ricerca delle fermate funziona lo stesso */ })
+      .finally(() => { lineeInCaricamento = false; });
   }
 
   function lineeSuggerite(testo) {
@@ -6016,7 +6127,7 @@
     return indice && lineaVista.nome ? Linee.lineaDi(indice, lineaVista.nome) : null;
   }
 
-  function apriLinea(nome) {
+  function apriLinea(nome, opzioni) {
     const pulito = String(nome || '').trim().toUpperCase();
     if (!pulito) return;
     const apri = () => {
@@ -6031,7 +6142,7 @@
       mostraVista('linea');
       impostaSheet('meta');
       disegnaLineaMappa();
-      aggiornaUrl();
+      aggiornaUrl(!opzioni || opzioni.storia !== false ? 'push' : 'replace');
     };
     if (typeof TPERRouting === 'undefined' || !TPERRouting.carica) {
       mostraToast('Linee non disponibili');
@@ -6091,12 +6202,25 @@
     box.innerHTML = html;
   }
 
-  function disegnaLineaMappa() {
+  // La mappa può non avere ancora lo stile (primo avvio, cambio stile o rete
+  // lenta): il tracciato non si perde, si riprova finché la mappa è pronta.
+  function disegnaLineaMappa(tentativo) {
+    if (vistaAttiva !== 'linea') return;
     const linea = lineaCorrente();
-    if (!linea || !mappa || typeof TPERRouting === 'undefined' || !TPERRouting.formaCorsa) return;
+    if (!linea || typeof TPERRouting === 'undefined' || !TPERRouting.formaCorsa) return;
+    if (!mappa || !mappa.isStyleLoaded()) {
+      // Nessun limite di tentativi: finché la vista linea è aperta si aspetta
+      // lo stile, anche su rete lenta. Uscendo dalla vista il controllo in
+      // testa ferma i tentativi da solo.
+      setTimeout(() => disegnaLineaMappa((tentativo || 0) + 1), 300);
+      return;
+    }
     const indiceCorsa = Linee.corsaVerso(linea, lineaVista.capolinea);
     TPERRouting.caricaTracciati(URL_TRACC_GZ, URL_TRACC).then(() => {
-      if (vistaAttiva !== 'linea' || !mappa || !mappa.isStyleLoaded()) return;
+      if (vistaAttiva !== 'linea' || !mappa || !mappa.isStyleLoaded()) {
+        setTimeout(() => disegnaLineaMappa((tentativo || 0) + 1), 300);
+        return;
+      }
       const punti = indiceCorsa != null ? TPERRouting.formaCorsa(indiceCorsa) : null;
       try {
         if (!mappa.getSource('linea-vista')) {
@@ -6150,6 +6274,14 @@
     if (corpo) corpo.scrollTop = 0;
     if (nome === 'linea') renderLinea();
     else pulisciLineaMappa();
+    // Uscendo dalla linea la direzione non serve più: senza questo, gli orari
+    // aperti dalla home erediterrebbero il parametro `linea` e un ritorno
+    // sbagliato alla vista linea.
+    if (nome === 'percorso') {
+      lineaVista.nome = null;
+      lineaVista.capolinea = null;
+      vistaRitorno = null;
+    }
     if (nome === 'orari') {
       renderLive();
       if (!live.items.length && !live.caricamento) caricaLive(false);
@@ -6159,12 +6291,15 @@
     }
     aggiornaScrim();
     aggiornaBarra();
-    aggiornaUrl();
   }
 
   // Freccia in alto a sinistra: si risale di un gradino, senza perdere il
   // percorso finché non si torna davvero alla schermata iniziale.
   function tornaIndietro() {
+    // Dentro linea e orari il tasto dell'app fa lo stesso del browser: torna
+    // alla voce precedente vera, non solo a una vista ricostruita.
+    const profondita = history.state && history.state.tper ? history.state.profondita || 0 : 0;
+    if (vistaAttiva !== 'percorso' && profondita > 0) { history.back(); return; }
     if (vistaAttiva === 'linea') { mostraVista('percorso'); impostaSheet('meta'); return; }
     if (vistaAttiva === 'orari' && vistaRitorno === 'linea') {
       vistaRitorno = null;
@@ -7411,7 +7546,7 @@
     if (sel.partenza && sel.destinazione) calcolaPercorso();
     impostaSheet(sel.partenza && sel.destinazione ? 'meta' : 'peek');
     const lineaUrl = parametri.get('linea');
-    if (lineaUrl) setTimeout(() => apriLinea(lineaUrl), 350);
+    if (lineaUrl) setTimeout(() => apriLinea(lineaUrl, { storia: false }), 350);
     // La mappa è stata creata prima che il layout fosse definitivo: senza un
     // resize il canvas resta vuoto finché la finestra non cambia dimensione.
     if (mappa) mappa.resize();
