@@ -16,7 +16,8 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 - Ritardi live su tutte le tappe, con cambio «a rischio» e corsa «persa».
 
 ### Cambiato
-- Pannello orari: tempo reale e orari programmati in un **unico elenco** ordinato per quanto manca. Entro 50 minuti si legge «tra N min», oltre compare l'orario. La sezione sotto resta la giornata completa, senza ripetere le corse già in elenco.
+- Pannello orari: **tutte** le corse che restano nella giornata, tempo reale e programmate, in un unico elenco ordinato per quanto manca. Entro 50 minuti si legge «tra N min» (e «ora» se sta passando), oltre compare l'orario. Le corse si filtrano con le chip delle linee.
+- Righe compatte come un tabellone: ora, badge colorato della linea, destinazione. Tolti pallini e linea verticale della timeline; l'etichetta resta solo per le corse reali (LIVE).
 - La stessa corsa arrivata da HelloBus (`13A`) e dal GTFS (`13`) non compare due volte e mostra la direzione.
 - `euro(0)` restituisce «Incluso»: «0,00 €» non compare più da nessuna parte.
 - `senzaDoppioni` distingue le fermate omonime di comuni diversi (chiave nome + comune).

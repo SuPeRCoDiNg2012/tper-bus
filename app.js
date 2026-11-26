@@ -5194,15 +5194,6 @@
   // Entro 50 minuti conta quanto manca («tra 10 min»): oltre, l'orario esatto
   // dice più di un numero grande che nessuno traduce in partenza.
   const MINUTI_RELATIVI = 50;
-  const ARRIVI_UNITI_MAX = 12;
-
-  // Linea "13A" di HelloBus e "13" del GTFS sono la stessa corsa.
-  function chiaveLinea(linea) {
-    if (VistaPercorso && typeof VistaPercorso.chiaveLinea === 'function') {
-      return VistaPercorso.chiaveLinea(linea);
-    }
-    return String(linea == null ? '' : linea).trim().toUpperCase();
-  }
 
   /**
    * Un solo elenco: tempo reale di HelloBus e orari programmati dello stesso
@@ -5238,20 +5229,34 @@
       .sort((a, b) => a.minuti - b.minuti);
   }
 
-  // Timeline degli arrivi: tempo reale e orari programmati nella stessa lista,
-  // tempo mancante in colonna a sinistra. Ogni riga si apre sul dettaglio.
+  // Elenco unico della fermata: tutte le corse che restano nella giornata,
+  // tempo reale e orari programmati insieme, ordinati per quanto manca. Righe
+  // compatte: ora, badge della linea, destinazione.
   function arriviHTML() {
-    const uniti = arriviUniti(fermataLive()).slice(0, ARRIVI_UNITI_MAX);
-    // Serve a non ripetere queste corse nella sezione degli orari del giorno.
-    live.uniti = uniti;
-    if (!uniti.length) return '';
+    const fermata = fermataLive();
+    let uniti = arriviUniti(fermata);
+    const linee = [];
+    uniti.forEach((voce) => {
+      const nome = String(voce.linea);
+      if (linee.indexOf(nome) < 0) linee.push(nome);
+    });
+    linee.sort((a, b) => a.localeCompare(b, 'it', { numeric: true }));
+    if (orariGiorno.linea && linee.indexOf(orariGiorno.linea) < 0) orariGiorno.linea = null;
+    if (orariGiorno.linea) uniti = uniti.filter((voce) => String(voce.linea) === orariGiorno.linea);
+    const filtro = linee.length > 1
+      ? '<div class="chips-linea" role="group" aria-label="Filtra per linea">' +
+        chipFiltroLinea('', 'Tutte') + linee.map((l) => chipFiltroLinea(l, l)).join('') + '</div>'
+      : '';
+    if (!uniti.length) return filtro;
     const oggi = routing.giorno === oggiISO();
-    return '<ul class="lista-arrivi">' + uniti.map((arrivo, indice) => {
+    return filtro + '<ul class="lista-arrivi">' + uniti.map((arrivo, indice) => {
       // Relativo solo per le corse vicine e solo se si guarda oggi: «tra 50
       // min» riferito a un altro giorno non vuol dire niente.
       const relativo = oggi && arrivo.minuti <= MINUTI_RELATIVI;
       const tempo = relativo
-        ? Math.max(0, arrivo.minuti) + '<span class="unita">min</span>'
+        ? (arrivo.minuti <= 0
+          ? 'ora'
+          : Math.max(1, arrivo.minuti) + '<span class="unita">min</span>')
         : '<span class="arrivo-alle">' + esc(arrivo.ora) + '</span>';
       const voce = coloreLinea(arrivo.linea);
       const colore = voce
@@ -5273,10 +5278,11 @@
       return '<li class="arrivo-item"><button type="button" class="arrivo" data-arrivo="' + indice +
         '" aria-expanded="' + (aperto ? 'true' : 'false') + '">' +
         '<span class="arrivo-tempo">' + tempo + '</span>' +
-        '<span class="arrivo-punto' + (arrivo.tipo === 'live' ? '' : ' off') + '"></span>' +
-        '<span class="arrivo-testo"><span class="badge-linea"' + colore + '>' + esc(arrivo.linea) + '</span>' +
-        '<span class="arrivo-meta">' + esc(meta) + '</span></span>' +
-        '<span class="' + (arrivo.tipo === 'live' ? 'tag-live' : 'tag-orario') + '">' + (arrivo.tipo === 'live' ? 'LIVE' : 'PROGRAMMATO') + '</span>' +
+        '<span class="badge-linea"' + colore + '>' + esc(arrivo.linea) + '</span>' +
+        '<span class="arrivo-meta">' + esc(meta) + '</span>' +
+        // Solo le corse reali hanno l'etichetta: quella programmata È la norma
+        // e occupava lo spazio della destinazione.
+        (arrivo.tipo === 'live' ? '<span class="tag-live">LIVE</span>' : '') +
         '</button>' + dettaglio + '</li>';
     }).join('') + '</ul>';
   }
@@ -5312,82 +5318,11 @@
       esc(testo) + '</button>';
   }
 
-  // Il filtro ridisegna solo la sezione degli orari: il tempo reale sopra resta
-  // com'è, senza una nuova chiamata a HelloBus.
+  // Il filtro per linea ridisegna l'elenco unico: nessuna nuova chiamata a
+  // HelloBus, si filtra quello che è già in memoria.
   function filtraOrariLinea(valore) {
     orariGiorno.linea = valore || null;
-    const sezione = document.querySelector('.orari-giorno');
-    const fermata = fermataLive();
-    if (!sezione || !fermata) return;
-    sezione.outerHTML = orariGiornoHTML(fermata);
-    aggiornaScrim();
-  }
-
-  // Tutte le corse della giornata, non solo il prossimo passaggio: il tempo
-  // reale resta sopra, qui sotto c'è il quadro completo.
-  function orariGiornoHTML(f) {
-    if (!f || eIndirizzo(f)) return '';
-    if (typeof TPERRouting === 'undefined' || !TPERRouting.partenzeFermata) return '';
-    const pronti = typeof TPERRouting.disponibile === 'function' && TPERRouting.disponibile();
-    if (!pronti) {
-      return '<section class="orari-giorno"><h3 class="orari-titolo">Orari programmati</h3>' +
-        '<p class="micro">Gli orari della giornata si caricano con la rete.</p></section>';
-    }
-    const elenco = partenzeDelGiorno(f);
-    // Una corsa per riga non basta quando una linea passa ogni pochi minuti:
-    // le chip filtrano senza aggiungere un'altra schermata.
-    const linee = [];
-    elenco.forEach((p) => {
-      const nome = String(p.linea);
-      if (linee.indexOf(nome) < 0) linee.push(nome);
-    });
-    linee.sort((a, b) => a.localeCompare(b, 'it', { numeric: true }));
-    if (orariGiorno.linea && linee.indexOf(orariGiorno.linea) < 0) orariGiorno.linea = null;
-    const scelte = orariGiorno.linea
-      ? elenco.filter((p) => String(p.linea) === orariGiorno.linea)
-      : elenco;
-    const oggi = routing.giorno === oggiISO();
-    const adesso = secondiDelGiorno(new Date());
-    const riga = (p, passato) => {
-      const voce = coloreLinea(p.linea);
-      const colore = voce
-        ? ' style="background:' + esc(voce[0]) + ';color:' + esc(Utilita.testoSuColore(voce[0], voce[1])) + '"'
-        : '';
-      // Il motore conosce solo gli id delle fermate: il nome del capolinea
-      // arriva dall'elenco fermate dell'app.
-      const capolinea = fermataPerId(p.capolineaId);
-      const destinazione = capolinea ? capolinea.nome : (p.capolinea || '');
-      return '<div class="ora-riga' + (passato ? ' passato' : '') + '">' +
-        '<span class="ora">' + hhmm(p.orario) + '</span>' +
-        '<span class="badge-linea"' + colore + '>' + esc(p.linea) + '</span>' +
-        '<span class="ora-dest">' + esc(nomeBreve(destinazione)) + '</span></div>';
-    };
-    // Le corse già mostrate nell'elenco unico qui sopra non si ripetono.
-    const mostrate = new Set((live.uniti || []).map((voce) => chiaveLinea(voce.linea) + '|' + voce.ora));
-    const passate = [];
-    const future = [];
-    scelte.forEach((p) => {
-      if (oggi && p.orario < adesso) { passate.push(p); return; }
-      if (mostrate.has(chiaveLinea(p.linea) + '|' + hhmm(p.orario))) return;
-      future.push(p);
-    });
-    // Le corse già partite restano disponibili ma non rubano lo spazio a
-    // quelle che devono ancora passare: la vista si apre su quelle di adesso.
-    const archivio = passate.length && future.length
-      ? '<details class="orari-passate"><summary>' + passate.length + ' corse già passate</summary>' +
-        '<div class="ora-lista">' + passate.map((p) => riga(p, true)).join('') + '</div></details>'
-      : passate.map((p) => riga(p, true)).join('');
-    const filtro = linee.length > 1
-      ? '<div class="chips-linea" role="group" aria-label="Filtra per linea">' +
-        chipFiltroLinea('', 'Tutte') + linee.map((l) => chipFiltroLinea(l, l)).join('') + '</div>'
-      : '';
-    return '<section class="orari-giorno">' +
-      '<h3 class="orari-titolo">Resto della giornata · ' + future.length + '</h3>' +
-      filtro +
-      (elenco.length
-        ? archivio + '<div class="ora-lista">' + future.map((p) => riga(p, false)).join('') + '</div>'
-        : '<p class="micro">Nessun orario programmato per questo giorno.</p>') +
-      '</section>';
+    renderLive();
   }
 
   // Vista orari: arrivi della fermata scelta, aggiornati ogni 30 secondi.
@@ -5398,7 +5333,6 @@
     if (fermata && live.stopId !== fermata.id) {
       live.stopId = fermata.id;
       live.items = [];
-      live.uniti = [];
       live.ts = 0;
       live.stato = 'idle';
       live.avviso = '';
@@ -5440,7 +5374,6 @@
         html += arriviHTML() || '<div class="box">Nessun passaggio in programma.</div>';
       }
     }
-    html += orariGiornoHTML(fermata);
     box.innerHTML = html;
     aggiornaScrim();
   }

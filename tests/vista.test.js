@@ -197,13 +197,22 @@ test('la variante della linea non duplica la corsa programmata', () => {
   assert.equal(Vista.chiaveLinea('T1'), 'T1');
 });
 
-test('gli arrivi scartano le corse passate e quelle oltre la finestra', () => {
+test('gli arrivi scartano le corse già passate', () => {
   const elenco = Vista.arriviUniti([], [
     { linea: '20', ora: '07:55' },
-    { linea: '20', ora: '08:05' },
-    { linea: '21', ora: '16:00' }
+    { linea: '20', ora: '08:05' }
   ], 8 * 60);
   assert.deepEqual(elenco.map((v) => v.ora), ['08:05']);
+});
+
+test('di default l’elenco tiene tutta la giornata, non solo le prossime ore', () => {
+  const elenco = Vista.arriviUniti([], [
+    { linea: '20', ora: '08:05' },
+    { linea: '21', ora: '20:00' }
+  ], 8 * 60);
+  assert.deepEqual(elenco.map((v) => v.ora), ['08:05', '20:00']);
+  // Con un tetto esplicito la corsa lontana si può escludere.
+  assert.equal(Vista.arriviUniti([], [{ linea: '21', ora: '20:00' }], 8 * 60, { massimo: 360 }).length, 0);
 });
 
 test('i minuti degli arrivi reggono la mezzanotte', () => {

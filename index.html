@@ -274,7 +274,7 @@
   .punto{width:6px;height:6px;border-radius:50%;background:var(--rosso);flex:0 0 auto;}
   .punto.off{background:var(--testo-2);}
   .lista-arrivi{list-style:none;margin:0;padding:0;}
-  .arrivo{display:flex;align-items:center;gap:12px;min-height:56px;padding:10px 0;}
+  .arrivo{display:grid;grid-template-columns:52px 44px minmax(0,1fr) auto;align-items:center;gap:8px;width:100%;min-height:46px;padding:6px 0;}
   .arrivo + .arrivo{border-top:1px solid var(--bordo);}
   .badge-linea{min-width:40px;text-align:center;font-size:13px;font-weight:700;padding:5px 8px;border-radius:8px;background:var(--rosso);color:#fff;}
   .arrivo-testo{flex:1;min-width:0;}
@@ -419,18 +419,17 @@
   .chip-suggerimento{display:inline-flex;align-items:center;min-height:36px;margin:0 6px 6px 0;padding:0 14px;border:1px solid var(--bordo);border-radius:999px;background:var(--sup);font-size:13px;font-weight:600;white-space:nowrap;color:var(--testo);cursor:pointer;}
   .chip-suggerimento:active{background:#F4F4F4;}
 
-  /* Arrivi: colonna dei tempi a sinistra e linea verticale, stile timeline. */
+  /* Arrivi: ora, badge della linea, destinazione. Righe basse e vicine, come
+     un tabellone di fermata: niente pallini né timeline. */
   .lista-arrivi{position:relative;}
-  .lista-arrivi::before{content:"";position:absolute;left:52px;top:20px;bottom:20px;width:1px;background:var(--bordo-2);}
   .arrivo-item{list-style:none;}
   .arrivo-item + .arrivo-item{border-top:1px solid var(--bordo);}
-  .arrivo{display:grid;grid-template-columns:44px 16px minmax(0,1fr) auto;align-items:center;gap:8px;width:100%;min-height:56px;padding:10px 0;border:0;background:transparent;text-align:left;cursor:pointer;position:relative;}
-  .arrivo-tempo{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;text-align:right;letter-spacing:-.2px;}
+  .arrivo{display:grid;grid-template-columns:52px 44px minmax(0,1fr) auto;align-items:center;gap:8px;width:100%;min-height:46px;padding:6px 0;border:0;background:transparent;text-align:left;cursor:pointer;position:relative;}
+  .arrivo-tempo{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.2px;}
   .arrivo-tempo .unita{font-size:10px;font-weight:500;color:var(--testo-2);margin-left:2px;}
-  .arrivo-punto{width:9px;height:9px;border-radius:50%;background:var(--sup);border:2px solid var(--rosso);justify-self:center;}
-  .arrivo-punto.off{border-color:var(--testo-2);}
-  .arrivo-testo{display:flex;align-items:center;gap:8px;min-width:0;}
-  .arrivo-testo .arrivo-meta{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .arrivo .badge-linea{justify-self:start;min-width:44px;}
+  .arrivo .arrivo-meta{margin:0;font-size:14px;color:var(--testo);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .arrivo .tag-live,.arrivo .tag-orario{font-size:8px;padding:2px 5px;letter-spacing:.3px;}
   .arrivo-dettaglio{grid-column:2 / -1;margin-top:8px;padding-top:8px;border-top:1px solid var(--bordo);display:flex;flex-direction:column;gap:8px;font-size:12px;line-height:1.5;color:var(--testo-2);}
   .arrivo-dettaglio .riga{display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .avviso-attivo{border:1px solid var(--rosso);border-radius:10px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--rosso);}

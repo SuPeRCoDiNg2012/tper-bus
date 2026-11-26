@@ -46,6 +46,23 @@
   }
 
   /**
+   * Minuti al prossimo passaggio, senza l'ambiguità delle 12 ore: a mezzogiorno
+   * esatto il calcolo circolare darebbe -720 (dodici ore fa) anche per una
+   * corsa che deve ancora partire.
+   */
+  function minutiVerso(ora, adessoMinuti) {
+    const minuti = minutiA(ora, adessoMinuti);
+    if (minuti !== -720) return minuti;
+    const parti = String(ora || '').split(':');
+    const ore = parseInt(parti[0], 10);
+    const min = parseInt(parti[1], 10);
+    if (!isFinite(ore) || !isFinite(min)) return minuti;
+    const target = ((ore % 24) * 60 + min) % 1440;
+    const adesso = ((adessoMinuti % 1440) + 1440) % 1440;
+    return target > adesso ? 720 : minuti;
+  }
+
+  /**
    * Un solo elenco di arrivi: corse in tempo reale e orari programmati,
    * ordinati per quanto manca. Se la stessa corsa (linea + ora) arriva da
    * entrambe le fonti vince quella con la posizione reale.
@@ -53,9 +70,9 @@
    */
   function arriviUniti(realtime, programmati, adessoMinuti, opzioni) {
     const minimo = opzioni && opzioni.minimo != null ? opzioni.minimo : -1;
-    // Sei ore: oltre, l'elenco smetterebbe di essere «i prossimi arrivi» e
-    // diventerebbe l'orario del giorno, che sta nella sezione sotto.
-    const massimo = opzioni && opzioni.massimo != null ? opzioni.massimo : 360;
+    // Nessun tetto di default: l'elenco della fermata è tutto quello che resta
+    // nella giornata. Il limite si può passare quando serve (test).
+    const massimo = opzioni && opzioni.massimo != null ? opzioni.massimo : Infinity;
     const visti = new Set();
     const elenco = [];
     const aggiungi = (voce) => {
@@ -77,7 +94,7 @@
     (programmati || []).forEach((p) => {
       const chiave = chiaveLinea(p.linea) + '|' + p.ora;
       if (p.destinazione) destinazioni.set(chiave, p.destinazione);
-      const minuti = minutiA(p.ora, adessoMinuti);
+      const minuti = minutiVerso(p.ora, adessoMinuti);
       if (minuti < minimo || minuti > massimo) return;
       aggiungi({ linea: String(p.linea), ora: p.ora, tipo: 'orario', bus: null, destinazione: p.destinazione || '' });
     });
@@ -85,7 +102,7 @@
       if (!voce.destinazione) {
         voce.destinazione = destinazioni.get(chiaveLinea(voce.linea) + '|' + voce.ora) || '';
       }
-      voce.minuti = minutiA(voce.ora, adessoMinuti);
+      voce.minuti = minutiVerso(voce.ora, adessoMinuti);
     });
     return elenco.filter((voce) => voce.minuti >= minimo).sort((a, b) => a.minuti - b.minuti);
   }
