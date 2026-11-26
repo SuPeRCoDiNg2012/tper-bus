@@ -46,7 +46,6 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 - Voce **Cancella tutti i dati** nel menu: svuota `localStorage`, cache e service worker, poi riavvia l'app.
 - Link a Privacy e alla nota «App non ufficiale TPER» nel piede del menu.
 - `FUNZIONI.md`: indice completo delle 361 funzioni, verificato contro il codice.
-- Segnalazione del controllore per linea, condivisa tra dispositivi (Worker + D1 in `controllori-api/`).
 - Meteo attuale da Open-Meteo, usato solo nel criterio «ottimizzato».
 - «Linee da evitare» nel menu, applicate a tutte le ricerche.
 - Ritardi live su tutte le tappe, con cambio «a rischio» e corsa «persa».

@@ -43,7 +43,7 @@
     <tr><td>OSRM (OpenStreetMap)</td><td>Coordinate dei punti</td><td>Percorsi a piedi</td></tr>
     <tr><td>OpenFreeMap</td><td>Coordinate della porzione di mappa</td><td>Cartografia</td></tr>
     <tr><td>Open-Meteo</td><td>Coordinate della zona</td><td>Meteo per i tempi a piedi</td></tr>
-    <tr><td>Cloudflare (relay e servizio controllori)</td><td>Linea segnalata, identificativo casuale, indirizzo IP</td><td>Segnalazione «c'è il controllore»</td></tr>
+    <tr><td>Cloudflare (relay degli orari)</td><td>Richiesta tecnica, indirizzo IP</td><td>Inoltro delle richieste a HelloBus</td></tr>
     <tr><td>unpkg (CDN)</td><td>Indirizzo IP</td><td>Libreria della mappa</td></tr>
   </table>
   <p>Questi fornitori ricevono la richiesta come qualsiasi visita a un sito: possono vedere l'indirizzo IP, come per qualunque connessione. Non c'è profilazione, non c'è pubblicità, non ci sono statistiche di terze parti, non esistono account.</p>
@@ -51,7 +51,7 @@
   <h2>Base giuridica</h2>
   <ul>
     <li><b>Esecuzione del servizio</b> (art. 6.1.b): cercare fermate, calcolare percorsi, mostrare orari e prezzi.</li>
-    <li><b>Legittimo interesse</b> (art. 6.1.f): far funzionare l'app, prevenire abusi sulle segnalazioni condivise, tenere un log tecnico locale degli errori.</li>
+    <li><b>Legittimo interesse</b> (art. 6.1.f): far funzionare l'app e tenere un log tecnico locale degli errori.</li>
     <li><b>Consenso</b> (art. 6.1.a): posizione del dispositivo, che puoi revocare in ogni momento dalle impostazioni del browser.</li>
   </ul>
 
@@ -59,7 +59,7 @@
   <p>I fornitori elencati sopra sono società con sede anche negli Stati Uniti (Cloudflare, unpkg) e possono trattare la richiesta fuori dall'UE sulla base delle clausole contrattuali standard della Commissione europea. Non vengono trasferiti dati tuoi conservati: solo la singola richiesta tecnica.</p>
 
   <h2>Conservazione</h2>
-  <p>Le segnalazioni dei controllori scadono dopo 25 minuti e vengono cancellate dal servizio. I dati locali durano finché non aggiorni l'app o non li cancelli. Gli orari e le geometrie restano in cache finché il service worker non li rinnova. Non conserviamo nulla che ti riguardi su un server.</p>
+  <p>I dati locali durano finché non aggiorni l'app o non li cancelli. Gli orari e le geometrie restano in cache finché il service worker non li rinnova. Non conserviamo nulla che ti riguardi su un server.</p>
 
   <h2>Notifiche</h2>
   <p>L'app non invia notifiche push e non chiede il permesso per farlo: nessun messaggio promozionale, nessun avviso a distanza.</p>
@@ -72,7 +72,7 @@
   <p>L'app non è rivolta a minori di 14 anni e non raccoglie consapevolmente dati che li riguardino: non ci sono account, pubblicità o profilazione.</p>
 
   <h2>Sicurezza</h2>
-  <p>Tutte le connessioni verso l'esterno usano HTTPS. Non esiste un database di utenti da proteggere: le uniche informazioni condivise sono le segnalazioni dei controllori, che non contengono dati personali.</p>
+  <p>Tutte le connessioni verso l'esterno usano HTTPS. Non esiste un database di utenti da proteggere e l'app non conserva dati personali su un server.</p>
 
   <h2>Modifiche</h2>
   <p>Se cambia qualcosa nel trattamento dei dati, questa pagina viene aggiornata e la data in fondo cambia. Le modifiche valgono dalla pubblicazione.</p>

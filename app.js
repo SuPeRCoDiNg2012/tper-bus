@@ -179,12 +179,6 @@
   // neve): con questi il cammino pesa il doppio.
   const METEO_BAGNATO = [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99];
 
-  // Segnalazioni "controllore a bordo": sono condivise tra i dispositivi, quindi
-  // vivono in un Worker con database (Freebuff Sites). Una segnalazione scade in
-  // 25 minuti; il dispositivo non può ripetere la stessa linea per 10 minuti.
-  const CONTROLLORI_URL = 'https://controllori-muovi-bologna-b9iaoo-preview.freebuff.site/api/controllori';
-  const K_DISPOSITIVO = 'tperzc_dispositivo_v1';
-  const controllori = { linee: [], ts: 0, caricamento: false };
   // Navigazione guidata: posizione continua, passo corrente, mappa in follow.
   const navigazione = {
     attiva: false, watchId: null, ultima: null, precisione: null,
@@ -1989,8 +1983,6 @@
     liveTappe.stato = 'idle';
     liveTappe.valori = [];
     liveTappe.esito = null;
-    controllori.linee = [];
-    controllori.ts = 0;
     if (liveTappeAbort) {
       liveTappeAbort.abort();
       liveTappeAbort = null;
@@ -4734,17 +4726,6 @@
     return testo + ': do più peso ai tratti a piedi.';
   }
 
-  /** Righe delle segnalazioni attive per le linee del percorso. */
-  function controlloriHTML() {
-    const adesso = Date.now();
-    return controllori.linee.map((voce) => {
-      const minuti = Math.max(1, Math.round((adesso - voce.ultima) / 60000));
-      return '<p class="criterio-spiega"><b>Controllore segnalato sul ' + esc(voce.linea) + '</b> · ' +
-        minuti + (minuti === 1 ? ' minuto' : ' minuti') + ' fa' +
-        (voce.quante > 1 ? ' · ' + voce.quante + ' segnalazioni' : '') + '.</p>';
-    }).join('');
-  }
-
   // Due righe di testo, non una scheda: la corsa scartata perché in forte
   // ritardo e il consiglio di camminare alla fermata dopo.
   function htmlSuggerimenti() {
@@ -4759,75 +4740,7 @@
       html += '<p class="criterio-spiega">Se cammini ' + s.minuti + ' min a ' + esc(s.nome) +
         ' arrivi ' + s.risparmio + ' min prima.</p>';
     }
-    // Segnalazioni degli altri passeggeri sulle linee di questo percorso.
-    return html + '<div id="riga-controllori">' + controlloriHTML() + '</div>';
-  }
-
-  // Identificativo anonimo del dispositivo: serve solo a non duplicare la
-  // stessa segnalazione, non identifica nessuno.
-  function dispositivoId() {
-    let id = leggi(K_DISPOSITIVO);
-    if (!id || !/^[A-Za-z0-9_-]{8,64}$/.test(id)) {
-      id = 'dev-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-      scrivi(K_DISPOSITIVO, id);
-    }
-    return id;
-  }
-
-  function lineeBusPercorso() {
-    const esito = routing.stato === 'ok' ? routing.esito : null;
-    const linee = [];
-    (esito && esito.tappe ? esito.tappe : []).forEach((tappa) => {
-      if (tappa.tipo === 1 || tappa.tipo === 2) return;
-      const nome = String(tappa.linea || '').toUpperCase();
-      if (nome && linee.indexOf(nome) < 0) linee.push(nome);
-    });
-    return linee;
-  }
-
-  async function caricaControllori(forza) {
-    const linee = lineeBusPercorso();
-    if (!linee.length) {
-      controllori.linee = [];
-      return;
-    }
-    if (!forza && controllori.ts && Date.now() - controllori.ts < 60000) return;
-    controllori.ts = Date.now();
-    try {
-      const risposta = await fetch(CONTROLLORI_URL + '?linee=' + encodeURIComponent(linee.join(',')),
-        { cache: 'no-store' });
-      if (!risposta.ok) throw new Error('controllori ' + risposta.status);
-      const dati = await risposta.json();
-      controllori.linee = Array.isArray(dati.linee) ? dati.linee : [];
-      // Solo la riga delle segnalazioni: ridisegnare tutta la scheda
-      // chiuderebbe il dettaglio che l'utente sta leggendo.
-      const box = document.getElementById('riga-controllori');
-      if (box) box.innerHTML = controlloriHTML();
-    } catch (errore) {
-      // Nessun avviso: la segnalazione è un extra, non un requisito del percorso.
-      controllori.linee = [];
-    }
-  }
-
-  async function segnalaControllore(linea) {
-    const nome = String(linea || '').toUpperCase();
-    if (!nome) return;
-    try {
-      const risposta = await fetch(CONTROLLORI_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ linea: nome, dispositivo: dispositivoId() })
-      });
-      if (risposta.status === 429) {
-        mostraToast('Hai già segnalato la linea ' + nome + ' da poco');
-        return;
-      }
-      if (!risposta.ok) throw new Error('segnalazione ' + risposta.status);
-      mostraToast('Segnalazione inviata: la vedono tutti');
-      caricaControllori(true);
-    } catch (errore) {
-      mostraToast('Segnalazione non inviata');
-    }
+    return html;
   }
 
   // Cambio criterio istantaneo: il pool è già in memoria, niente rete e
@@ -5085,7 +4998,6 @@
     collegaRisultato();
     caricaLivePercorso();
     caricaLiveTappe();
-    caricaControllori();
     avviaTimerPercorso();
     disegnaTracciato();
     aggiornaScrim();
@@ -5623,7 +5535,6 @@
       if (!primaCorsaPercorso()) return;
       caricaLivePercorso(true);
       caricaLiveTappe(true);
-      caricaControllori();
     }, 30000);
   }
 
@@ -7649,14 +7560,6 @@
     if (window.screen && screen.orientation && screen.orientation.addEventListener) {
       screen.orientation.addEventListener('change', adattaAllaVista);
     }
-
-    // Segnalazione controllore: un tocco sul pulsante dentro il dettaglio.
-    document.addEventListener('click', (evento) => {
-      const bottone = evento.target.closest('[data-controllore]');
-      if (!bottone) return;
-      evento.preventDefault();
-      segnalaControllore(bottone.getAttribute('data-controllore'));
-    });
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible') return;

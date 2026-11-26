@@ -1,12 +1,12 @@
 # Tutte le funzioni di Muovi Bologna
 
-Indice completo del codice: **415 funzioni** — 330 in `app.js` e 85 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
+Indice completo del codice: **405 funzioni** — 325 in `app.js` e 80 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
 
 Nessun framework e nessun bundler: `index.html` carica gli script con `<script>` normali, `app.js` è l'unico file grande e gli altri moduli sono oggetti globali (`Utilita`, `Tariffe`, `Piedi`, `Routing`, `VistaPercorso`, `Icone`).
 
 ---
 
-## utilita.js — 14 funzioni
+## utilita.js — 15 funzioni
 
 Colori, contrasto, cache, tempi e geometria: roba che non sa niente di bus.
 
@@ -19,6 +19,7 @@ Colori, contrasto, cache, tempi e geometria: roba che non sa niente di bus.
 | `cacheDaSvuotare(misure, soglia)` | Quali cache sono cresciute oltre la soglia. |
 | `deveMostrareInvito(uso, visto, installata)` | L'invito all'installazione arriva al terzo uso e non si ripete. |
 | `timeoutPer(tipo)` | Millisecondi di attesa per ogni tipo di richiesta. |
+| `durata(minuti)` | Durata leggibile: minuti sotto l'ora, poi «1h» o «2h e 35min». |
 | `semplifica(punti, tolleranza)` | Douglas-Peucker: toglie i vertici inutili da una linea. |
 | `involucro(punti)` | Poligono convesso che contiene tutte le fermate di una zona. |
 | `raggruppa(punti, metri)` | Gruppi di punti vicini, uniti a catena. |
@@ -149,19 +150,6 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `versioneCache(nome)` | Versione della cache dal nome del file. |
 | `pulisciCacheVecchie()` | Cancella le cache delle versioni precedenti. |
 | `potaturaCache()` | Toglie dalla cache statica i file che non esistono più. |
-
-## controllori-api/worker.js — 6 funzioni
-
-Il backend delle segnalazioni (Worker + D1).
-
-| Funzione | Cosa fa |
-| --- | --- |
-| `cors(origine)` | Origini ammesse; il resto riceve la prima. |
-| `risposta(dati, stato, origine)` | JSON con header CORS e `no-store`. |
-| `lineaPulita(valore)` | Normalizza e valida il nome della linea. |
-| `prepara(env)` | Crea tabella e indici al primo uso. |
-| `leggi(env, linee)` | Segnalazioni attive aggregate per linea. |
-| `scrivi(env, linea, verso, dispositivo)` | Inserisce una segnalazione, con tetti anti-spam. |
 
 ---
 
@@ -452,18 +440,13 @@ Il backend delle segnalazioni (Worker + D1).
 | `htmlBadgePiano()` | Badge del criterio attivo. |
 | `htmlSpiegazione()` | Testo che spiega la scelta. |
 
-## Meteo e controllori — 11
+## Meteo e suggerimenti — 6
 
 | Funzione | Cosa fa |
 | --- | --- |
 | `caricaMeteo()` | Meteo attuale da Open-Meteo per la zona. |
 | `descrizioneMeteo()` | Nota meteo in una riga. |
-| `controlloriHTML()` | Righe delle segnalazioni attive del percorso. |
-| `htmlSuggerimenti()` | Consigli: corsa scartata, camminare, controllore. |
-| `dispositivoId()` | Identificativo casuale del browser. |
-| `lineeBusPercorso()` | Linee bus dell'itinerario mostrato. |
-| `caricaControllori(forza)` | Scarica le segnalazioni e aggiorna la riga. |
-| `segnalaControllore(linea)` | Invia la segnalazione di una linea. |
+| `htmlSuggerimenti()` | Consigli: corsa scartata e camminata alla fermata dopo. |
 | `impostaCriterio(criterio)` | Cambia criterio senza skeleton. |
 | `contaScelteOttimizzato()` | Quante volte si è scelto «ottimizzato». |
 | `rigaCriterioHTML()` | Riga con criterio scelto e motivo. |

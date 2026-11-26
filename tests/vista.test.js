@@ -54,6 +54,12 @@ test('un bus continua a mostrare il numero di fermate', () => {
   assert.doesNotMatch(html, /Treno · /);
 });
 
+test('il dettaglio non propone più la segnalazione controllore', () => {
+  const html = render(viaggio({}, corsa({ linea: '20', tipo: 3, fermate: 3 })));
+  assert.doesNotMatch(html, /data-controllore/i);
+  assert.doesNotMatch(html, /Ho visto il controllore/i);
+});
+
 test('tempi a piedi e totale porta-a-porta', () => {
   const e = viaggio({
     camminoIniziale: 8 * 60,
