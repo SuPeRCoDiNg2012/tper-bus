@@ -7,6 +7,7 @@
   'use strict';
 
   const Icone = typeof require === 'function' ? require('./icone') : globale.Icone;
+  const Utilita = typeof require === 'function' ? require('./utilita') : globale.Utilita;
   // Le impronte a 16px si leggono come due puntini: una figura intera è
   // riconoscibile anche a questa dimensione.
   const ICONA_PEDANA = Icone.svg('person-standing', 18);
@@ -221,7 +222,7 @@
         '<span class="corsa-badge' + (treno ? ' treno' : '') + '"' + colore + '>' + esc(tappa.linea) + '</span>' +
         '<div class="corsa-corpo">' +
         '<div class="corsa-riga"><span class="corsa-ora">' + hhmm(tappa.partenza) + '</span><span class="corsa-fermata">' + esc(etichetta(tappa.da)) + '</span></div>' +
-        '<div class="corsa-info">' + (treno ? 'Treno' : tappa.fermate + ' ' + (tappa.fermate === 1 ? 'fermata' : 'fermate')) + ' · ' + durata + ' min' +
+        '<div class="corsa-info">' + (treno ? 'Treno' : tappa.fermate + ' ' + (tappa.fermate === 1 ? 'fermata' : 'fermate')) + ' · ' + Utilita.durata(durata) +
         ritardoHTML(e, indice) + (tappa.ultimaCorsa ? ' · <b class="ultima-corsa">ultima corsa</b>' : '') + '</div>' +
         '<div class="corsa-riga"><span class="corsa-ora">' + hhmm(tappa.arrivo) + '</span><span class="corsa-fermata">' + esc(etichetta(tappa.a)) + '</span></div>' +
         '</div></div>';
@@ -252,7 +253,7 @@
     return '<details class="opzione" data-opzione="' + indice + '"' + (vista.aperto === indice ? ' open' : '') + '>' +
       '<summary class="opzione-testa">' +
       '<span class="opzione-orari">' + hhmm(uscita) + '<span class="freccia">→</span>' + hhmm(arrivoDestinazione) + '</span>' +
-      '<span class="opzione-meta">' + totale + ' min · ' + cambiTesto(e.cambi) + esc(extra) +
+      '<span class="opzione-meta">' + Utilita.durata(totale) + ' · ' + cambiTesto(e.cambi) + esc(extra) +
       (margine != null && margine >= 0 ? ' · ' + margine + ' min di margine' : '') +
       (e.tappe.some((tappa) => tappa.ultimaCorsa) ? ' · <b class="ultima-corsa">ultima corsa</b>' : '') + '</span>' +
       '<span class="opzione-linee">' + modiHTML(e) + '</span>' +

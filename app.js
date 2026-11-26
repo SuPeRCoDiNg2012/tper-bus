@@ -2348,7 +2348,7 @@
     // A piedi si sa anche quanto manca: utile quando l'arrivo è vicino e il
     // tempo da solo non dice nulla.
     const resto = routing.stato === 'piedi' ? distanzaInMetri(navigazione.ultima, coordinataDi(sel.destinazione)) : null;
-    const quando = minuti == null ? '' : ' · ' + (minuti < 1 ? 'meno di 1 min' : minuti + ' min');
+    const quando = minuti == null ? '' : ' · ' + (minuti < 1 ? 'meno di 1 min' : Utilita.durata(minuti));
     const quanto = resto == null ? '' : ' · ' + metriTesto(resto);
     scriviTesto('nav-eta', arrivato ? 'Arrivato' : (navigazione.arrivo || '—'));
     scriviTesto('nav-restanti', arrivato
@@ -3601,7 +3601,7 @@
     return '<div class="riepilogo">' +
       // Con i chip del criterio già visibili il badge ripeterebbe la stessa
       // informazione: si mostra solo quando i chip non ci sono.
-      '<div class="riep-titolo">' + totaleMinuti(e) + ' min' + (prezzo ? ' · ' + esc(prezzo) + spunta : '') + (htmlCriteri() ? '' : htmlBadgePiano()) + '</div>' +
+      '<div class="riep-titolo">' + Utilita.durata(totaleMinuti(e)) + (prezzo ? ' · ' + esc(prezzo) + spunta : '') + (htmlCriteri() ? '' : htmlBadgePiano()) + '</div>' +
       htmlCriteri() +
       '<div class="riep-meta">' + esc(meta) + '</div>' +
       htmlSpiegazione() +
@@ -3645,7 +3645,7 @@
       const uscita = Math.max(0, e.partenza - (e.camminoIniziale || 0));
       const arrivo = e.arrivo + (e.camminoFinale || 0);
       const piedi = Math.round(((e.camminoIniziale || 0) + (e.camminoFinale || 0)) / 60);
-      const meta = totaleMinuti(e) + ' min · ' +
+      const meta = Utilita.durata(totaleMinuti(e)) + ' · ' +
         (e.cambi === 0 ? 'diretto' : e.cambi === 1 ? '1 cambio' : e.cambi + ' cambi') +
         (piedi ? ' · a piedi ' + piedi + ' min' : '');
       // Il margine è già calcolato dalla ricerca: qui si mostra, e sotto i due

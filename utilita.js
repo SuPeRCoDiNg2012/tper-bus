@@ -87,6 +87,18 @@
   }
 
   /**
+   * Durata leggibile: sotto l'ora restano i minuti, sopra si passa a «1h» o
+   * «2h e 35min». Evita i «95 min» che costringono a fare il conto a mente.
+   */
+  function durata(minuti) {
+    const totali = Math.max(0, Math.round(Number(minuti) || 0));
+    if (totali < 60) return totali + ' min';
+    const ore = Math.floor(totali / 60);
+    const resto = totali % 60;
+    return resto ? ore + 'h e ' + resto + 'min' : ore + 'h';
+  }
+
+  /**
    * Douglas-Peucker su una linea di coordinate [lon, lat]. Toglie i punti che
    * stanno entro `tolleranza` (in gradi) dalla retta fra i due estremi: la
    * geometria GTFS ha un vertice ogni pochi metri e senza questo le linee
@@ -313,6 +325,7 @@
     cacheDaSvuotare: cacheDaSvuotare,
     deveMostrareInvito: deveMostrareInvito,
     timeoutPer: timeoutPer,
+    durata: durata,
     semplifica: semplifica,
     involucro: involucro,
     raggruppa: raggruppa,

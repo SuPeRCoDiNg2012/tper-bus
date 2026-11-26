@@ -2,6 +2,15 @@ const test = require('node:test');
 const assert = require('node:assert');
 const Utilita = require('../utilita');
 
+test('le durate sopra l\'ora passano a ore e minuti', () => {
+  assert.equal(Utilita.durata(0), '0 min');
+  assert.equal(Utilita.durata(59), '59 min');
+  assert.equal(Utilita.durata(60), '1h');
+  assert.equal(Utilita.durata(95), '1h e 35min');
+  assert.equal(Utilita.durata(120), '2h');
+  assert.equal(Utilita.durata(155), '2h e 35min');
+});
+
 test('il contrasto segue la formula WCAG', () => {
   assert.equal(Math.round(Utilita.contrasto('#FFFFFF', '#000000')), 21);
   assert.equal(Math.round(Utilita.contrasto('#FFFFFF', '#FFFFFF')), 1);

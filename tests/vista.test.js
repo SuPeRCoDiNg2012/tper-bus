@@ -73,7 +73,9 @@ test('tempi a piedi e totale porta-a-porta', () => {
   // Si esce di casa alle 08:02 (bus alle 08:10 meno 8 min) e si arriva alle 09:05.
   assert.match(html, /08:02/);
   assert.match(html, /09:05/);
-  assert.match(html, /63 min/);
+  // Oltre l'ora il totale passa a ore e minuti, non resta «63 min».
+  assert.match(html, /1h e 3min/);
+  assert.doesNotMatch(html, /63 min/);
 });
 
 test('nomi e linee vengono sempre escapati', () => {
