@@ -44,6 +44,29 @@ test('la pulizia si ferma appena basta', () => {
   ]);
 });
 
+test('semplifica toglie i vertici sulla retta e tiene gli estremi', () => {
+  const linea = [[0, 0], [0.0001, 0], [0.0002, 0], [0.0003, 0]];
+  const out = Utilita.semplifica(linea, 0.00008);
+  assert.equal(out.length, 2);
+  assert.deepEqual(out[0], [0, 0]);
+  assert.deepEqual(out[1], [0.0003, 0]);
+});
+
+test('semplifica tiene i vertici che deviano oltre la tolleranza', () => {
+  const linea = [[0, 0], [0.0001, 0.001], [0.0002, 0]];
+  assert.equal(Utilita.semplifica(linea, 0.00008).length, 3);
+  // Con una tolleranza più larga sparisce anche la curva.
+  assert.equal(Utilita.semplifica(linea, 0.01).length, 2);
+});
+
+test('semplifica regge linee vuote, corte o degenerate', () => {
+  assert.deepEqual(Utilita.semplifica([], 0.0001), []);
+  assert.deepEqual(Utilita.semplifica([[1, 2]], 0.0001), [[1, 2]]);
+  assert.equal(Utilita.semplifica([[0, 0], [1, 1]], 0.0001).length, 2);
+  // Tre punti identici non fanno dividere per zero.
+  assert.deepEqual(Utilita.semplifica([[0, 0], [0, 0], [0, 0]], 0.0001), [[0, 0], [0, 0]]);
+});
+
 test('l\'invito all\'installazione compare al terzo uso e una volta sola', () => {
   assert.equal(Utilita.deveMostrareInvito(2, false, false), false);
   assert.equal(Utilita.deveMostrareInvito(3, false, false), true);

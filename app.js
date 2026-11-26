@@ -879,7 +879,8 @@
 
       const features = (dati.forme || [])
         .map((forma, indice) => {
-          const punti = decodificaPolilinea(forma);
+          // ~8 metri: toglie il tremolio del GPS del bus senza spostare la strada.
+          const punti = Utilita.semplifica(decodificaPolilinea(forma), 0.00008);
           if (punti.length < 2) return null;
           const nome = lineaPerForma.get(indice);
           const treno = nome != null && lineeTreno.has(String(nome));
@@ -930,10 +931,14 @@
     return punti;
   }
 
+  const LIVELLI_LINEE = ['linee-tutte-bordo', 'linee-tutte', 'linee-stazioni'];
+
   async function mostraLineeTutte(attivo) {
     if (!mappa) return;
     if (mappa.getLayer('linee-tutte')) {
-      mappa.setLayoutProperty('linee-tutte', 'visibility', attivo ? 'visible' : 'none');
+      LIVELLI_LINEE.forEach((id) => {
+        if (mappa.getLayer(id)) mappa.setLayoutProperty(id, 'visibility', attivo ? 'visible' : 'none');
+      });
       return;
     }
     if (!attivo) return;
@@ -941,6 +946,23 @@
       const dati = await caricaFormeLinee();
       if (!mappa || mappa.getLayer('linee-tutte')) return;
       mappa.addSource('linee-tutte', { type: 'geojson', data: dati });
+      const sotto = mappa.getLayer('fermate-cluster') ? 'fermate-cluster' : undefined;
+      // Bordo bianco sotto il colore: è quello che rende leggibili due linee
+      // che si incrociano, come in una mappa della metropolitana.
+      mappa.addLayer({
+        id: 'linee-tutte-bordo',
+        type: 'line',
+        source: 'linee-tutte',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#FFFFFF',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 9, 4.2, 12, 6, 16, 8],
+          'line-opacity': 0.92,
+          // Corsia in pixel, non legata allo zoom: le linee parallele restano
+          // separate anche allontanandosi.
+          'line-offset': ['*', ['get', 'corsia'], PASSO_CORSIA]
+        }
+      }, sotto);
       mappa.addLayer({
         id: 'linee-tutte',
         type: 'line',
@@ -948,13 +970,35 @@
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
           'line-color': ['coalesce', ['get', 'colore'], '#C1121F'],
-          'line-width': 2,
-          'line-opacity': 0.85,
-          // Corsia in pixel, non legata allo zoom: le linee parallele restano
-          // separate anche allontanandosi.
+          'line-width': ['interpolate', ['linear'], ['zoom'], 9, 2, 12, 3, 16, 4.2],
+          'line-opacity': 1,
           'line-offset': ['*', ['get', 'corsia'], PASSO_CORSIA]
         }
-      }, mappa.getLayer('fermate-cluster') ? 'fermate-cluster' : undefined);
+      }, sotto);
+      // Fermate come punti della metro: cerchio bianco con anello scuro, sopra
+      // la linea. I pin restano il bersaglio del tocco a zoom più alto.
+      const punti = fermate
+        .filter((f) => f.lat != null && f.lon != null)
+        .map((f) => ({
+          type: 'Feature',
+          properties: { treno: f.tipo === 'treno' ? 1 : 0 },
+          geometry: { type: 'Point', coordinates: [f.lon, f.lat] }
+        }));
+      mappa.addSource('linee-stazioni', { type: 'geojson', data: { type: 'FeatureCollection', features: punti } });
+      mappa.addLayer({
+        id: 'linee-stazioni',
+        type: 'circle',
+        source: 'linee-stazioni',
+        // Le fermate come punti della metro si vedono da vicino: a scala di
+        // città sarebbero novemila puntini sopra le linee.
+        minzoom: 13,
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 2, 17, 4.4],
+          'circle-color': ['case', ['==', ['get', 'treno'], 1], '#1A1A1A', '#FFFFFF'],
+          'circle-stroke-color': ['case', ['==', ['get', 'treno'], 1], '#FFFFFF', '#1A1A1A'],
+          'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 13, 1, 17, 1.8]
+        }
+      }, sotto);
     } catch (errore) {
       mostraToast('Tracciati delle linee non disponibili offline');
       const voce = $('menu-linee');

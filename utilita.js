@@ -86,6 +86,48 @@
     return TIMEOUT[tipo] || TIMEOUT.fermate;
   }
 
+  /**
+   * Douglas-Peucker su una linea di coordinate [lon, lat]. Toglie i punti che
+   * stanno entro `tolleranza` (in gradi) dalla retta fra i due estremi: la
+   * geometria GTFS ha un vertice ogni pochi metri e senza questo le linee
+   * sulla mappa sembrano tremolanti. Gli estremi restano sempre.
+   */
+  function semplifica(punti, tolleranza) {
+    if (!Array.isArray(punti) || punti.length < 3) return (punti || []).slice();
+    const soglia = Math.max(0, Number(tolleranza) || 0);
+    const quadrato = soglia * soglia;
+    const distanza = (p, a, b) => {
+      let x = a[0];
+      let y = a[1];
+      let dx = b[0] - x;
+      let dy = b[1] - y;
+      if (dx !== 0 || dy !== 0) {
+        const t = ((p[0] - x) * dx + (p[1] - y) * dy) / (dx * dx + dy * dy);
+        if (t > 1) { x = b[0]; y = b[1]; } else if (t > 0) { x += dx * t; y += dy * t; }
+      }
+      dx = p[0] - x;
+      dy = p[1] - y;
+      return dx * dx + dy * dy;
+    };
+    const tenuti = [punti[0]];
+    const passo = (primo, ultimo) => {
+      let massimo = 0;
+      let indice = 0;
+      for (let i = primo + 1; i < ultimo; i += 1) {
+        const d = distanza(punti[i], punti[primo], punti[ultimo]);
+        if (d > massimo) { massimo = d; indice = i; }
+      }
+      if (massimo > quadrato) {
+        if (indice - primo > 1) passo(primo, indice);
+        tenuti.push(punti[indice]);
+        if (ultimo - indice > 1) passo(indice, ultimo);
+      }
+    };
+    passo(0, punti.length - 1);
+    tenuti.push(punti[punti.length - 1]);
+    return tenuti;
+  }
+
   const API = {
     TIMEOUT: TIMEOUT,
     CACHE_RIGENERABILI: CACHE_RIGENERABILI,
@@ -95,7 +137,8 @@
     testoSuColore: testoSuColore,
     cacheDaSvuotare: cacheDaSvuotare,
     deveMostrareInvito: deveMostrareInvito,
-    timeoutPer: timeoutPer
+    timeoutPer: timeoutPer,
+    semplifica: semplifica
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

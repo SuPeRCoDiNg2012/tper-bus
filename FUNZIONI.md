@@ -1,12 +1,12 @@
 # Tutte le funzioni di Muovi Bologna
 
-Indice completo del codice: **368 funzioni** — 293 in `app.js` e 75 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
+Indice completo del codice: **368 funzioni** — 292 in `app.js` e 76 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
 
 Nessun framework e nessun bundler: `index.html` carica gli script con `<script>` normali, `app.js` è l'unico file grande e gli altri moduli sono oggetti globali (`Utilita`, `Tariffe`, `Piedi`, `Routing`, `VistaPercorso`, `Icone`).
 
 ---
 
-## utilita.js — 7 funzioni
+## utilita.js — 8 funzioni
 
 Colori, contrasto, cache e timeout: roba che non sa niente di bus.
 
@@ -19,6 +19,7 @@ Colori, contrasto, cache e timeout: roba che non sa niente di bus.
 | `cacheDaSvuotare(misure, soglia)` | Quali cache sono cresciute oltre la soglia. |
 | `deveMostrareInvito(uso, visto, installata)` | L'invito all'installazione arriva al terzo uso e non si ripete. |
 | `timeoutPer(tipo)` | Millisecondi di attesa per ogni tipo di richiesta. |
+| `semplifica(punti, tolleranza)` | Douglas-Peucker: toglie i vertici inutili da una linea. |
 
 ## tariffe.js — 5 funzioni
 
@@ -133,7 +134,7 @@ Il backend delle segnalazioni (Worker + D1).
 
 ---
 
-# app.js — 293 funzioni
+# app.js — 292 funzioni
 
 ## Stato locale e preferenze — 11
 

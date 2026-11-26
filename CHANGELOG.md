@@ -5,6 +5,7 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 ## [Non pubblicato]
 
 ### Aggiunto
+- Linee sulla mappa in stile metropolitana: bordo bianco sotto il colore, spessore uniforme che cresce con lo zoom, angoli arrotondati, geometria semplificata (~8 m) per togliere il tremolio, fermate come cerchi bianchi con anello scuro quando le linee sono visibili.
 - `privacy.html`: informativa statica (dati locali, posizione, servizi esterni, conservazione, diritti).
 - Voce **Cancella tutti i dati** nel menu: svuota `localStorage`, cache e service worker, poi riavvia l'app.
 - Link a Privacy e alla nota «App non ufficiale TPER» nel piede del menu.
@@ -19,6 +20,7 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 - La stessa corsa arrivata da HelloBus (`13A`) e dal GTFS (`13`) non compare due volte e mostra la direzione.
 - `euro(0)` restituisce «Incluso»: «0,00 €» non compare più da nessuna parte.
 - `senzaDoppioni` distingue le fermate omonime di comuni diversi (chiave nome + comune).
+- CSP: aggiunta l'origine del relay `proxy.corsfix.com`, che il browser stava bloccando (fallback su un altro relay).
 - Service worker: installazione con `Promise.allSettled` (un asset mancante non blocca più tutto), `cache.put` solo per risposte `ok`, navigazioni sconosciute in rete prima del fallback offline, potatura dei file non più presenti.
 
 ### Corretto
