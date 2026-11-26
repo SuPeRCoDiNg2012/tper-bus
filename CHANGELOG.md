@@ -4,6 +4,19 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- **Ricerca per linea**: scrivendo «20» nella ricerca compaiono le linee oltre alle fermate; la scheda della linea mostra il tracciato sulla mappa, le direzioni, l'elenco delle fermate, l'ultima corsa e il ritardo tipico osservato.
+- **Ultima corsa** segnalata nelle opzioni di percorso quando la tappa usa l'ultima partenza utile della giornata.
+- **Avviso «scendi alla prossima»**: vibrazione e testo una fermata (circa 250 m) prima della discesa, una volta sola.
+- **Viaggio condivisibile**: partenza, destinazione, giorno, ora e linea stanno nell'URL e vengono letti all'avvio.
+- **Fermate fissate**: fino a tre fermate in home con il prossimo passaggio, fissabili dagli orari; Casa e Lavoro restano separati.
+- **Puntualità tipica**: dopo almeno cinque osservazioni, la linea mostra «di solito +N min», solo dai viaggi visti da questo dispositivo.
+- **Ricerca tollerante**: abbreviazioni (`v.le`, `p.za`, `staz.`) e un errore di battitura non lasciano più a secco la ricerca delle fermate.
+- **Cache locale degli indirizzi** Nominatim (sette giorni, massimo quaranta voci) e **copia del log errori** dal pannello admin.
+- **Avvio più leggero**: non si riscrivono più fermate e linee in `localStorage` a ogni apertura se il dataset non è cambiato; il tempo di caricamento viene misurato e incluso nel log copiato.
+- **Tastiera**: frecce su e giù nei suggerimenti, Invio sul primo risultato, focus visibile.
+- **Scorciatoie nel manifest** per Casa e Lavoro.
+- Non implementati e dichiarati come limiti: notifiche push (servono chiavi VAPID, un deploy del Worker e la crittografia Web Push), S1 Porretta (nessun GTFS verificabile con le fermate intermedie) e filtro «fermate accessibili» (il dataset non espone `wheelchair_boarding`).
+
 - Zone tariffarie ridisegnate: le fermate di una zona si dividono prima nei gruppi che stanno davvero vicini, quindi una zona sparsa non diventa più un triangolo lungo mezza provincia che si sovrappone alle altre. Ogni zona ha il suo numero sulla mappa (toccabile anche dove non c'è un'area) e solo quella scelta si riempie e si evidenzia; aree, confini ed etichette compaiono con lo zoom invece di 157 poligoni sovrapposti tutti insieme. Le aree non sono più una coperta di colore: sotto la barra una pillola dice la zona del punto che stai guardando («Zona 500 · urbana») e al tocco apre la sua scheda.
 
 - Pulizia: via le regole CSS della vecchia sezione «Resto della giornata» (`.orari-giorno`, `.ora-riga`, `.ora-lista`, `.orari-passate` e i loro figli). L'azzeramento del filtro per linea non sta più nella funzione che legge gli orari: è passato a `renderLive`, dove si sa quando cambiano fermata o giorno.

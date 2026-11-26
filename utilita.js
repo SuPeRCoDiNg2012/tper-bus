@@ -248,8 +248,63 @@
     return [somma[0] / elenco.length, somma[1] / elenco.length];
   }
 
+  // Abbreviazioni che si vedono davvero sui cartelli e nelle ricerche: senza
+  // espanderle, «vle» o «p.za» non trovano niente.
+  function espandi(testo) {
+    return String(testo || '')
+      .toLowerCase()
+      .replace(/\bv\.?\s?le\b/g, 'viale')
+      .replace(/\bv\.?\s?li\b/g, 'viali')
+      .replace(/\bp\.?\s?zza\b/g, 'piazza')
+      .replace(/\bp\.?\s?za\b/g, 'piazza')
+      .replace(/\bstaz\.?(?=\s|$)/g, 'stazione')
+      .replace(/\bosp\.?(?=\s|$)/g, 'ospedale')
+      .replace(/\bstr\.?(?=\s|$)/g, 'strada');
+  }
+
+  // Distanza di Levenshtein a due righe: sufficiente per parole di un nome di
+  // fermata e abbastanza economica da girare su tutte le fermate.
+  function distanzaEdit(a, b) {
+    const s = String(a || '');
+    const t = String(b || '');
+    if (s === t) return 0;
+    if (!s.length) return t.length;
+    if (!t.length) return s.length;
+    let precedente = new Array(t.length + 1);
+    let corrente = new Array(t.length + 1);
+    for (let j = 0; j <= t.length; j += 1) precedente[j] = j;
+    for (let i = 1; i <= s.length; i += 1) {
+      corrente[0] = i;
+      for (let j = 1; j <= t.length; j += 1) {
+        const costo = s.charAt(i - 1) === t.charAt(j - 1) ? 0 : 1;
+        corrente[j] = Math.min(precedente[j] + 1, corrente[j - 1] + 1, precedente[j - 1] + costo);
+      }
+      const scambio = precedente;
+      precedente = corrente;
+      corrente = scambio;
+    }
+    return precedente[t.length];
+  }
+
+  // «viale zamboni» contro «viale zamboni 2» sì, «bologna» contro «bolognina»
+  // no: la soglia cresce con la lunghezza e vale per una parola o per il nome
+  // intero, non per qualunque sottostringa.
+  function vicina(nome, query) {
+    const n = String(nome || '');
+    const q = String(query || '').trim();
+    if (!n || q.length < 4) return false;
+    const soglia = q.length >= 10 ? 2 : 1;
+    if (Math.abs(n.length - q.length) <= soglia && distanzaEdit(n, q) <= soglia) return true;
+    return n.split(/[^a-z0-9]+/).some((parola) =>
+      parola.length >= 3 && Math.abs(parola.length - q.length) <= soglia && distanzaEdit(parola, q) <= soglia
+    );
+  }
+
   const API = {
     TIMEOUT: TIMEOUT,
+    espandi: espandi,
+    distanzaEdit: distanzaEdit,
+    vicina: vicina,
     CACHE_RIGENERABILI: CACHE_RIGENERABILI,
     SOGLIA_CACHE: SOGLIA_CACHE,
     luminanza: luminanza,

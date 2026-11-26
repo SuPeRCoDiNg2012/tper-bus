@@ -1,12 +1,12 @@
 # Tutte le funzioni di Muovi Bologna
 
-Indice completo del codice: **387 funzioni** — 304 in `app.js` e 83 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
+Indice completo del codice: **415 funzioni** — 330 in `app.js` e 85 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
 
 Nessun framework e nessun bundler: `index.html` carica gli script con `<script>` normali, `app.js` è l'unico file grande e gli altri moduli sono oggetti globali (`Utilita`, `Tariffe`, `Piedi`, `Routing`, `VistaPercorso`, `Icone`).
 
 ---
 
-## utilita.js — 11 funzioni
+## utilita.js — 14 funzioni
 
 Colori, contrasto, cache, tempi e geometria: roba che non sa niente di bus.
 
@@ -23,6 +23,30 @@ Colori, contrasto, cache, tempi e geometria: roba che non sa niente di bus.
 | `involucro(punti)` | Poligono convesso che contiene tutte le fermate di una zona. |
 | `raggruppa(punti, metri)` | Gruppi di punti vicini, uniti a catena. |
 | `centroide(punti)` | Punto medio di un gruppo di coordinate. |
+| `espandi(testo)` | Traduce abbreviazioni comuni (`v.le`, `p.za`, `staz.`) in parole intere. |
+| `distanzaEdit(a, b)` | Distanza di Levenshtein fra due stringhe. |
+| `vicina(nome, query)` | Vero se una parola del nome è a un errore di battitura dalla ricerca. |
+
+---
+
+## linee.js — 12 funzioni
+
+Indice delle linee costruito dagli orari GTFS: ricerca «dove passa il 20», direzioni, sequenza fermate, partenze e ultima corsa. Puro, senza DOM.
+
+| Funzione | Cosa fa |
+| --- | --- |
+| `normalizza(testo)` | Minuscole, senza accenti, senza la parola «linea». |
+| `indice(orari)` | Raggruppa le corse per linea e per sequenza di fermate (una volta sola). |
+| `lineaDi(linee, nome)` | Cerca una linea per nome esatto. |
+| `versi(linea)` | Una voce per capolinea, dalla più frequente. |
+| `gruppoPrincipale(linea, capolinea)` | Gruppo di corse più usato verso un capolinea. |
+| `fermateVerso(linea, capolinea)` | Sequenza fermate della direzione scelta. |
+| `corsaVerso(linea, capolinea)` | Indice della corsa campione, per il tracciato sulla mappa. |
+| `attivo(servizio, attive)` | Vero se il servizio circola nel giorno scelto. |
+| `partenze(linea, capolinea, attive, indiceFermata)` | Partenze ordinate da una fermata della linea. |
+| `ultima(linea, capolinea, attive)` | Ultima partenza della giornata dal capolinea. |
+| `ultimaAllaFermata(linea, capolinea, idFermata, attive)` | Ultima corsa che passa davvero da una fermata. |
+| `cerca(linee, testo)` | Linee per nome esatto, prefisso o contenuto. |
 
 ## tariffe.js — 6 funzioni
 

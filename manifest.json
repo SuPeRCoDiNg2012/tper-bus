@@ -13,6 +13,22 @@
   "lang": "it",
   "dir": "ltr",
   "categories": ["travel", "navigation", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Casa",
+      "short_name": "Casa",
+      "description": "Torna a casa con i prossimi passaggi",
+      "url": "./?vai=casa",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Lavoro",
+      "short_name": "Lavoro",
+      "description": "Vai al lavoro con i prossimi passaggi",
+      "url": "./?vai=lavoro",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
   "prefer_related_applications": false,
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

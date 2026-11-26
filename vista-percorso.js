@@ -222,7 +222,7 @@
         '<div class="corsa-corpo">' +
         '<div class="corsa-riga"><span class="corsa-ora">' + hhmm(tappa.partenza) + '</span><span class="corsa-fermata">' + esc(etichetta(tappa.da)) + '</span></div>' +
         '<div class="corsa-info">' + (treno ? 'Treno' : tappa.fermate + ' ' + (tappa.fermate === 1 ? 'fermata' : 'fermate')) + ' · ' + durata + ' min' +
-        ritardoHTML(e, indice) + '</div>' +
+        ritardoHTML(e, indice) + (tappa.ultimaCorsa ? ' · <b class="ultima-corsa">ultima corsa</b>' : '') + '</div>' +
         '<div class="corsa-riga"><span class="corsa-ora">' + hhmm(tappa.arrivo) + '</span><span class="corsa-fermata">' + esc(etichetta(tappa.a)) + '</span></div>' +
         '</div></div>';
       // Segnalazione condivisa: solo per i bus, i treni non hanno controllori.
@@ -253,7 +253,8 @@
       '<summary class="opzione-testa">' +
       '<span class="opzione-orari">' + hhmm(uscita) + '<span class="freccia">→</span>' + hhmm(arrivoDestinazione) + '</span>' +
       '<span class="opzione-meta">' + totale + ' min · ' + cambiTesto(e.cambi) + esc(extra) +
-      (margine != null && margine >= 0 ? ' · ' + margine + ' min di margine' : '') + '</span>' +
+      (margine != null && margine >= 0 ? ' · ' + margine + ' min di margine' : '') +
+      (e.tappe.some((tappa) => tappa.ultimaCorsa) ? ' · <b class="ultima-corsa">ultima corsa</b>' : '') + '</span>' +
       '<span class="opzione-linee">' + modiHTML(e) + '</span>' +
       Icone.svg('chevron-down', 16, 'opzione-freccia') +
       '</summary>' +

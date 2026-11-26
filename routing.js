@@ -900,8 +900,20 @@
     cammini.forEach((elenco) => elenco.sort((x, y) => x[1] - y[1]));
   }
 
+  /** Tracciato intero di una corsa in coordinate GeoJSON [lon, lat]. */
+  function formaCorsa(indiceCorsa) {
+    if (!tracciati || !tracciati.corse || indiceCorsa == null || indiceCorsa < 0) return null;
+    const punti = forma(tracciati.corse[indiceCorsa]);
+    return punti && punti.length > 1 ? punti.map((punto) => [punto[1], punto[0]]) : null;
+  }
+
   const API = {
     carica: carica,
+    // Dati grezzi e servizi del giorno: servono all'indice delle linee (linee.js)
+    // e all'ultima corsa, senza duplicare qui la lettura del dataset.
+    orari: function () { return dati; },
+    serviziDelGiorno: function (chiave) { return Array.from(serviziAttivi(chiave)); },
+    formaCorsa: formaCorsa,
     impostaCammini: impostaCammini,
     caricaTracciati: caricaTracciati,
     tratta: tratta,
