@@ -710,6 +710,13 @@
     if (!mappa) return;
     ['partenza', 'destinazione'].forEach((ruolo) => {
       const f = sel[ruolo];
+      // In home il pin rosso della partenza non c'è: la partenza è la posizione
+      // attuale e sulla mappa devono restare solo le fermate. Compare quando
+      // c'è una destinazione, cioè quando il viaggio esiste davvero.
+      if (ruolo === 'partenza' && !sel.destinazione) {
+        if (marker[ruolo]) { marker[ruolo].remove(); marker[ruolo] = null; }
+        return;
+      }
       if (!f || f.lat == null || f.lon == null) {
         if (marker[ruolo]) { marker[ruolo].remove(); marker[ruolo] = null; }
         return;
@@ -1288,40 +1295,39 @@
   const ICONA_PIN_FERMATA = 'pin-fermata';
   const ICONA_PIN_TRENO = 'pin-fermata-treno';
 
-  // Il pin della fermata è lo stesso segno di quello di partenza (goccia piena,
-  // bordo bianco, foro bianco), solo più piccolo: un unico linguaggio sulla
-  // mappa. I treni usano la variante scura.
+  // Il segno della fermata è un cerchio morbido, non una goccia con la punta:
+  // niente linee rette, ombra appena accennata e lo stesso rosso del marchio.
+  // I treni usano la variante scura.
   function immaginePinFermata(treno) {
     const scala = 2;
-    const larghezza = 24;
-    const altezza = 32;
+    const lato = 26;
     const tela = document.createElement('canvas');
-    tela.width = larghezza * scala;
-    tela.height = altezza * scala;
+    tela.width = lato * scala;
+    tela.height = lato * scala;
     const ctx = tela.getContext('2d');
     if (!ctx) return null;
     ctx.scale(scala, scala);
-    const centro = larghezza / 2;
-    const raggio = 8.2;
-    const capo = 10;
-    const punta = altezza - 2;
+    const centro = lato / 2;
+    const raggio = 9.1;
     const colore = treno ? '#1A1A1A' : '#C1121F';
-    // Goccia in un solo percorso: punta, fianco sinistro, testa tonda, fianco
-    // destro. Disegnata a pezzi la testa e la punta si vedevano giuntate.
+    // L'ombra sta solo sotto il disco: dà profondità senza disegnare un gambo.
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.26)';
+    ctx.shadowBlur = 3;
+    ctx.shadowOffsetY = 1.5;
     ctx.beginPath();
-    ctx.moveTo(centro, punta);
-    ctx.quadraticCurveTo(centro - raggio * 0.62, capo + raggio * 1.15, centro - raggio, capo);
-    ctx.arc(centro, capo, raggio, Math.PI, 0, false);
-    ctx.quadraticCurveTo(centro + raggio * 0.62, capo + raggio * 1.15, centro, punta);
-    ctx.closePath();
+    ctx.arc(centro, centro, raggio, 0, Math.PI * 2);
     ctx.fillStyle = colore;
     ctx.fill();
-    ctx.lineWidth = 1.6;
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(centro, centro, raggio, 0, Math.PI * 2);
+    ctx.lineWidth = 2;
     ctx.strokeStyle = '#FFFFFF';
     ctx.stroke();
-    // Foro bianco, come il pin di partenza.
+    // Foro bianco al centro, come il resto dei segni dell'app.
     ctx.beginPath();
-    ctx.arc(centro, capo, 2.7, 0, Math.PI * 2);
+    ctx.arc(centro, centro, 2.5, 0, Math.PI * 2);
     ctx.fillStyle = '#FFFFFF';
     ctx.fill();
     return { immagine: ctx.getImageData(0, 0, tela.width, tela.height), scala: scala };
@@ -1388,13 +1394,13 @@
       filter: ['!', ['has', 'point_count']],
       layout: {
         'icon-image': ['case', ['==', ['get', 'treno'], 1], ICONA_PIN_TRENO, ICONA_PIN_FERMATA],
-        'icon-anchor': 'bottom',
+        'icon-anchor': 'center',
         // Crescono con lo zoom ma restano leggibili da lontano: sono anche il
         // bersaglio del tocco, quindi il pin è più grande di un simbolo
         // decorativo.
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 12.5, 0.55, 14, 0.8, 16, 1]
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 12.5, 0.68, 14, 0.88, 16, 1.08]
       }
     } : {
       id: 'fermate-punti',
@@ -1419,7 +1425,7 @@
         'text-field': ['get', 'nome'],
         'text-font': ['Noto Sans Regular'],
         'text-size': 11,
-        'text-offset': [0, 1.1],
+        'text-offset': [0, 1.55],
         'text-anchor': 'top',
         'text-optional': true,
         'text-padding': 4
@@ -4058,6 +4064,9 @@
   // Una fermata si condivide per id; un indirizzo per coordinate e nome.
   function parametroLuogo(luogo) {
     if (!luogo) return null;
+    // La posizione GPS non finisce negli URL condivisi: è un dato personale e
+    // l'app non lo salva mai. La partenza da qui resta solo in memoria.
+    if (luogo.gps) return null;
     if (luogo.id && !/^geo:/.test(luogo.id) && fermataPerId(luogo.id)) return luogo.id;
     if (luogo.lat == null || luogo.lon == null) return null;
     return [luogo.lat.toFixed(5), luogo.lon.toFixed(5), nomeBreve(luogo.nome || '')].join(',');
@@ -4189,6 +4198,9 @@
       ripristinandoStoria = false;
     }
     aggiornaUrl('replace');
+    // Ripristinando una voce senza partenza (un link condiviso non contiene
+    // mai il GPS) si riparte dalla posizione attuale, come in home.
+    if (!sel.partenza && !p.get('da')) setTimeout(partenzaDallaPosizione, 250);
   }
 
   // Prima di disegnare o calcolare, data e ora devono avere un valore. In
@@ -5038,6 +5050,18 @@
     routing.camminata = camminata;
     aggiornaBarra();
     if (!sel.destinazione) {
+      // Tornando in home non deve restare il tracciato del viaggio precedente:
+      // la mappa mostra solo le fermate.
+      if (mappa) {
+        ['percorso', 'percorso-fermate', 'percorso-nodi'].forEach((id) => {
+          const sorgente = mappa.getSource(id);
+          if (sorgente && typeof sorgente.setData === 'function') {
+            sorgente.setData({ type: 'FeatureCollection', features: [] });
+          }
+        });
+      }
+      ultimeFeatures = [];
+      inquadratoPerFermate = null;
       box.innerHTML = listaViciniHTML();
       aggiornaScrim();
       return;
@@ -6836,6 +6860,63 @@
   /* ------------------------------------------------------------------ *
    * Geolocalizzazione
    * ------------------------------------------------------------------ */
+  let posizioneAutomaticaInCorso = false;
+
+  // La posizione diventa la partenza senza che l'utente debba premere nulla.
+  function posizioneInPartenza(posizione) {
+    const lat = posizione.coords.latitude;
+    const lon = posizione.coords.longitude;
+    if (!isFinite(lat) || !isFinite(lon)) return;
+    const vicina = fermateVicine(lat, lon, 1)[0];
+    posizioneUtente = { lat: lat, lon: lon };
+    sel.partenza = {
+      id: 'geo:' + lat.toFixed(5) + ',' + lon.toFixed(5),
+      nome: 'La mia posizione',
+      indirizzo: '',
+      lat: lat,
+      lon: lon,
+      zona: vicina ? vicina.zona : '500',
+      tipo: 'indirizzo',
+      genere: 'indirizzo',
+      categoria: 'Posizione attuale',
+      gps: true
+    };
+    impostaInput('partenza');
+    aggiornaMarker();
+    renderPercorso();
+    if (sel.destinazione) calcolaPercorso();
+    else inquadra(false);
+  }
+
+  function partenzaDallaPosizione() {
+    if (posizioneAutomaticaInCorso || sel.partenza || !navigator.geolocation) return;
+    // Con il permesso già negato il browser può non richiamare nessuno dei due
+    // callback: si evita di chiedere e di lasciare la partenza bloccata.
+    const richiedi = () => {
+      if (posizioneAutomaticaInCorso || sel.partenza) return;
+      posizioneAutomaticaInCorso = true;
+      const guardia = setTimeout(() => { posizioneAutomaticaInCorso = false; }, 9000);
+      navigator.geolocation.getCurrentPosition((posizione) => {
+        clearTimeout(guardia);
+        posizioneAutomaticaInCorso = false;
+        // Se nel frattempo l'utente ha scelto una partenza, la sua scelta vince.
+        if (sel.partenza) return;
+        posizioneInPartenza(posizione);
+      }, () => {
+        // Permesso negato o GPS spento: la home resta con le fermate, senza errori.
+        clearTimeout(guardia);
+        posizioneAutomaticaInCorso = false;
+      }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 });
+    };
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then((stato) => {
+        if (stato.state !== 'denied') richiedi();
+      }).catch(richiedi);
+    } else {
+      richiedi();
+    }
+  }
+
   function vaiVicino() {
     if (!navigator.geolocation) {
       mostraToast('Geolocalizzazione non supportata da questo browser');
@@ -7542,8 +7623,13 @@
     setTimeout(chiudiAttesaMappa, 2500);
     setTimeout(chiudiAvvio, 6000);
     await caricaDati();
-    ripristinaTratta();
+    // La home non riapre il viaggio precedente: solo fermate e, se il browser
+    // lo consente, la posizione attuale come partenza.
+    impostaInput('partenza');
+    impostaInput('destinazione');
     const parametri = leggiUrl();
+    impostaInput('partenza');
+    impostaInput('destinazione');
     const vai = parametri.get('vai');
     if (vai === 'casa' || vai === 'lavoro') {
       const scelto = preferitiValidi().find((voce) => voce.slot === vai);
@@ -7556,6 +7642,7 @@
     if (fermateFisse().length) preparaLinee();
     if (sel.partenza && sel.destinazione) calcolaPercorso();
     impostaSheet(sel.partenza && sel.destinazione ? 'meta' : 'peek');
+    if (!sel.partenza) setTimeout(partenzaDallaPosizione, 400);
     const lineaUrl = parametri.get('linea');
     if (lineaUrl) setTimeout(() => apriLinea(lineaUrl, { storia: false }), 350);
     // La mappa è stata creata prima che il layout fosse definitivo: senza un
