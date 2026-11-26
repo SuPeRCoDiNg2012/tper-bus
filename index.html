@@ -259,6 +259,7 @@
   .live-percorso{display:flex;align-items:flex-start;gap:8px;padding:10px 0;border-top:1px solid var(--bordo);font-size:13px;line-height:1.4;}
   .live-percorso .live-testo{display:flex;flex-direction:column;gap:3px;min-width:0;}
   .live-percorso .live-nota{font-size:12px;color:var(--testo-2);}
+  .live-azione{align-self:flex-start;min-height:32px;margin-top:3px;padding:0 10px;border:1px solid var(--rosso);border-radius:8px;background:transparent;color:var(--rosso);font:inherit;font-size:12px;font-weight:600;cursor:pointer;}
   .live-percorso[hidden]{display:none;}
   .tag-live{font-size:9px;font-weight:700;letter-spacing:.6px;padding:3px 6px;border-radius:5px;background:#F2F2F2;color:var(--testo-2);flex:0 0 auto;}
   .tag-orario{font-size:9px;font-weight:700;letter-spacing:.6px;padding:3px 6px;border-radius:5px;background:#F2F2F2;color:var(--testo-2);flex:0 0 auto;}
@@ -709,6 +710,8 @@
     <div class="menu-sezione">Percorso attuale</div>
     <button class="menu-recente" id="menu-recente" hidden></button>
     <p class="menu-sezione" id="menu-recente-vuoto">Nessun percorso aperto.</p>
+    <div class="menu-sezione">Viaggi salvati</div>
+    <div id="menu-viaggi"></div>
     <div class="menu-sezione">Preferiti</div>
     <div id="menu-preferiti"></div>
     <details id="menu-info">

@@ -312,6 +312,53 @@
     );
   }
 
+  /**
+   * Coordinate dentro un testo o un link condiviso: Google Maps (`@lat,lon`,
+   * `!3d…!4d…`, `q=lat,lon`), Apple Maps (`ll=`), OpenStreetMap (`mlat`/
+   * `mlon`) e il formato `geo:lat,lon`. Restituisce null se non le trova.
+   */
+  function coordinateCondivise(testo) {
+    const originale = String(testo || '');
+    if (!originale) return null;
+    let s = originale;
+    try { s = decodeURIComponent(originale); } catch (errore) { /* resta com'è */ }
+    const schemi = [
+      /@(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/,
+      /!3d(-?\d{1,2}(?:\.\d+)?)!4d(-?\d{1,3}(?:\.\d+)?)/,
+      /[?&](?:q|ll|center|query)=(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/,
+      /geo:(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/,
+      /^\s*(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/
+    ];
+    for (let i = 0; i < schemi.length; i += 1) {
+      const trovato = s.match(schemi[i]);
+      if (!trovato) continue;
+      const lat = parseFloat(trovato[1]);
+      const lon = parseFloat(trovato[2]);
+      if (isFinite(lat) && isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+        return { lat: lat, lon: lon };
+      }
+    }
+    const mlat = s.match(/[?&]mlat=(-?\d{1,2}(?:\.\d+)?)/);
+    const mlon = s.match(/[?&]mlon=(-?\d{1,3}(?:\.\d+)?)/);
+    if (mlat && mlon) {
+      const lat = parseFloat(mlat[1]);
+      const lon = parseFloat(mlon[1]);
+      if (isFinite(lat) && isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+        return { lat: lat, lon: lon };
+      }
+    }
+    return null;
+  }
+
+  /** Testo utile di una condivisione, senza link né spazi doppi. */
+  function testoCondiviso(testo) {
+    return String(testo || '')
+      .replace(/https?:\/\/\S+/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200);
+  }
+
   const API = {
     TIMEOUT: TIMEOUT,
     espandi: espandi,
@@ -327,6 +374,8 @@
     timeoutPer: timeoutPer,
     durata: durata,
     semplifica: semplifica,
+    coordinateCondivise: coordinateCondivise,
+    testoCondiviso: testoCondiviso,
     involucro: involucro,
     raggruppa: raggruppa,
     centroide: centroide

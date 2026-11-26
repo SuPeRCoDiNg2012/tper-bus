@@ -41,6 +41,7 @@
   const K_INDIRIZZI = 'tperzc_indirizzi_v1';
   const K_RITARDI = 'tperzc_storico_ritardi_v2';
   const K_FISSE = 'tperzc_fermate_fisse_v1';
+  const K_VIAGGI = 'tperzc_viaggi_salvati_v1';
   const K_ERRORI = 'tperzc_errori_v1';
   const URL_UFFICIALE = 'https://solweb.tper.it/web/tools/zone-calculator.aspx';
   const HELLOBUS = 'https://hellobuswsweb.tper.it/web-services/hellobus.asmx/QueryHellobus';
@@ -3026,6 +3027,102 @@
     impostaInput('destinazione');
   }
 
+  // Viaggi completi salvati dall'utente: partenza, destinazione, ora e modo.
+  // Restano locali, come preferiti e fermate fissate.
+  function viaggiSalvati() {
+    const elenco = leggiJSON(K_VIAGGI);
+    return Array.isArray(elenco) ? elenco.filter((voce) => voce && voce.destinazione) : [];
+  }
+
+  function etichettaViaggio(voce) {
+    const da = voce.partenza ? nomeBreve(voce.partenza.nome) : 'La mia posizione';
+    return da + ' → ' + nomeBreve(voce.destinazione.nome);
+  }
+
+  function salvaViaggio() {
+    if (!sel.partenza || !sel.destinazione) {
+      mostraToast('Scegli partenza e destinazione prima di salvare');
+      return;
+    }
+    const partenza = luogoSalvato(sel.partenza);
+    const destinazione = luogoSalvato(sel.destinazione);
+    if (!destinazione) {
+      mostraToast('Questa destinazione non si può salvare');
+      return;
+    }
+    const voce = {
+      id: Date.now().toString(36),
+      partenza: partenza,
+      destinazione: destinazione,
+      orario: routing.orario || oraAdesso(),
+      modo: routing.modo === 'arrivo' ? 'arrivo' : 'partenza'
+    };
+    const elenco = viaggiSalvati().filter((salvato) =>
+      (salvato.destinazione.id !== destinazione.id) ||
+      ((salvato.partenza && salvato.partenza.id) || '') !== ((partenza && partenza.id) || '') ||
+      salvato.orario !== voce.orario || salvato.modo !== voce.modo);
+    elenco.unshift(voce);
+    scrivi(K_VIAGGI, JSON.stringify(elenco.slice(0, 5)));
+    sincronizzaMenu();
+    mostraToast('Viaggio salvato');
+  }
+
+  function rimuoviViaggio(id) {
+    scrivi(K_VIAGGI, JSON.stringify(viaggiSalvati().filter((voce) => voce.id !== id)));
+    sincronizzaMenu();
+  }
+
+  function renderViaggi() {
+    const box = $('menu-viaggi');
+    if (!box) return;
+    const elenco = viaggiSalvati();
+    box.innerHTML = elenco.length
+      ? elenco.map((voce) => '<div class="menu-pref-riga">' +
+          '<button type="button" class="menu-pref" data-viaggio="' + esc(voce.id) + '">' +
+          '<span class="spazio">' + esc(etichettaViaggio(voce)) + '</span>' +
+          '<span class="nota">' + esc(voce.orario) + (voce.modo === 'arrivo' ? ' · arrivo' : '') + '</span></button>' +
+          '<button type="button" class="menu-pref-rimuovi" data-rimuovi-viaggio="' + esc(voce.id) +
+          '" aria-label="Rimuovi ' + esc(etichettaViaggio(voce)) + '">' + Icone.svg('x', 15) + '</button></div>').join('')
+      : '<p class="menu-sezione" style="padding-top:0">Nessun viaggio salvato.</p>';
+  }
+
+  function apriViaggioSalvato(id) {
+    const voce = viaggiSalvati().filter((salvato) => salvato.id === id)[0];
+    if (!voce) return;
+    chiudiMenu();
+    sel.partenza = luogoRipristinato(voce.partenza);
+    sel.destinazione = luogoRipristinato(voce.destinazione);
+    if (!sel.destinazione) return;
+    impostaInput('partenza');
+    impostaInput('destinazione');
+    aggiornaMarker();
+    salvaTratta();
+    routing.modo = voce.modo === 'arrivo' ? 'arrivo' : 'partenza';
+    routing.giorno = oggiISO();
+    routing.orario = voce.orario || oraAdesso();
+    const quando = dataDaGiornoEOra(routing.giorno, routing.orario);
+    if (quando.getTime() < Date.now() - 5 * 60000) {
+      if (routing.modo === 'arrivo') {
+        const traUnOra = new Date(Date.now() + 60 * 60000);
+        traUnOra.setMinutes(Math.ceil(traUnOra.getMinutes() / 5) * 5, 0, 0);
+        routing.giorno = isoDi(traUnOra);
+        routing.orario = due(traUnOra.getHours()) + ':' + due(traUnOra.getMinutes());
+      } else {
+        routing.orario = oraAdesso();
+      }
+    }
+    routing.adesso = routing.modo === 'partenza' && routing.orario === oraAdesso();
+    routing.chiave = null;
+    routing.criterio = criterioPredefinito();
+    salvaQuando();
+    mostraVista('percorso');
+    impostaSheet('meta');
+    renderPercorso();
+    inquadra();
+    if (sel.partenza) calcolaPercorso();
+    else setTimeout(partenzaDallaPosizione, 200);
+  }
+
   /* ------------------------------------------------------------------ *
    * Calcolo zone e prezzo
    * ------------------------------------------------------------------ */
@@ -3475,7 +3572,7 @@
       '<button type="button" class="quando-btn" id="btn-quando" aria-expanded="' + (quandoAperto ? 'true' : 'false') + '">' +
       ICONA_OROLOGIO + '<span>' + esc(quandoEtichetta()) + '</span>' + ICONA_GIU + '</button>' +
       (sel.partenza && sel.destinazione
-        ? '<button type="button" class="icona" data-azione="inverti" aria-label="Inverti partenza e destinazione">' + ICONA_SCAMBIA + '</button>'
+        ? '<button type="button" class="icona" data-azione="inverti" aria-label="Inverti e pianifica il ritorno">' + ICONA_SCAMBIA + '</button>'
         : '') +
       '</div>' +
       '</div>' +
@@ -3601,6 +3698,7 @@
       '<div class="riep-azioni">' +
       '<button type="button" class="btn btn-primario" data-azione="avvia-navigazione">Avvia</button>' +
       '<button type="button" class="btn btn-tenue" data-azione="dettagli">Dettagli</button>' +
+      '<button type="button" class="btn btn-tenue" data-azione="salva-viaggio">Salva</button>' +
       '</div></div>';
   }
 
@@ -3746,6 +3844,59 @@
       '</div>';
   }
 
+  // Quando non c'è più nulla nella finestra di ricerca, il pulsante non deve
+  // mandare l'utente a un orario arbitrario: si cerca la prima corsa utile
+  // nelle prossime 24 ore, a passi di 15 minuti, e la si apre davvero.
+  async function cercaProssimaCorsa() {
+    if (!sel.partenza || !sel.destinazione) return;
+    if (typeof TPERRouting === 'undefined') return;
+    mostraToast('Cerco la prossima corsa…');
+    try {
+      if (!TPERRouting.disponibile()) await TPERRouting.carica(URL_ORARI_GZ, URL_ORARI);
+      const da = candidatiPercorso(sel.partenza);
+      const a = candidatiPercorso(sel.destinazione);
+      if (!da.length || !a.length) {
+        mostraToast('Nessuna fermata con orari vicino a questa ricerca');
+        return;
+      }
+      let inizio = dataDaGiornoEOra(routing.giorno, routing.orario);
+      if (!isFinite(inizio.getTime()) || inizio.getTime() < Date.now()) inizio = new Date();
+      inizio.setSeconds(0, 0);
+      inizio.setMinutes(Math.ceil(inizio.getMinutes() / 15) * 15);
+      const scadenza = Date.now() + 4500;
+      const limite = inizio.getTime() + 24 * 3600000;
+      for (let quando = inizio; quando.getTime() <= limite; quando = new Date(quando.getTime() + 15 * 60000)) {
+        if (Date.now() > scadenza) break;
+        const esito = TPERRouting.calcola(da, a, quando, {
+          maxCambi: 3,
+          vietate: vietatePer(),
+          camminoMax: camminata * 60,
+          criterio: 'veloce'
+        });
+        if (esito && !esito.errore) {
+          // Il motore può restituire una corsa che parte molto dopo l'istante
+          // di ricerca: si apre l'ora reale della prima corsa, non il minuto
+          // da cui si è partiti a cercare.
+          const prima = esito.tappe && esito.tappe[0];
+          let uscita = quando;
+          if (prima && prima.partenza != null) {
+            const base = dataDaGiornoEOra(isoDi(quando), '00:00');
+            const secondi = prima.partenza - (esito.camminoIniziale || 0) - 60;
+            const calcolata = new Date(base.getTime() + secondi * 1000);
+            if (isFinite(calcolata.getTime())) uscita = calcolata;
+          }
+          routing.modo = 'partenza';
+          aggiornaQuando(isoDi(uscita), due(uscita.getHours()) + ':' + due(uscita.getMinutes()), false);
+          mostraToast('Prima corsa utile: ' + due(uscita.getHours()) + ':' + due(uscita.getMinutes()));
+          return;
+        }
+        const pausa = respira();
+        if (pausa) await pausa;
+      }
+    } catch (errore) { /* si resta nello stato vuoto */ }
+    mostraToast('Nessuna corsa utile trovata nelle prossime 24 ore');
+  }
+
   function htmlStatoPercorso() {
     if (routing.stato === 'caricamento' || routing.stato === 'idle') {
       return '<div class="schema" aria-busy="true"><span></span><span></span><span></span></div>';
@@ -3780,7 +3931,7 @@
           ? '<div class="micro" style="margin-top:6px">Stai evitando ' + esc(evitate.join(', ')) +
             ': toglile dal menu → Linee da evitare per rivederle.</div>'
           : '') +
-        '<div style="margin-top:10px"><button type="button" class="btn btn-tenue" data-azione="prova-domani">Prova domani alle 08:00</button></div></div>';
+        '<div style="margin-top:10px"><button type="button" class="btn btn-tenue" data-azione="prossima-corsa">Cerca la prossima corsa</button></div></div>';
     }
     if (routing.stato === 'ok') {
       return htmlAlternative() + htmlDettaglio(tariffaCorrente());
@@ -4126,6 +4277,93 @@
     };
   }
 
+  function luogoDaCoordinate(lat, lon, nome) {
+    const vicina = fermateVicine(lat, lon, 1)[0];
+    return {
+      id: 'geo:' + Number(lat).toFixed(5) + ',' + Number(lon).toFixed(5),
+      nome: nome || 'Luogo condiviso',
+      indirizzo: '',
+      lat: lat,
+      lon: lon,
+      zona: vicina ? vicina.zona : '500',
+      tipo: 'indirizzo',
+      genere: 'luogo',
+      categoria: 'Luogo condiviso'
+    };
+  }
+
+  async function geocodificaCondivisione(testo) {
+    const url = NOMINATIM + '?format=jsonv2&addressdetails=1&namedetails=1&limit=1&dedupe=1&accept-language=it&countrycodes=it' +
+      '&q=' + encodeURIComponent(testo);
+    const risposta = await fetch(url, {
+      signal: segnaleConTimeout(null, TIMEOUT_NOMINATIM),
+      headers: { Accept: 'application/json' }
+    });
+    if (!risposta.ok) return null;
+    const elenco = await risposta.json();
+    const voce = Array.isArray(elenco) ? elenco[0] : null;
+    if (!voce) return null;
+    const lat = parseFloat(voce.lat);
+    const lon = parseFloat(voce.lon);
+    if (!isFinite(lat) || !isFinite(lon)) return null;
+    const indirizzo = voce.address || {};
+    const via = indirizzo.road || indirizzo.pedestrian || indirizzo.footway || indirizzo.square || '';
+    const civico = indirizzo.house_number ? ' ' + indirizzo.house_number : '';
+    const nome = nomeNominatim(voce) || ((via + civico).trim() || String(voce.display_name || '').split(',')[0].trim());
+    return {
+      id: 'geo:' + lat.toFixed(5) + ',' + lon.toFixed(5),
+      nome: nome || testo,
+      indirizzo: voce.display_name || '',
+      lat: lat,
+      lon: lon,
+      zona: (fermateVicine(lat, lon, 1)[0] || {}).zona || '500',
+      tipo: 'indirizzo',
+      genere: genereNominatim(voce),
+      categoria: categoriaNominatim(voce)
+    };
+  }
+
+  // Web Share Target: un luogo condiviso da Maps, WhatsApp o dal browser
+  // diventa la destinazione. Se il link ha coordinate non serve geocodificare;
+  // altrimenti si prova il nome della fermata e, solo dopo, Nominatim.
+  async function gestisciCondivisione(parametri) {
+    const titolo = parametri.get('title') || '';
+    const testo = parametri.get('text') || '';
+    const link = parametri.get('url') || '';
+    const contenuto = [titolo, testo, link].filter(Boolean).join(' ');
+    if (!contenuto) return;
+    const coord = Utilita.coordinateCondivise(contenuto);
+    let luogo = null;
+    if (coord) {
+      luogo = luogoDaCoordinate(coord.lat, coord.lon, Utilita.testoCondiviso(titolo || testo) || 'Luogo condiviso');
+    } else {
+      const query = Utilita.testoCondiviso(testo || titolo);
+      if (query) {
+        const fermata = cercaFermate(query)[0];
+        if (fermata) luogo = fermata;
+        else {
+          try { luogo = await geocodificaCondivisione(query); } catch (errore) { luogo = null; }
+        }
+      }
+    }
+    if (!luogo) {
+      mostraToast('Luogo condiviso non riconosciuto');
+      return;
+    }
+    sel.destinazione = luogo;
+    impostaInput('destinazione');
+    aggiornaMarker();
+    salvaTratta();
+    routing.chiave = null;
+    mostraVista('percorso');
+    impostaSheet('meta');
+    renderPercorso();
+    aggiornaUrl('replace');
+    if (sel.partenza) calcolaPercorso();
+    else setTimeout(partenzaDallaPosizione, 150);
+    mostraToast('Destinazione condivisa: ' + nomeBreve(luogo.nome));
+  }
+
   // Letto una volta all'avvio: i parametri vincono sulla tratta salvata.
   function leggiUrl() {
     const p = new URLSearchParams(location.search);
@@ -4248,6 +4486,12 @@
     const campoOra = $('input-ora');
     if (campoData) campoData.value = routing.giorno;
     if (campoOra) campoOra.value = routing.orario;
+    // La riga «Quando» è fuori dal risultato: senza questo aggiornamento
+    // resterebbe all'orario precedente dopo un cambio o un ritorno.
+    const etichetta = $('btn-quando');
+    if (etichetta) {
+      etichetta.innerHTML = ICONA_OROLOGIO + '<span>' + esc(quandoEtichetta()) + '</span>' + ICONA_GIU;
+    }
     calcolaPercorso();
   }
 
@@ -4384,8 +4628,9 @@
   // alternative come su Google Maps non basta spostare la partenza di qualche
   // minuto (uscivano quattro varianti della stessa linea): si ricalcola
   // vietando a turno la linea principale, così compare un'altra strada.
-  async function calcolaOpzioni(da, a, base) {
+  async function calcolaOpzioni(da, a, base, evitata) {
     const arrivo = routing.modo === 'arrivo';
+    const extraVietate = evitata ? [evitata] : null;
     // La scadenza si confronta come istante assoluto: dopo mezzanotte i
     // secondi del giorno ripartono da zero, mentre le corse serali hanno
     // orari oltre 86400 (es. 00:39 = 88740).
@@ -4401,7 +4646,7 @@
     function calcola(quando, vietate) {
       return TPERRouting.calcola(da, a, quando, {
         maxCambi: 3,
-        vietate: vietatePer(vietate),
+        vietate: vietatePer(vietate).concat(extraVietate || []),
         camminoMax: camminata * 60,
         criterio: routing.criterio
       });
@@ -4414,9 +4659,10 @@
     // itinerario più lento senza saperlo.
     function calcolaConCambi(quando) {
       const comuni = {
-        camminoMax: camminata * 60,
+                camminoMax: camminata * 60,
         criterio: routing.criterio,
-        vietate: vietatePer()
+        vietate: vietatePer(extraVietate)
+
       };
       const prova = (cambi) => {
         const esito = TPERRouting.calcola(da, a, quando, Object.assign({ maxCambi: cambi }, comuni));
@@ -4503,7 +4749,7 @@
       const confronto = TPERRouting.calcolaConfronto(da, a, migliore.quandoRichiesta, {
         maxCambi: 3,
         camminoMax: camminata * 60,
-        vietate: vietatePer()
+        vietate: vietatePer(extraVietate)
       });
       const dalMotore = [confronto.veloce, confronto.ottimizzato]
         .concat(confronto.alternative || [])
@@ -4547,7 +4793,7 @@
             maxCambi: 1,
             camminoMax: camminata * 60,
             criterio: routing.criterio,
-            vietate: vietatePer()
+            vietate: vietatePer(extraVietate)
           });
           if (esito && !esito.errore) { aggiungi(esito, quando); break; }
           const pausa = respira();
@@ -5002,8 +5248,9 @@
     disegnaTracciato();
     aggiornaScrim();
   }
-  function calcolaPercorso() {
+  function calcolaPercorso(opzioni) {
     if (!sel.partenza || !sel.destinazione) return;
+    const evitata = opzioni && opzioni.evita ? opzioni.evita : null;
     aggiornaUrl('replace');
     if (typeof TPERRouting === 'undefined') {
       routing.stato = 'errore';
@@ -5062,7 +5309,8 @@
       return calcolaOpzioni(
         candidatiPercorso(sel.partenza),
         candidatiA,
-        dataDaGiornoEOra(routing.giorno, routing.orario)
+        dataDaGiornoEOra(routing.giorno, routing.orario),
+        evitata
       );
     }).then((risultato) => {
       if (richiesta !== routing.richiesta || !risultato) return;
@@ -5287,7 +5535,8 @@
     if (info && info.noti) {
       if (info.cambioPerso) {
         html += '<span><b>Cambio perso:</b> con questo ritardo la corsa per ' +
-          esc(info.lineaPersa) + ' non ti aspetta. Scegli un\'altra soluzione.</span>';
+          esc(info.lineaPersa) + ' non ti aspetta.</span>' +
+          '<button type="button" class="live-azione" data-azione="alternativa-ritardo">Cerca un\'altra soluzione</button>';
       } else if (info.cambioRischioso) {
         html += '<span><b>Cambio a rischio:</b> al ritardo attuale restano meno di 2 minuti per la coincidenza.</span>';
       } else if (info.ultimo >= 120) {
@@ -5437,6 +5686,22 @@
       noti: noti, totale: tappe.length, ultimo: ultimo,
       cambioRischioso: cambioRischioso, cambioPerso: cambioPerso, lineaPersa: lineaPersa
     };
+  }
+
+  // Un cambio perso non si risolve aspettando: si riparte da adesso e si evita
+  // la linea che non si riesce a prendere, così il motore cerca davvero
+  // un'altra strada invece di riproporre lo stesso itinerario.
+  function ricalcolaPerRitardo() {
+    const info = ritardiPercorso();
+    if (!info || !info.cambioPerso) return;
+    routing.giorno = oggiISO();
+    routing.orario = oraAdesso();
+    routing.adesso = true;
+    routing.modo = 'partenza';
+    routing.chiave = null;
+    salvaQuando();
+    mostraToast(info.lineaPersa ? 'Cerco un\'alternativa senza la linea ' + info.lineaPersa : 'Cerco un\'alternativa');
+    calcolaPercorso({ evita: info.lineaPersa });
   }
 
   // Il GTFS non sa se una corsa è cancellata o venti minuti indietro: quando
@@ -6763,6 +7028,7 @@
 
   function sincronizzaMenu() {
     renderPreferiti();
+    renderViaggi();
     renderEvitate();
     const check = $('menu-abbonamento');
     if (check) check.checked = abbonamento;
@@ -7084,6 +7350,12 @@
       impostaSheet('meta');
       calcolaPercorso();
     });
+    $('menu-viaggi').addEventListener('click', (evento) => {
+      const apri = evento.target.closest('[data-viaggio]');
+      if (apri) { apriViaggioSalvato(apri.getAttribute('data-viaggio')); return; }
+      const togli = evento.target.closest('[data-rimuovi-viaggio]');
+      if (togli) rimuoviViaggio(togli.getAttribute('data-rimuovi-viaggio'));
+    });
     $('menu-info').addEventListener('toggle', () => { if ($('menu-info').open) renderInfo(); });
     $('input-evita').addEventListener('keydown', (evento) => {
       if (evento.key !== 'Enter') return;
@@ -7393,6 +7665,8 @@
           else { routing.chiave = null; impostaSheet('meta'); calcolaPercorso(); }
         }
         if (azione === 'dettagli') impostaSheet('piena');
+        if (azione === 'salva-viaggio') salvaViaggio();
+        if (azione === 'alternativa-ritardo') ricalcolaPerRitardo();
         if (azione === 'chip-cerca') {
           const testo = pulsante.getAttribute('data-testo') || '';
           apriCerca('destinazione');
@@ -7411,6 +7685,8 @@
           renderPercorso();
         }
         if (azione === 'inverti') {
+          const esito = routing.stato === 'ok' ? routing.esito : null;
+          const arrivo = esito ? esito.arrivo + (esito.camminoFinale || 0) : null;
           const partenza = sel.partenza;
           sel.partenza = sel.destinazione;
           sel.destinazione = partenza;
@@ -7424,7 +7700,18 @@
           live.stato = 'idle';
           routing.chiave = null;
           inquadra();
-          calcolaPercorso();
+          if (arrivo != null) {
+            // Il ritorno parte dopo l'arrivo previsto, non all'ora della
+            // andata: un minuto di margine per scendere e riprendere fiato.
+            const base = dataDaGiornoEOra(routing.giorno, '00:00');
+            const arrivoMs = base.getTime() + arrivo * 1000;
+            const ritorno = new Date(Math.max(Date.now(), arrivoMs) + 60 * 1000);
+            routing.modo = 'partenza';
+            aggiornaQuando(isoDi(ritorno), due(ritorno.getHours()) + ':' + due(ritorno.getMinutes()), false);
+            mostraToast('Ritorno pianificato alle ' + due(ritorno.getHours()) + ':' + due(ritorno.getMinutes()));
+          } else {
+            calcolaPercorso();
+          }
         }
         if (azione === 'orari-partenza') {
           const f = fermataLive();
@@ -7449,6 +7736,7 @@
           routing.chiave = null;
           calcolaPercorso();
         }
+        if (azione === 'prossima-corsa') cercaProssimaCorsa();
         if (azione === 'prova-domani') {
           const domani = new Date();
           domani.setDate(domani.getDate() + 1);
@@ -7627,6 +7915,9 @@
     const parametri = leggiUrl();
     impostaInput('partenza');
     impostaInput('destinazione');
+    if (parametri.get('condiviso') || parametri.get('url') || parametri.get('text') || parametri.get('title')) {
+      setTimeout(() => gestisciCondivisione(parametri), 250);
+    }
     const vai = parametri.get('vai');
     if (vai === 'casa' || vai === 'lavoro') {
       const scelto = preferitiValidi().find((voce) => voce.slot === vai);

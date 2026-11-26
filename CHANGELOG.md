@@ -23,6 +23,11 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 - **Menu**: la voce «La mia posizione» imposta davvero la posizione come partenza; un preferito impostato apre subito il percorso e la matita lo cambia; «Percorso attuale» sostituisce l'etichetta fuorviante «Percorsi recenti».
 - **Durate oltre l'ora** scritte come «1h» o «2h e 35min» nel riepilogo, nelle alternative e nei singoli tratti, invece di «95 min».
 - **Orari di una fermata**: toccando una corsa si apre la pagina della sua linea; il chevron a destra conserva dettagli della corsa e avviso a due minuti.
+- **Ritorno in un tocco**: il pulsante di inversione scambia partenza e destinazione e imposta la partenza all'arrivo previsto, con un minuto di margine.
+- **Viaggi salvati**: fino a cinque tratte complete, con ora e tipo di ricerca, riapribili dal menu e ricalcolate sul giorno corrente.
+- **Luoghi condivisi**: Web Share Target per ricevere un luogo o un link da Maps e da altre app, con lettura delle coordinate e geocodifica di riserva.
+- **Ritardo che rompe il viaggio**: quando HelloBus segnala un cambio perso, un pulsante ricalcola da adesso evitando la linea non raggiungibile.
+- **Nessun viaggio**: al posto dell'orario fisso «domani alle 08:00» si cerca la prima corsa utile nelle prossime 24 ore.
 - **Avviso «scendi alla prossima»** azzerato a ogni nuova navigazione: la vibrazione si ripete anche se la fermata di discesa è la stessa del viaggio precedente.
 - **Scorciatoie nel manifest** per Casa e Lavoro.
 - Non implementati e dichiarati come limiti: notifiche push (servono chiavi VAPID, un deploy del Worker e la crittografia Web Push), S1 Porretta (nessun GTFS verificabile con le fermate intermedie) e filtro «fermate accessibili» (il dataset non espone `wheelchair_boarding`).

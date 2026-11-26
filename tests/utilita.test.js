@@ -53,6 +53,21 @@ test('la pulizia si ferma appena basta', () => {
   ]);
 });
 
+test('le coordinate condivise si leggono dai link più comuni', () => {
+  assert.deepEqual(Utilita.coordinateCondivise('https://maps.google.com/?q=44.4949,11.3426'), { lat: 44.4949, lon: 11.3426 });
+  assert.deepEqual(Utilita.coordinateCondivise('https://www.google.com/maps/@44.4949,11.3426,15z'), { lat: 44.4949, lon: 11.3426 });
+  assert.deepEqual(Utilita.coordinateCondivise('https://maps.apple.com/?ll=44.4949,11.3426'), { lat: 44.4949, lon: 11.3426 });
+  assert.deepEqual(Utilita.coordinateCondivise('geo:44.4949,11.3426'), { lat: 44.4949, lon: 11.3426 });
+  assert.deepEqual(Utilita.coordinateCondivise('https://www.openstreetmap.org/?mlat=44.4949&mlon=11.3426#map=16'), { lat: 44.4949, lon: 11.3426 });
+});
+
+test('una condivisione senza coordinate resta testo, non un punto inventato', () => {
+  assert.equal(Utilita.coordinateCondivise('Piazza Maggiore, Bologna'), null);
+  assert.equal(Utilita.coordinateCondivise('https://example.com/evento'), null);
+  assert.equal(Utilita.coordinateCondivise(''), null);
+  assert.equal(Utilita.testoCondiviso('Piazza Maggiore https://maps.google.com/?q=44.49,11.34'), 'Piazza Maggiore');
+});
+
 test('semplifica toglie i vertici sulla retta e tiene gli estremi', () => {
   const linea = [[0, 0], [0.0001, 0], [0.0002, 0], [0.0003, 0]];
   const out = Utilita.semplifica(linea, 0.00008);
