@@ -6,65 +6,83 @@
 <title>Privacy — Muovi Bologna</title>
 <meta name="theme-color" content="#C1121F">
 <meta name="robots" content="index,follow">
-<style>
-  :root{--rosso:#C1121F;--testo:#1A1A1A;--testo-2:#6B6B6B;--bordo:#E6E6E6;--carta:#fff}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--carta);color:var(--testo);
-    font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-  header{background:var(--rosso);color:#fff;padding:18px 20px}
-  header a{color:#fff;text-decoration:none;font-weight:600;font-size:14px;opacity:.9}
-  h1{margin:6px 0 0;font-size:22px;line-height:1.2}
-  main{padding:20px;max-width:640px;margin:0 auto}
-  h2{font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--testo-2);
-    margin:26px 0 6px}
-  p,li{font-size:15px}
-  ul{padding-left:20px}
-  a{color:var(--rosso)}
-  code{font-size:13px;background:#F4F4F4;padding:1px 4px;border-radius:4px}
-  footer{border-top:1px solid var(--bordo);margin-top:28px;padding-top:14px;
-    font-size:13px;color:var(--testo-2)}
-</style>
+<link rel="stylesheet" href="legale.css">
 </head>
 <body>
 <header>
   <a href="./">&larr; Torna all'app</a>
-  <h1>Privacy</h1>
+  <h1>Informativa privacy</h1>
 </header>
 <main>
-  <p>Muovi Bologna è un'app non ufficiale, non affiliata a TPER. Questa pagina dice esattamente quali dati tocca e dove finiscono.</p>
+  <p>Muovi Bologna è un'app non ufficiale, non affiliata a TPER. Questa pagina dice quali dati tocca e dove finiscono, ai sensi dell'art. 13 del Regolamento UE 2016/679 (GDPR).</p>
 
-  <h2>Cosa resta sul telefono</h2>
+  <!-- Se pubblichi l'app come attività, sostituisci il capoverso qui sotto con
+       nome, indirizzo ed email del titolare: il GDPR chiede un recapito reale. -->
+  <h2>Titolare del trattamento</h2>
+  <p>Il titolare è chi pubblica questa app: il progetto è ospitato su GitHub, all'indirizzo <a href="https://github.com/SuPeRCoDiNg2012/tper-bus" target="_blank" rel="noopener">github.com/SuPeRCoDiNg2012/tper-bus</a>, dove puoi aprire una segnalazione per esercitare i tuoi diritti.</p>
+
+  <h2>Dati che restano sul telefono</h2>
   <ul>
-    <li>Preferenze: criterio di ricerca, abbonamento, linee da evitare, soglia a piedi.</li>
-    <li>Percorsi recenti e preferiti (casa, lavoro): solo nomi e identificativi delle fermate.</li>
-    <li>Cache degli orari e delle geometrie a piedi, per non riscaricarle ogni volta.</li>
-    <li>Un identificativo casuale del browser, usato solo per non farti inviare due volte la stessa segnalazione di controllore.</li>
+    <li><b>Preferenze</b>: criterio di ricerca, abbonamento urbano, linee da evitare, soglia a piedi, criterio predefinito.</li>
+    <li><b>Tratta e luoghi</b>: ultimo percorso, fermate recenti, preferiti (casa, lavoro). Solo nomi e identificativi delle fermate.</li>
+    <li><b>Cache</b>: orari, elenco fermate e tempi a piedi, per non riscaricarli ogni volta.</li>
+    <li><b>Segnalazioni</b>: un identificativo casuale del browser, usato solo per non far inviare due volte la stessa segnalazione.</li>
+    <li><b>Log errori</b>: gli ultimi errori tecnici dell'app, visibili solo a te nel pannello «admin».</li>
   </ul>
-  <p>Sono tutti in <code>localStorage</code> del browser. Si cancellano dal menu dell'app con <b>Informazioni &rarr; Cancella tutti i dati</b>, oppure cancellando i dati del sito dalle impostazioni del browser.</p>
+  <p>Sono tutti in <code>localStorage</code> e nella cache del browser. Si cancellano dal menu dell'app con <b>Informazioni e fonti dati &rarr; Cancella tutti i dati</b>, oppure cancellando i dati del sito dalle impostazioni del browser. L'elenco completo delle chiavi è nella <a href="cookie.html">cookie policy</a>.</p>
 
   <h2>Posizione</h2>
-  <p>La posizione viene chiesta solo quando tocchi «Trova» o «Avvia». Serve a centrare la mappa, a trovare le fermate vicine e a seguire il viaggio. Non viene salvata, non viene inviata a nessun server dell'app: resta nella memoria della pagina e sparisce quando la chiudi. Puoi negare il permesso e usare l'app cercando le fermate per nome.</p>
+  <p>La posizione viene chiesta solo quando tocchi «Trova» o «Avvia la navigazione», e solo se dai il permesso al browser (base giuridica: il tuo consenso, art. 6.1.a GDPR). Serve a centrare la mappa, trovare le fermate vicine e seguire il viaggio. Non viene salvata e non viene inviata a nessun server dell'app: resta nella memoria della pagina e sparisce quando la chiudi. Puoi negare il permesso e usare l'app cercando le fermate per nome.</p>
 
   <h2>Cosa esce dal telefono</h2>
+  <p>Le funzioni che non possono stare nel browser mandano una richiesta a un fornitore esterno. In ogni caso la richiesta contiene solo ciò che serve alla funzione, mai un profilo:</p>
+  <table>
+    <tr><th>Fornitore</th><th>Cosa riceve</th><th>Perché</th></tr>
+    <tr><td>TPER — HelloBus, via relay pubblico</td><td>Fermata, linea, orario richiesto</td><td>Arrivi in tempo reale</td></tr>
+    <tr><td>Nominatim (OpenStreetMap)</td><td>Il testo cercato</td><td>Indirizzi e luoghi</td></tr>
+    <tr><td>OSRM (OpenStreetMap)</td><td>Coordinate dei punti</td><td>Percorsi a piedi</td></tr>
+    <tr><td>OpenFreeMap</td><td>Coordinate della porzione di mappa</td><td>Cartografia</td></tr>
+    <tr><td>Open-Meteo</td><td>Coordinate della zona</td><td>Meteo per i tempi a piedi</td></tr>
+    <tr><td>Cloudflare (relay e servizio controllori)</td><td>Linea segnalata, identificativo casuale, indirizzo IP</td><td>Segnalazione «c'è il controllore»</td></tr>
+    <tr><td>unpkg (CDN)</td><td>Indirizzo IP</td><td>Libreria della mappa</td></tr>
+  </table>
+  <p>Questi fornitori ricevono la richiesta come qualsiasi visita a un sito: possono vedere l'indirizzo IP, come per qualunque connessione. Non c'è profilazione, non c'è pubblicità, non ci sono statistiche di terze parti, non esistono account.</p>
+
+  <h2>Base giuridica</h2>
   <ul>
-    <li>Richieste agli orari TPER (HelloBus), passando da un relay pubblico: fermata, linea, orario.</li>
-    <li>Richieste di percorsi a piedi a OSRM e di indirizzi a Nominatim (OpenStreetMap): coordinate dei punti.</li>
-    <li>Meteo attuale da Open-Meteo: coordinate della zona.</li>
-    <li>Segnalazione «c'è il controllore»: nome della linea e identificativo casuale. Nessun IP viene salvato dal nostro servizio.</li>
+    <li><b>Esecuzione del servizio</b> (art. 6.1.b): cercare fermate, calcolare percorsi, mostrare orari e prezzi.</li>
+    <li><b>Legittimo interesse</b> (art. 6.1.f): far funzionare l'app, prevenire abusi sulle segnalazioni condivise, tenere un log tecnico locale degli errori.</li>
+    <li><b>Consenso</b> (art. 6.1.a): posizione del dispositivo, che puoi revocare in ogni momento dalle impostazioni del browser.</li>
   </ul>
-  <p>Questi fornitori ricevono la richiesta come qualsiasi visita a un sito: possono vedere l'indirizzo IP, come per qualunque connessione. Non c'è profiling, non c'è pubblicità, non ci sono statistiche di terze parti.</p>
+
+  <h2>Trasferimenti fuori dall'Unione europea</h2>
+  <p>I fornitori elencati sopra sono società con sede anche negli Stati Uniti (Cloudflare, unpkg) e possono trattare la richiesta fuori dall'UE sulla base delle clausole contrattuali standard della Commissione europea. Non vengono trasferiti dati tuoi conservati: solo la singola richiesta tecnica.</p>
 
   <h2>Conservazione</h2>
-  <p>Le segnalazioni dei controllori scadono dopo 25 minuti e vengono cancellate. Le cache locali durano finché non aggiorni l'app o cancelli i dati. Non esistono account e non conserviamo nulla che ti riguardi su un server.</p>
+  <p>Le segnalazioni dei controllori scadono dopo 25 minuti e vengono cancellate dal servizio. I dati locali durano finché non aggiorni l'app o non li cancelli. Gli orari e le geometrie restano in cache finché il service worker non li rinnova. Non conserviamo nulla che ti riguardi su un server.</p>
 
   <h2>Notifiche</h2>
-  <p>Gli avvisi dei preferiti sono notifiche locali: le genera il telefono, senza un server push. Se in futuro arriveranno notifiche da un server, lo chiederemo esplicitamente e questa pagina sarà aggiornata prima.</p>
+  <p>L'app non invia notifiche push e non chiede il permesso per farlo: nessun messaggio promozionale, nessun avviso a distanza.</p>
 
   <h2>I tuoi diritti</h2>
-  <p>Non avendo dati tuoi sui nostri server, non c'è nulla da richiedere o rettificare: la cancellazione è immediata e la fai tu dal menu. Per i dati trattati dai fornitori elencati valgono le loro informative (TPER, OpenStreetMap Foundation, Open-Meteo).</p>
+  <p>Puoi chiedere accesso, rettifica, cancellazione, limitazione e portabilità dei dati, oppure opporti al trattamento (artt. 15–22 GDPR). Poiché l'app non ha account, la maggior parte dei dati è già solo sul tuo telefono e la cancellazione è immediata dal menu. Per il resto scrivi al titolare tramite il repository indicato sopra.</p>
+  <p>Se ritieni che il trattamento violi la normativa puoi proporre reclamo al <a href="https://www.garanteprivacy.it" target="_blank" rel="noopener">Garante per la protezione dei dati personali</a> o all'autorità di controllo del tuo Paese.</p>
+
+  <h2>Minori</h2>
+  <p>L'app non è rivolta a minori di 14 anni e non raccoglie consapevolmente dati che li riguardino: non ci sono account, pubblicità o profilazione.</p>
+
+  <h2>Sicurezza</h2>
+  <p>Tutte le connessioni verso l'esterno usano HTTPS. Non esiste un database di utenti da proteggere: le uniche informazioni condivise sono le segnalazioni dei controllori, che non contengono dati personali.</p>
+
+  <h2>Modifiche</h2>
+  <p>Se cambia qualcosa nel trattamento dei dati, questa pagina viene aggiornata e la data in fondo cambia. Le modifiche valgono dalla pubblicazione.</p>
 
   <footer>
-    Dati fermate, zone e linee: open data TPER / Regione Emilia-Romagna (CC BY 3.0 IT). Orari bus: GTFS TPER. Orari treni: GTFS Trenitalia (CC BY 4.0). Mappe: OpenStreetMap. Prezzi indicativi: verifica su <a href="https://www.tper.it" target="_blank" rel="noopener">tper.it</a>.
+    <a href="./">App</a>
+    <a href="termini.html">Termini</a>
+    <a href="cookie.html">Cookie</a>
+    <a href="note-legali.html">Note legali</a>
+    <span class="aggiornata">Ultimo aggiornamento: 26 novembre 2026</span>
   </footer>
 </main>
 </body>

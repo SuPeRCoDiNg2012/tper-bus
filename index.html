@@ -342,6 +342,9 @@
   .drawer details summary svg{flex:0 0 auto;color:var(--testo-2);}
   .drawer details[open] summary svg{transform:rotate(180deg);}
   .drawer-piede{padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--bordo);font-size:11px;color:var(--testo-2);}
+  .drawer-piede .piede-legale{display:flex;flex-wrap:wrap;gap:4px 10px;margin:6px 0;}
+  .drawer-piede .piede-legale a{color:var(--testo);text-decoration:none;font-weight:600;font-size:11px;}
+  .drawer-piede .piede-nota{display:block;line-height:1.4;}
   .drawer details summary::-webkit-details-marker{display:none;}
   .drawer .info{display:flex;flex-direction:column;gap:12px;padding:0 16px 16px;font-size:12px;line-height:1.6;color:var(--testo-2);}
   .drawer .info h3{font-size:13px;font-weight:600;color:var(--testo);margin:0 0 4px;}
@@ -557,6 +560,11 @@
   </button>
   <span class="marchio">Muovi Bologna</span>
   <span class="spazio"></span>
+  <!-- Con un percorso aperto a sinistra c'è la freccia: il menu resta
+       raggiungibile da qui, così privacy e info non spariscono. -->
+  <button class="icona" id="btn-menu-destra" aria-label="Apri il menu" hidden>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
   <span class="pill-offline" id="pill-offline" hidden>Offline</span>
 </header>
 
@@ -695,7 +703,16 @@
       <span class="spazio">Installa app</span>
     </button>
   </div>
-  <div class="drawer-piede"><span id="drawer-aggiornato"></span> · <a href="privacy.html">Privacy</a> · <span>App non ufficiale TPER</span></div>
+  <div class="drawer-piede">
+    <span class="piede-nota">App non ufficiale TPER. Orari e prezzi indicativi: verifica su tper.it.</span>
+    <div class="piede-legale">
+      <a href="privacy.html">Privacy</a>
+      <a href="termini.html">Termini</a>
+      <a href="cookie.html">Cookie</a>
+      <a href="note-legali.html">Note legali</a>
+    </div>
+    <span id="drawer-aggiornato"></span>
+  </div>
 </aside>
 
 <!-- Impostazioni tecniche: non stanno nel menu, si aprono scrivendo «admin»
@@ -727,6 +744,7 @@
             <button type="button" class="btn btn-tenue" data-azione="salva-proxy">Salva</button>
           </div>
           <p class="nota-piccola" style="margin:6px 0 0">Vuoto = relay predefinito. Serve solo se hai un proxy tuo.</p>
+          <button type="button" class="link-mini" data-azione="azzera-proxy">Usa il relay predefinito</button>
         </div>
       </details>
       <button class="voce-menu" id="menu-errori" hidden>

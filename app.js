@@ -3576,6 +3576,9 @@
       if (torna) tasto.removeAttribute('aria-controls');
       else tasto.setAttribute('aria-controls', 'drawer');
     }
+    // Con la freccia a sinistra, il menu si apre dal tasto a destra.
+    const menuDestra = $('btn-menu-destra');
+    if (menuDestra) menuDestra.hidden = !torna;
     const inquadra = $('btn-inquadra');
     if (inquadra) inquadra.hidden = !(haPercorso && routing.stato === 'ok');
     // Il titolo si compone solo con entrambi i capi scelti: aprendo gli orari
@@ -5926,12 +5929,13 @@
       '<p>Treni coperti: Bologna C.le, Imola, Bologna–Pianoro e la linea S2A Bologna–Vignola. La S1 Porretta non è inclusa.</p>' +
       '<p>Fermate aggiornate al ' + esc(aggiornato || 'non disponibile') + '. Prezzi indicativi: verifica su tper.it.</p>' +
       '<a href="https://www.tper.it" target="_blank" rel="noopener">Apri tper.it</a></div>' +
-      '<div><h3>Relay orari</h3><p>HelloBus non accetta le chiamate del browser (CORS): l\'app passa da un relay pubblico. Puoi usarne uno tuo, con {url} al posto dell\'indirizzo.</p>' +
-      '<div class="campo-relay"><input id="input-proxy" type="text" placeholder="https://mio-relay.example/?url={url}" value="' + esc(leggi(K_PROXY) || '') + '">' +
-      '<button type="button" data-azione="salva-proxy">Salva</button></div>' +
-      '<button type="button" data-azione="azzera-proxy">Usa il relay predefinito</button></div>' +
-      '<div><h3>Privacy</h3><p>Nessun dato personale lascia il telefono: preferenze e percorsi recenti restano in localStorage, la posizione serve solo a trovare le fermate vicine e non viene salvata. Nessun tracciamento, nessuna statistica.</p>' +
-      '<p><a href="privacy.html">Informativa completa</a> · <button type="button" class="link-mini" data-azione="cancella-dati">Cancella tutti i dati</button></p></div>' +
+      '<div><h3>Privacy</h3><p>Nessun dato personale lascia il telefono: preferenze e percorsi recenti restano in localStorage, la posizione serve solo a trovare le fermate vicine e non viene salvata. Nessun tracciamento, nessuno cookie, nessuna statistica.</p>' +
+      '<p>' +
+      '<a href="privacy.html">Informativa privacy</a> · ' +
+      '<a href="termini.html">Termini</a> · ' +
+      '<a href="cookie.html">Cookie</a> · ' +
+      '<a href="note-legali.html">Note legali</a></p>' +
+      '<p><button type="button" class="link-mini" data-azione="cancella-dati">Cancella tutti i dati</button></p></div>' +
       '<p><b>App non ufficiale</b>, non affiliata a TPER. Orari e prezzi possono essere imprecisi: verifica sempre su <a href="https://www.tper.it" target="_blank" rel="noopener">tper.it</a>.</p>';
   }
 
@@ -6165,6 +6169,7 @@
       if (routing.stato === 'ok' && ultimeFeatures.length) inquadraPercorso(400);
       else inquadra();
     });
+    $('btn-menu-destra').addEventListener('click', apriMenu);
     // Un tasto, due mestieri: torna indietro oppure apre il menu.
     $('btn-menu').addEventListener('click', () => {
       const barra = $('barra');
@@ -6221,6 +6226,14 @@
       const azione = pulsante.getAttribute('data-azione');
       if (azione === 'evita-aggiungi') aggiungiLineaEvitata();
       if (azione === 'salva-proxy') salvaProxy();
+      if (azione === 'azzera-proxy') {
+        localStorage.removeItem(K_PROXY);
+        const campo = $('input-proxy');
+        if (campo) campo.value = '';
+        live.items = []; live.ts = 0; live.stato = 'idle';
+        mostraToast('Relay predefinito ripristinato');
+        caricaLive(true);
+      }
     });
     $('menu-criterio').addEventListener('click', () => {
       scrivi(K_CRITERIO_DEFAULT, 'ottimizzato');
