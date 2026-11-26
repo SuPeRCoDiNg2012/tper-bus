@@ -89,3 +89,10 @@ test('zone urbane e numeri accettati come stringhe', () => {
   assert.equal(Tariffe.isZonaUrbana(510), false);
   assert.equal(Tariffe.isZonaUrbana('510'), false);
 });
+
+test('l\'etichetta della zona dice se è urbana, neutra o extraurbana', () => {
+  assert.deepEqual(Tariffe.etichettaZona('500'), { titolo: 'Zona 500', nota: 'Area urbana di Bologna · 1 zona' });
+  assert.deepEqual(Tariffe.etichettaZona(509), { titolo: 'Zona 509', nota: 'Zona neutra dell’area urbana (cuscinetto)' });
+  assert.deepEqual(Tariffe.etichettaZona('577'), { titolo: 'Zona 577', nota: 'Extraurbana' });
+  assert.equal(Tariffe.etichettaZona(null).titolo, 'Zona non nota');
+});

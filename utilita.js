@@ -128,6 +128,48 @@
     return tenuti;
   }
 
+  /**
+   * Involucro convesso (monotone chain) di punti [lon, lat]: il poligono più
+   * piccolo che contiene tutte le fermate di una zona. Restituisce l'anello
+   * senza ripetere il primo punto; con meno di tre punti non è un'area.
+   */
+  function involucro(punti) {
+    const elenco = (punti || [])
+      .filter((p) => Array.isArray(p) && isFinite(p[0]) && isFinite(p[1]))
+      .map((p) => [Number(p[0]), Number(p[1])])
+      .sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]));
+    const unici = [];
+    elenco.forEach((p) => {
+      const ultimo = unici[unici.length - 1];
+      if (!ultimo || p[0] !== ultimo[0] || p[1] !== ultimo[1]) unici.push(p);
+    });
+    if (unici.length < 3) return unici;
+    // Due catene, bassa e alta: la svolta non deve mai essere oraria.
+    const catena = (punti) => {
+      const pila = [];
+      punti.forEach((p) => {
+        while (pila.length >= 2) {
+          const a = pila[pila.length - 2];
+          const b = pila[pila.length - 1];
+          const cross = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+          if (cross <= 0) pila.pop();
+          else break;
+        }
+        pila.push(p);
+      });
+      pila.pop();
+      return pila;
+    };
+    const anello = catena(unici).concat(catena(unici.slice().reverse()));
+    const visti = new Set();
+    return anello.filter((p) => {
+      const chiave = p[0] + ',' + p[1];
+      if (visti.has(chiave)) return false;
+      visti.add(chiave);
+      return true;
+    });
+  }
+
   const API = {
     TIMEOUT: TIMEOUT,
     CACHE_RIGENERABILI: CACHE_RIGENERABILI,
@@ -138,7 +180,8 @@
     cacheDaSvuotare: cacheDaSvuotare,
     deveMostrareInvito: deveMostrareInvito,
     timeoutPer: timeoutPer,
-    semplifica: semplifica
+    semplifica: semplifica,
+    involucro: involucro
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

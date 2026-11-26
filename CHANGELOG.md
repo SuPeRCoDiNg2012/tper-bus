@@ -4,6 +4,8 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- Mappa: interruttore **Zone tariffarie** nel menu. Ogni zona è un'area appena colorata (rossa la 500, grigie le altre) e toccandola si legge il suo nome e se è urbana, neutra o extraurbana. I confini ufficiali TPER non sono pubblicati: l'area è l'involucro delle fermate della zona, quindi è una stima dichiarata.
+
 ### Aggiunto
 - Linee sulla mappa in stile metropolitana: bordo bianco sotto il colore, spessore uniforme che cresce con lo zoom, angoli arrotondati, geometria semplificata (~8 m) per togliere il tremolio, fermate come cerchi bianchi con anello scuro quando le linee sono visibili.
 - `privacy.html`: informativa statica (dati locali, posizione, servizi esterni, conservazione, diritti).

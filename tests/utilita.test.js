@@ -83,3 +83,16 @@ test('i timeout sono diversi per tipo di chiamata', () => {
   // Tipo sconosciuto: si ricade sui dati statici, non su zero.
   assert.equal(Utilita.timeoutPer('boh'), 10000);
 });
+
+test('l\'involucro tiene solo i vertici esterni e scarta quelli interni', () => {
+  const anello = Utilita.involucro([[0, 0], [1, 0], [1, 1], [0, 1], [0.5, 0.5], [0.2, 0.8]]);
+  assert.equal(anello.length, 4);
+  assert.deepEqual(anello.map((p) => p.join(',')).sort(), ['0,0', '0,1', '1,0', '1,1']);
+  // Punti allineati o doppioni: non è un\'area.
+  assert.equal(Utilita.involucro([[0, 0], [1, 1], [2, 2]]).length, 2);
+  assert.equal(Utilita.involucro([[5, 5], [5, 5], [5, 5]]).length, 1);
+  assert.deepEqual(Utilita.involucro([]), []);
+  assert.deepEqual(Utilita.involucro(null), []);
+  // Coordinate sporche: si scartano, non fanno saltare il disegno.
+  assert.equal(Utilita.involucro([[0, 0], ['x', 2], [1, 0], [1, 1]]).length, 3);
+});

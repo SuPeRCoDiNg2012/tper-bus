@@ -22,6 +22,15 @@
     return ZONE_URBANE.has(String(zona));
   }
 
+  /** Nome leggibile di una zona tariffaria: 500 urbana, 501–509 neutre, resto extraurbane. */
+  function etichettaZona(zona) {
+    const z = String(zona == null ? '' : zona);
+    if (!z) return { titolo: 'Zona non nota', nota: '' };
+    if (z === '500') return { titolo: 'Zona 500', nota: 'Area urbana di Bologna · 1 zona' };
+    if (ZONE_URBANE.has(z)) return { titolo: 'Zona ' + z, nota: 'Zona neutra dell’area urbana (cuscinetto)' };
+    return { titolo: 'Zona ' + z, nota: 'Extraurbana' };
+  }
+
   /** Distanza in linea d'aria fra due punti; null se manca una coordinata. */
   function distanzaKm(a, b) {
     if (!a || !b) return null;
@@ -128,6 +137,7 @@
     TARIFFE_BUS: TARIFFE_BUS,
     SCAGLIONI_TRENO: SCAGLIONI_TRENO,
     isZonaUrbana: isZonaUrbana,
+    etichettaZona: etichettaZona,
     distanzaKm: distanzaKm,
     prezzoTreno: prezzoTreno,
     avvisoConfine: avvisoConfine,

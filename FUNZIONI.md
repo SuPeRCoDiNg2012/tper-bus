@@ -1,12 +1,12 @@
 # Tutte le funzioni di Muovi Bologna
 
-Indice completo del codice: **368 funzioni** — 291 in `app.js` e 77 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
+Indice completo del codice: **373 funzioni** — 294 in `app.js` e 79 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
 
 Nessun framework e nessun bundler: `index.html` carica gli script con `<script>` normali, `app.js` è l'unico file grande e gli altri moduli sono oggetti globali (`Utilita`, `Tariffe`, `Piedi`, `Routing`, `VistaPercorso`, `Icone`).
 
 ---
 
-## utilita.js — 8 funzioni
+## utilita.js — 9 funzioni
 
 Colori, contrasto, cache e timeout: roba che non sa niente di bus.
 
@@ -20,12 +20,14 @@ Colori, contrasto, cache e timeout: roba che non sa niente di bus.
 | `deveMostrareInvito(uso, visto, installata)` | L'invito all'installazione arriva al terzo uso e non si ripete. |
 | `timeoutPer(tipo)` | Millisecondi di attesa per ogni tipo di richiesta. |
 | `semplifica(punti, tolleranza)` | Douglas-Peucker: toglie i vertici inutili da una linea. |
+| `involucro(punti)` | Poligono convesso che contiene tutte le fermate di una zona. |
 
-## tariffe.js — 5 funzioni
+## tariffe.js — 6 funzioni
 
 | Funzione | Cosa fa |
 | --- | --- |
 | `isZonaUrbana(zona)` | La zona è quella urbana di Bologna? |
+| `etichettaZona(zona)` | Nome leggibile della zona: urbana, neutra o extraurbana. |
 | `distanzaKm(a, b)` | Distanza in linea d'aria; `null` se manca una coordinata. |
 | `prezzoTreno(km)` | Prezzo del regionale per km (`null` oltre 200 km). |
 | `avvisoConfine(fermataExtraurbana)` | Nota quando la fermata scelta esce dalla zona urbana. |
@@ -135,7 +137,7 @@ Il backend delle segnalazioni (Worker + D1).
 
 ---
 
-# app.js — 291 funzioni
+# app.js — 294 funzioni
 
 ## Stato locale e preferenze — 11
 
@@ -206,7 +208,7 @@ Il backend delle segnalazioni (Worker + D1).
 | `recenti()` | Fermate cercate di recente. |
 | `aggiungiRecente(f)` | Aggiunge una fermata ai recenti. |
 
-## Mappa — 18
+## Mappa — 21
 
 | Funzione | Cosa fa |
 | --- | --- |
@@ -221,6 +223,9 @@ Il backend delle segnalazioni (Worker + D1).
 | `caricaFormeLinee()` | Carica i tracciati delle linee quando servono. |
 | `decodificaPolilinea(testo)` | Polilinea `[lat, lon]` come vuole GeoJSON. |
 | `mostraLineeTutte(attivo)` | Mostra tutte le linee sulla mappa. |
+| `datiZone()` | Un'area per zona tariffaria, dalle sue fermate. |
+| `mostraZone(attivo)` | Accende o spegne le aree delle zone. |
+| `mostraZonaToccata(feature, punto)` | Scheda della zona toccata. |
 | `immaginePinFermata(treno)` | Pin della fermata, variante scura per i treni. |
 | `creaLivelliPercorso()` | Livelli e sorgenti del percorso. |
 | `immagineFreccia()` | Freccia disegnata su canvas e ruotata da MapLibre. |

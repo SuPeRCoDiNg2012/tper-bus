@@ -1006,6 +1006,100 @@
     }
   }
 
+  /* --- Zone tariffarie ----------------------------------------------------
+   * I confini ufficiali TPER non sono pubblicati: l'area di ogni zona è
+   * l'involucro delle fermate che le appartengono, calcolato dai dati reali.
+   * È un'approssimazione, e il popup lo dice con il nome della zona.
+   */
+
+  let popupZona = null;
+
+  function datiZone() {
+    const perZona = new Map();
+    fermate.forEach((f) => {
+      if (f.zona == null || f.lat == null || f.lon == null) return;
+      const zona = String(f.zona);
+      if (!perZona.has(zona)) perZona.set(zona, []);
+      perZona.get(zona).push([f.lon, f.lat]);
+    });
+    const features = [];
+    perZona.forEach((punti, zona) => {
+      if (punti.length < 3) return;      // due fermate non fanno un'area
+      const anello = Utilita.involucro(punti);
+      if (anello.length < 3) return;
+      const etichetta = Tariffe.etichettaZona(zona);
+      features.push({
+        type: 'Feature',
+        properties: {
+          zona: zona,
+          famiglia: !Tariffe.isZonaUrbana(zona) ? 'extraurbana' : (zona === '500' ? 'urbana' : 'neutra'),
+          titolo: etichetta.titolo,
+          nota: etichetta.nota
+        },
+        geometry: { type: 'Polygon', coordinates: [anello.concat([anello[0]])] }
+      });
+    });
+    return { type: 'FeatureCollection', features: features };
+  }
+
+  function mostraZone(attivo) {
+    if (!mappa) return;
+    if (mappa.getLayer('zone-fill')) {
+      ['zone-fill', 'zone-bordo'].forEach((id) => {
+        if (mappa.getLayer(id)) mappa.setLayoutProperty(id, 'visibility', attivo ? 'visible' : 'none');
+      });
+      return;
+    }
+    if (!attivo) return;
+    try {
+      // Sopra la cartografia ma sotto i livelli dell'app (partendo dall'alone
+      // del GPS, che è il più in basso): fermate e percorso restano leggibili.
+      const sotto = mappa.getLayer('utente-precisione') ? 'utente-precisione' : undefined;
+      mappa.addSource('zone', { type: 'geojson', data: datiZone() });
+      mappa.addLayer({
+        id: 'zone-fill',
+        type: 'fill',
+        source: 'zone',
+        paint: {
+          'fill-color': ['match', ['get', 'famiglia'], 'urbana', '#C1121F', 'neutra', '#6B6B6B', '#6B6B6B'],
+          // Quasi trasparente ma leggibile su una cartografia chiara.
+          'fill-opacity': ['match', ['get', 'famiglia'], 'urbana', 0.22, 'neutra', 0.16, 0.10]
+        }
+      }, sotto);
+      mappa.addLayer({
+        id: 'zone-bordo',
+        type: 'line',
+        source: 'zone',
+        layout: { 'line-join': 'round' },
+        paint: {
+          'line-color': ['match', ['get', 'famiglia'], 'urbana', '#C1121F', '#6B6B6B'],
+          'line-width': 2,
+          'line-opacity': 0.7,
+          'line-dasharray': [2, 2]
+        }
+      }, sotto);
+    } catch (errore) {
+      mostraToast('Zone non disponibili con questi dati');
+      const voce = $('menu-zone');
+      if (voce) voce.checked = false;
+    }
+  }
+
+  // Popup della zona toccata: due righe, senza aprire il pannello.
+  function mostraZonaToccata(feature, punto) {
+    if (!mappa || !feature) return;
+    const proprieta = feature.properties || {};
+    const nodo = document.createElement('div');
+    nodo.className = 'zona-scheda';
+    nodo.innerHTML = '<b>' + esc(proprieta.titolo || ('Zona ' + proprieta.zona)) + '</b>' +
+      '<span>' + esc(proprieta.nota || '') + '</span>';
+    if (popupZona) { popupZona.remove(); popupZona = null; }
+    popupZona = new maplibregl.Popup({ closeButton: false, closeOnClick: true, offset: 6, className: 'zona-popup' })
+      .setLngLat(punto)
+      .setDOMContent(nodo)
+      .addTo(mappa);
+  }
+
   // Il pin delle fermate è un'immagine disegnata una volta su canvas: sui
   // display retina resta nitida grazie al pixelRatio 2x.
   const ICONA_PIN_FERMATA = 'pin-fermata';
@@ -1260,6 +1354,9 @@
         try { mappa.addImage('freccia-percorso', freccia, { pixelRatio: 2 }); } catch (errore) { /* niente frecce */ }
       }
     }
+    // Ricreare i livelli dell'app manda via le zone: se erano accese tornano.
+    const voceZone = $('menu-zone');
+    if (voceZone && voceZone.checked && !mappa.getLayer('zone-fill')) mostraZone(true);
     if (mappa.hasImage('freccia-percorso')) {
       mappa.addLayer({
         id: 'percorso-frecce',
@@ -6033,6 +6130,9 @@
     $('menu-linee').addEventListener('change', (evento) => {
       mostraLineeTutte(evento.target.checked);
     });
+    $('menu-zone').addEventListener('change', (evento) => {
+      mostraZone(evento.target.checked);
+    });
     $('menu-recente').addEventListener('click', () => {
       chiudiMenu();
       routing.chiave = null;
@@ -6397,6 +6497,12 @@
           const fermata = scelta ? fermataPerId(scelta.properties.id) : null;
           if (fermata) { apriMini(fermata); return; }
         }
+        // Zone tariffarie: un tocco sull'area dice che zona è. Le fermate
+        // hanno la precedenza, quindi si arriva qui solo sul vuoto.
+        const zone = mappa.getLayer('zone-fill')
+          ? mappa.queryRenderedFeatures(evento.point, { layers: ['zone-fill'] })
+          : null;
+        if (zone && zone.length) { mostraZonaToccata(zone[0], evento.lngLat); return; }
         chiudiMini();
         if (statoSheet === 'piena' && !navigazione.attiva) impostaSheet('meta');
       });
