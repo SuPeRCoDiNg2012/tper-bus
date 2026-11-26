@@ -17,6 +17,32 @@ test('il contrasto segue la formula WCAG', () => {
   assert.equal(Utilita.contrasto('non-un-colore', '#FFFFFF'), null);
 });
 
+test('un ritardo simulato fa perdere il cambio e indica il punto da cui ripartire', () => {
+  const tappe = [
+    { linea: 'A', da: '452', partenza: 10 * 3600 + 25 * 60, arrivo: 10 * 3600 + 34 * 60 },
+    { linea: '96', da: '800', partenza: 10 * 3600 + 45 * 60, arrivo: 11 * 3600 + 6 * 60 }
+  ];
+  // Il bus A arriva 12 minuti dopo: il margine di 11 minuti non basta più.
+  const perso = Utilita.analizzaRitardi(tappe, [12 * 60, 0]);
+  assert.equal(perso.cambioPerso, true);
+  assert.equal(perso.lineaPersa, '96');
+  assert.equal(perso.cambioDa, '800');
+  assert.equal(perso.noti, 2);
+
+  // Con 10 minuti di ritardo il cambio è solo a rischio.
+  const rischio = Utilita.analizzaRitardi(tappe, [10 * 60, 0]);
+  assert.equal(rischio.cambioPerso, false);
+  assert.equal(rischio.cambioRischioso, true);
+});
+
+test('dopo un cambio perso si riparte da posizione, cambio, poi partenza', () => {
+  const posizione = { lat: 44.49, lon: 11.34 };
+  const cambio = { id: '1003', nome: 'Porta Maggiore' };
+  assert.equal(Utilita.scegliOrigineRitardo(posizione, cambio).tipo, 'posizione');
+  assert.equal(Utilita.scegliOrigineRitardo(null, cambio).tipo, 'cambio');
+  assert.equal(Utilita.scegliOrigineRitardo(null, null).tipo, 'partenza');
+});
+
 test('il testo del badge resta leggibile su ogni colore di linea', () => {
   // Giallo chiaro: bianco sarebbe illeggibile, serve il nero.
   assert.equal(Utilita.testoSuColore('#FFD400'), '#1A1A1A');

@@ -2155,7 +2155,7 @@
   function mostraPosizioneUtente(posizione) {
     const coords = posizione && posizione.coords;
     if (!coords) return;
-    posizioneUtente = { lat: coords.latitude, lon: coords.longitude, precisione: coords.accuracy };
+    posizioneUtente = { lat: coords.latitude, lon: coords.longitude, precisione: coords.accuracy, ts: Date.now() };
     if (!mappa) return;
     const segnaposto = creaMarkerUtente();
     if (segnaposto) {
@@ -2368,7 +2368,7 @@
     const punto = { lat: posizione.coords.latitude, lon: posizione.coords.longitude };
     navigazione.precisione = isFinite(posizione.coords.accuracy) ? Math.round(posizione.coords.accuracy) : null;
     navigazione.ultima = punto;
-    posizioneUtente = punto;
+    posizioneUtente = { lat: punto.lat, lon: punto.lon, ts: Date.now() };
     const marcatore = creaMarkerUtente();
     if (marcatore && mappa) {
       marcatore.setLngLat([punto.lon, punto.lat]).addTo(mappa);
@@ -4255,6 +4255,24 @@
     };
   }
 
+  function luogoDaPosizione(posizione, nome) {
+    const lat = Number(posizione.lat);
+    const lon = Number(posizione.lon);
+    const vicina = fermateVicine(lat, lon, 1)[0];
+    return {
+      id: 'geo:' + lat.toFixed(5) + ',' + lon.toFixed(5),
+      nome: nome || 'La mia posizione',
+      indirizzo: '',
+      lat: lat,
+      lon: lon,
+      zona: vicina ? vicina.zona : '500',
+      tipo: 'indirizzo',
+      genere: 'indirizzo',
+      categoria: 'Posizione attuale',
+      gps: true
+    };
+  }
+
   function luogoDaCoordinate(lat, lon, nome) {
     const vicina = fermateVicine(lat, lon, 1)[0];
     return {
@@ -5514,7 +5532,7 @@
       if (info.cambioPerso) {
         html += '<span><b>Cambio perso:</b> con questo ritardo la corsa per ' +
           esc(info.lineaPersa) + ' non ti aspetta.</span>' +
-          '<button type="button" class="live-azione" data-azione="alternativa-ritardo">Cerca un\'altra soluzione</button>';
+          '<button type="button" class="live-azione" data-azione="alternativa-ritardo">Cerca un\'altra soluzione da qui</button>';
       } else if (info.cambioRischioso) {
         html += '<span><b>Cambio a rischio:</b> al ritardo attuale restano meno di 2 minuti per la coincidenza.</span>';
       } else if (info.ultimo >= 120) {
@@ -5637,48 +5655,51 @@
     // I valori sono allineati alle tappe di un esito preciso: cambiando
     // soluzione o criterio non valgono più.
     if (!tappe.length || !valori.length || liveTappe.esito !== esito) return null;
-    let noti = 0;
-    let ultimo = 0;
-    let cambioRischioso = false;
-    let cambioPerso = false;
-    let lineaPersa = '';
     tappe.forEach((tappa, indice) => {
-      const scarto = valori[indice];
-      if (scarto == null) return;
-      annotaRitardo(tappa.linea, scarto, tappa.partenza);
-      noti += 1;
-      const successiva = tappe[indice + 1];
-      if (successiva) {
-        const margine = successiva.partenza - tappa.arrivo;
-        if (scarto > margine) {
-          cambioPerso = true;
-          lineaPersa = successiva.linea;
-        } else if (margine - scarto < 120) {
-          cambioRischioso = true;
-        }
-      } else if (scarto > 0) {
-        ultimo = scarto;
-      }
+      if (valori[indice] != null) annotaRitardo(tappa.linea, valori[indice], tappa.partenza);
     });
-    return {
-      noti: noti, totale: tappe.length, ultimo: ultimo,
-      cambioRischioso: cambioRischioso, cambioPerso: cambioPerso, lineaPersa: lineaPersa
-    };
+    return Utilita.analizzaRitardi(tappe, valori);
   }
 
-  // Un cambio perso non si risolve aspettando: si riparte da adesso e si evita
-  // la linea che non si riesce a prendere, così il motore cerca davvero
+  // Un cambio perso non si risolve aspettando: si riparte da dove si è e si
+  // evita la linea che non si riesce a prendere, così il motore cerca davvero
   // un'altra strada invece di riproporre lo stesso itinerario.
   function ricalcolaPerRitardo() {
     const info = ritardiPercorso();
     if (!info || !info.cambioPerso) return;
+    // Si riparte da dove si è: prima l'ultima posizione GPS, poi la fermata
+    // del cambio perso. La partenza originale resta solo come ultimo ripiego.
+    const posizione = navigazione.attiva && navigazione.ultima
+      ? { lat: navigazione.ultima.lat, lon: navigazione.ultima.lon, ts: Date.now() }
+      : posizioneUtente;
+    const fresca = posizione && posizione.lat != null && posizione.lon != null &&
+      (posizione.ts == null || Date.now() - posizione.ts <= 120000);
+    const cambio = info.cambioDa ? fermataPerId(info.cambioDa) : null;
+    const scelta = Utilita.scegliOrigineRitardo(fresca ? posizione : null, cambio);
+    let origine = null;
+    let da = '';
+    if (scelta.tipo === 'posizione') {
+      origine = luogoDaPosizione(scelta.luogo, 'La mia posizione');
+      da = 'la tua posizione';
+    } else if (scelta.tipo === 'cambio') {
+      origine = scelta.luogo;
+      da = 'la fermata del cambio';
+    }
+    if (navigazione.attiva) fermaNavigazione(true);
+    if (origine) {
+      sel.partenza = origine;
+      impostaInput('partenza');
+      aggiornaMarker();
+      if (!origine.gps) salvaTratta();
+    }
     routing.giorno = oggiISO();
     routing.orario = oraAdesso();
     routing.adesso = true;
     routing.modo = 'partenza';
     routing.chiave = null;
     salvaQuando();
-    mostraToast(info.lineaPersa ? 'Cerco un\'alternativa senza la linea ' + info.lineaPersa : 'Cerco un\'alternativa');
+    mostraToast('Ricalcolo da ' + (da || 'la partenza') +
+      (info.lineaPersa ? ' senza la linea ' + info.lineaPersa : ''));
     calcolaPercorso({ evita: info.lineaPersa });
   }
 
@@ -7071,7 +7092,7 @@
     const lon = posizione.coords.longitude;
     if (!isFinite(lat) || !isFinite(lon)) return;
     const vicina = fermateVicine(lat, lon, 1)[0];
-    posizioneUtente = { lat: lat, lon: lon };
+    posizioneUtente = { lat: lat, lon: lon, ts: Date.now() };
     sel.partenza = {
       id: 'geo:' + lat.toFixed(5) + ',' + lon.toFixed(5),
       nome: 'La mia posizione',

@@ -350,6 +350,51 @@
     return null;
   }
 
+  /**
+   * Effetto dei ritardi sulle tappe: un ritardo su una corsa intermedia può
+   * far perdere il cambio. `cambioDa` è la fermata da cui ripartire.
+   */
+  function analizzaRitardi(tappe, valori) {
+    const corsa = Array.isArray(tappe) ? tappe : [];
+    const scarti = Array.isArray(valori) ? valori : [];
+    let noti = 0;
+    let ultimo = 0;
+    let cambioRischioso = false;
+    let cambioPerso = false;
+    let lineaPersa = '';
+    let cambioDa = '';
+    corsa.forEach((tappa, indice) => {
+      const scarto = scarti[indice];
+      if (scarto == null) return;
+      noti += 1;
+      const successiva = corsa[indice + 1];
+      if (successiva) {
+        const margine = successiva.partenza - tappa.arrivo;
+        if (scarto > margine) {
+          cambioPerso = true;
+          lineaPersa = successiva.linea;
+          cambioDa = successiva.da || '';
+        } else if (margine - scarto < 120) {
+          cambioRischioso = true;
+        }
+      } else if (scarto > 0) {
+        ultimo = scarto;
+      }
+    });
+    return {
+      noti: noti, totale: corsa.length, ultimo: ultimo,
+      cambioRischioso: cambioRischioso, cambioPerso: cambioPerso,
+      lineaPersa: lineaPersa, cambioDa: cambioDa
+    };
+  }
+
+  /** Da dove ripartire dopo un cambio perso: posizione, cambio, poi partenza. */
+  function scegliOrigineRitardo(posizione, cambio) {
+    if (posizione) return { tipo: 'posizione', luogo: posizione };
+    if (cambio) return { tipo: 'cambio', luogo: cambio };
+    return { tipo: 'partenza', luogo: null };
+  }
+
   /** Testo utile di una condivisione, senza link né spazi doppi. */
   function testoCondiviso(testo) {
     return String(testo || '')
@@ -376,6 +421,8 @@
     semplifica: semplifica,
     coordinateCondivise: coordinateCondivise,
     testoCondiviso: testoCondiviso,
+    analizzaRitardi: analizzaRitardi,
+    scegliOrigineRitardo: scegliOrigineRitardo,
     involucro: involucro,
     raggruppa: raggruppa,
     centroide: centroide
