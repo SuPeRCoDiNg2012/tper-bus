@@ -21,7 +21,7 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ### Corretto
 - Margine di 5 minuti su «arriva entro», con avviso «poco margine» sotto i 2.
-- Buffer di cambio: 120 s bus-bus, 240 s con treno, 360 s treno-treno.
+- Buffer di cambio: 180 s bus-bus (30 s se è la stessa linea), 240 s con treno, 360 s treno-treno.
 - Badge «tempi a piedi stimati» quando la geometria OSRM non è ancora arrivata.
 
 ## [1.0.0]
