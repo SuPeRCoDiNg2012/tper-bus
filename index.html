@@ -308,6 +308,8 @@
   .btn-aggiorna{width:44px;height:44px;border:0;border-radius:12px;background:#F2F2F2;color:var(--testo);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;}
   .btn-aggiorna.gira svg{animation:gira 1s linear infinite;}
   @keyframes gira{to{transform:rotate(360deg);}}
+  .orari-azioni{display:flex;gap:8px;margin:2px 0 4px;}
+  .orari-azioni .btn{flex:1;min-width:0;padding:0 12px;}
   .stato-live{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--testo-2);}
   .punto{width:6px;height:6px;border-radius:50%;background:var(--rosso);flex:0 0 auto;}
   .punto.off{background:var(--testo-2);}
@@ -348,7 +350,7 @@
   .menu-pref .nota{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:52%;}
   .menu-pref .nota.vuoto{color:var(--testo-2);}
   .menu-pref svg{color:var(--testo-2);flex:0 0 auto;}
-  .menu-pref-rimuovi{width:44px;height:44px;flex:0 0 auto;border:0;background:transparent;color:var(--testo-2);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .menu-pref-rimuovi,.menu-pref-modifica{width:44px;height:44px;flex:0 0 auto;border:0;background:transparent;color:var(--testo-2);display:flex;align-items:center;justify-content:center;cursor:pointer;}
   .menu-pref-avviso{width:44px;height:44px;flex:0 0 auto;border:0;background:transparent;color:var(--testo-2);display:flex;align-items:center;justify-content:center;cursor:pointer;}
   .menu-pref-avviso.acceso{color:var(--rosso);}
   .pref-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
@@ -703,9 +705,9 @@
       <span class="spazio">Zone tariffarie</span>
       <span class="interruttore"><input type="checkbox" id="menu-zone"><span class="binario"></span></span>
     </label>
-    <div class="menu-sezione">Percorsi recenti</div>
+    <div class="menu-sezione">Percorso attuale</div>
     <button class="menu-recente" id="menu-recente" hidden></button>
-    <p class="menu-sezione" id="menu-recente-vuoto">Nessun percorso ancora.</p>
+    <p class="menu-sezione" id="menu-recente-vuoto">Nessun percorso aperto.</p>
     <div class="menu-sezione">Preferiti</div>
     <div id="menu-preferiti"></div>
     <details id="menu-info">

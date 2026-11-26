@@ -3139,15 +3139,21 @@
       riquadro.innerHTML = PREFERITI.map((voce) => {
         const scelto = validi.find((v) => v.slot === voce.slot);
         const acceso = scelto && avvisoAttivo(voce.slot);
+        // Con un posto impostato la riga porta lì; la matita cambia il posto.
+        // Prima la riga apriva sempre la ricerca, quindi «Casa» non poteva
+        // essere usata come destinazione dal menu.
         return '<div class="menu-pref-riga">' +
-          '<button type="button" class="menu-pref" data-azione="pref-scegli" data-slot="' + voce.slot + '">' +
+          '<button type="button" class="menu-pref" data-azione="' + (scelto ? 'pref-vai' : 'pref-scegli') +
+          '" data-slot="' + voce.slot + '">' +
           Icone.svg(voce.icona, 20) +
           '<span class="spazio">' + voce.etichetta + '</span>' +
           '<span class="nota' + (scelto ? '' : ' vuoto') + '">' +
           esc(scelto ? nomeBreve(scelto.luogo.nome) : 'Imposta') + '</span>' +
           '</button>' +
           (scelto
-            ? '<button type="button" class="menu-pref-avviso' + (acceso ? ' acceso' : '') + '" data-azione="pref-avviso" data-slot="' +
+            ? '<button type="button" class="menu-pref-modifica" data-azione="pref-scegli" data-slot="' + voce.slot +
+              '" aria-label="Cambia ' + voce.etichetta + '">' + Icone.svg('pencil', 18) + '</button>' +
+              '<button type="button" class="menu-pref-avviso' + (acceso ? ' acceso' : '') + '" data-azione="pref-avviso" data-slot="' +
               voce.slot + '" aria-pressed="' + (acceso ? 'true' : 'false') + '" aria-label="Avvisa 5 minuti prima del bus da ' +
               voce.etichetta + '">' + Icone.svg(acceso ? 'bell' : 'bell-off', 18) + '</button>' +
               '<button type="button" class="menu-pref-rimuovi" data-azione="pref-rimuovi" data-slot="' + voce.slot +
@@ -3306,6 +3312,9 @@
   function azionePreferito(azione, pulsante) {
     if (azione === 'pref-vai') {
       const scelto = preferitiValidi().find((v) => v.slot === pulsante.getAttribute('data-slot'));
+      // Il menu deve chiudersi prima della ricerca: altrimenti resta sotto e
+      // ricompare quando si chiude l'overlay.
+      chiudiMenu();
       if (scelto) selezionaFermata('destinazione', scelto.luogo);
       return true;
     }
@@ -3901,7 +3910,12 @@
   // (percorso o orari di una fermata), hamburger nella schermata iniziale.
   function aggiornaBarra() {
     const haPercorso = !!(sel.partenza && sel.destinazione);
-    const torna = haPercorso || vistaAttiva !== 'percorso';
+    // Anche una scelta incompleta deve poter essere annullata: con la sola
+    // destinazione il tasto torna indietro, non sparisce lasciando l'utente
+    // senza modo di chiudere la ricerca. La posizione automatica non conta:
+    // in home il tasto resta il menu.
+    const haScelta = !!sel.destinazione || !!(sel.partenza && !sel.partenza.gps);
+    const torna = haScelta || vistaAttiva !== 'percorso';
     const barra = $('barra');
     if (!barra) return;
     barra.classList.toggle('torna', torna);
@@ -6055,6 +6069,14 @@
       '<button type="button" class="btn-aggiorna' + (live.caricamento ? ' gira' : '') +
       '" data-azione="aggiorna" aria-label="Aggiorna gli arrivi"' + (fermata ? '' : ' disabled') + '>' +
       ICONA_REFRESH + '</button></div>';
+    // Dalla fermata si continua il viaggio senza tornare alla home: gli stessi
+    // due gesti della mini-card, ma dentro gli orari.
+    if (fermata && !eIndirizzo(fermata)) {
+      html += '<div class="orari-azioni">' +
+        '<button type="button" class="btn btn-tenue" data-azione="orari-partenza">Parti da qui</button>' +
+        '<button type="button" class="btn btn-tenue" data-azione="orari-destinazione">Vai qui</button>' +
+        '</div>';
+    }
 
     if (!fermata) {
       html += '<div class="box">Tocca una fermata sulla mappa per vedere gli orari.</div>';
@@ -6343,9 +6365,28 @@
       return;
     }
     if (vistaAttiva === 'orari') { mostraVista('percorso'); impostaSheet('meta'); return; }
+    // Il pannello non è una schermata: ridurlo è un gesto, non un passo
+    // indietro. Dalla vista dettaglio si torna al riepilogo, dal riepilogo si
+    // torna alla home con un tocco solo; il peek resta una posizione del
+    // pannello, non una tappa obbligata.
     if (statoSheet === 'piena') { impostaSheet('meta'); return; }
-    if (statoSheet === 'meta') { impostaSheet('peek'); return; }
-    if (sel.destinazione) azzeraNavigazione();
+    if (sel.destinazione) {
+      if (profondita > 0) { history.back(); return; }
+      azzeraNavigazione();
+      return;
+    }
+    // Partenza scelta a mano, senza destinazione: si annulla la scelta e si
+    // torna alla posizione automatica, invece di restare su una tratta a metà.
+    if (sel.partenza && !sel.partenza.gps) {
+      if (profondita > 0) { history.back(); return; }
+      sel.partenza = null;
+      impostaInput('partenza');
+      aggiornaMarker();
+      renderPercorso();
+      impostaSheet('peek');
+      aggiornaUrl('replace');
+      partenzaDallaPosizione();
+    }
   }
 
   // Quanto pannello si vede davvero: aggiorna --h-sheet e restituisce il valore,
@@ -6884,8 +6925,14 @@
     impostaInput('partenza');
     aggiornaMarker();
     renderPercorso();
+    // Il GPS non sta nell'URL: se prima c'era una partenza scelta a mano, la
+    // sostituzione deve sparire anche dall'indirizzo, non restare come residuo.
+    aggiornaUrl('replace');
     if (sel.destinazione) calcolaPercorso();
-    else inquadra(false);
+    else {
+      impostaSheet('peek');
+      inquadra(false);
+    }
   }
 
   function partenzaDallaPosizione() {
@@ -6915,6 +6962,25 @@
     } else {
       richiedi();
     }
+  }
+
+  // La voce del menu «La mia posizione» deve fare quello che dice: usare la
+  // posizione come partenza, non solo spostare la mappa.
+  function posizioneComePartenza() {
+    if (!navigator.geolocation) {
+      mostraToast('Geolocalizzazione non supportata da questo browser');
+      return;
+    }
+    // Anche se il menu è stato aperto da linea o orari, la posizione serve al
+    // percorso: si torna alla schermata di ricerca prima di impostarla.
+    mostraVista('percorso');
+    mostraToast('Cerco la tua posizione…');
+    navigator.geolocation.getCurrentPosition((posizione) => {
+      posizioneInPartenza(posizione);
+      mostraToast('Partenza: la tua posizione');
+    }, () => {
+      mostraToast('Posizione non disponibile: controlla i permessi del browser');
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
   }
 
   function vaiVicino() {
@@ -7080,7 +7146,7 @@
       impostaAbbonamento(evento.target.checked);
       renderPercorso();
     });
-    $('menu-posizione').addEventListener('click', () => { chiudiMenu(); vaiVicino(); });
+    $('menu-posizione').addEventListener('click', () => { chiudiMenu(); posizioneComePartenza(); });
     $('menu-linee').addEventListener('change', (evento) => {
       mostraLineeTutte(evento.target.checked);
     });
@@ -7430,6 +7496,16 @@
           routing.chiave = null;
           inquadra();
           calcolaPercorso();
+        }
+        if (azione === 'orari-partenza') {
+          const f = fermataLive();
+          if (f) selezionaFermata('partenza', f);
+          return;
+        }
+        if (azione === 'orari-destinazione') {
+          const f = fermataLive();
+          if (f) selezionaFermata('destinazione', f);
+          return;
         }
         if (azione === 'avvia-navigazione') avviaNavigazione();
         if (azione === 'ora-adesso') aggiornaQuando(oggiISO(), oraAdesso(), true);

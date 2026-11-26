@@ -19,6 +19,8 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 - **Direzione della linea** in una tendina a tutta larghezza invece di una fila di chip da scorrere: con nove capolinea la scelta resta un tocco solo, anche da tastiera.
 - **Home più pulita**: la partenza è la posizione attuale, richiesta in automatico all'apertura (se il permesso è negato restano le fermate); il viaggio precedente non viene riaperto; il pin rosso della partenza compare solo quando c'è una destinazione e tornando in home il tracciato sparisce, così restano solo le fermate. La posizione GPS non finisce mai negli URL condivisi.
 - **Pin delle fermate** rotondi con ombra morbida al posto della goccia con la punta: stesso linguaggio del resto dell'interfaccia, senza linee rigide.
+- **Flusso più lineare**: il tasto indietro non passa più dal pannello ridotto (dettaglio → riepilogo → home) e annulla anche una scelta incompleta; dagli orari di una fermata si può partire o impostarla come destinazione senza tornare alla home.
+- **Menu**: la voce «La mia posizione» imposta davvero la posizione come partenza; un preferito impostato apre subito il percorso e la matita lo cambia; «Percorso attuale» sostituisce l'etichetta fuorviante «Percorsi recenti».
 - **Avviso «scendi alla prossima»** azzerato a ogni nuova navigazione: la vibrazione si ripete anche se la fermata di discesa è la stessa del viaggio precedente.
 - **Scorciatoie nel manifest** per Casa e Lavoro.
 - Non implementati e dichiarati come limiti: notifiche push (servono chiavi VAPID, un deploy del Worker e la crittografia Web Push), S1 Porretta (nessun GTFS verificabile con le fermate intermedie) e filtro «fermate accessibili» (il dataset non espone `wheelchair_boarding`).
