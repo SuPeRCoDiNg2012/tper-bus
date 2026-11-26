@@ -352,7 +352,7 @@
   function riferimentoFermata(f) {
     if (!f) return '';
     if (eIndirizzo(f)) return f.indirizzo || f.nome || 'Indirizzo';
-    return 'Palina ' + f.id + (f.indirizzo ? ' · ' + f.indirizzo : '');
+    return 'Palina ' + f.id + (dettaglioFermata(f) ? ' · ' + dettaglioFermata(f) : '');
   }
   // Niente toast: i messaggi vivono in una riga dentro il pannello.
   function mostraToast(messaggio, durata) {
@@ -814,7 +814,7 @@
         type: 'Feature',
         properties: {
           id: f.id,
-          nome: nomeBreve(f.nome),
+          nome: nomeFermataBreve(f.nome),
           treno: f.tipo === 'treno' || f.tipo === 'entrambi' ? 1 : 0
         },
         geometry: { type: 'Point', coordinates: [f.lon, f.lat] }
@@ -2286,7 +2286,7 @@
     let icona;
     if (arrivato) {
       titolo = 'Sei arrivato';
-      sotto = nomeBreve(passo.nome);
+      sotto = nomeFermataBreve(passo.nome);
       destra = '0 m';
       icona = ICONA_FINE;
       if (!navigazione.arrivato) {
@@ -2295,21 +2295,21 @@
       }
     } else if (!inCorsa) {
       titolo = passo.fermata ? 'Cammina fino alla fermata' : 'A piedi fino a';
-      sotto = nomeBreve(passo.nome);
+      sotto = nomeFermataBreve(passo.nome);
       destra = navigazione.ultima ? metriTesto(distanza) : '…';
       icona = ICONA_PIEDANA;
     } else if (allaSalita) {
       titolo = 'Sali sul ' + (passo.modo === 'treno' ? 'treno ' : '') + passo.linea;
-      sotto = 'Fermata ' + nomeBreve(passo.nomeSalita);
+      sotto = 'Fermata ' + nomeFermataBreve(passo.nomeSalita);
       destra = 'Ora';
       icona = passo.modo === 'treno' ? ICONA_TRENO : ICONA_BUS;
     } else {
-      titolo = 'Scendi a ' + nomeBreve(passo.nome);
+      titolo = 'Scendi a ' + nomeFermataBreve(passo.nome);
       const conto = passo.fermate > 1 ? passo.fermate + ' fermate' : '1 fermata';
       // La fermata di salita resta nel sottotitolo: se si è saliti da poco
       // aiuta a riconoscere la corsa giusta, senza ripetere "4 fermate".
       sotto = (passo.modo === 'treno' ? 'Treno ' : 'Bus ') + passo.linea +
-        (passo.nomeSalita ? ' · da ' + nomeBreve(passo.nomeSalita) : '');
+        (passo.nomeSalita ? ' · da ' + nomeFermataBreve(passo.nomeSalita) : '');
       destra = conto;
       icona = passo.modo === 'treno' ? ICONA_TRENO : ICONA_BUS;
     }
@@ -2345,7 +2345,7 @@
     const quanto = resto == null ? '' : ' · ' + metriTesto(resto);
     scriviTesto('nav-eta', arrivato ? 'Arrivato' : (navigazione.arrivo || '—'));
     scriviTesto('nav-restanti', arrivato
-      ? nomeBreve(sel.destinazione ? sel.destinazione.nome : '')
+      ? nomeLuogo(sel.destinazione)
       : 'arrivo previsto' + quando + quanto);
   }
 
@@ -2408,7 +2408,7 @@
       try { navigator.vibrate([90, 60, 90]); } catch (errore) { /* niente vibrazione */ }
     }
     const sotto = $('nav-sotto');
-    if (sotto) sotto.textContent = 'Scendi alla prossima: ' + nomeBreve(passo.nome);
+    if (sotto) sotto.textContent = 'Scendi alla prossima: ' + nomeFermataBreve(passo.nome);
   }
 
   function erroreNavigazione(errore) {
@@ -2521,35 +2521,39 @@
     return i > 0 ? String(nome).slice(0, i) : '';
   }
 
+  // Il nome completo del dataset è «Comune - Nome della fermata»: in elenco
+  // interessa solo la parte specifica, mentre il comune resta nel dettaglio.
+  function nomeFermataBreve(nome) {
+    const testo = String(nome || '');
+    const i = testo.indexOf(' - ');
+    return i > 0 ? testo.slice(i + 3) : testo;
+  }
+
+  function dettaglioFermata(f) {
+    if (!f || eIndirizzo(f)) return f ? (f.indirizzo || '') : '';
+    return [prefissoComune(f.nome), f.indirizzo].filter(Boolean).join(' · ');
+  }
+
+  function nomeLuogo(luogo) {
+    if (!luogo) return '';
+    return eIndirizzo(luogo) ? luogo.nome : nomeFermataBreve(luogo.nome);
+  }
+
   function nomiCompatti(items) {
-    const conta = new Map();
-    items.forEach((f) => {
-      const p = prefissoComune(f.nome);
-      if (p) conta.set(p, (conta.get(p) || 0) + 1);
-    });
-    let dominante = '';
-    let massimo = 0;
-    conta.forEach((quante, comune) => {
-      if (quante > massimo || (quante === massimo && comune < dominante)) { massimo = quante; dominante = comune; }
-    });
     const mappa = new Map();
-    items.forEach((f) => {
-      const p = prefissoComune(f.nome);
-      // Con una sola fermata del comune non c'è ripetizione da togliere.
-      const compatto = massimo > 1 && p === dominante;
-      mappa.set(f.id, compatto ? f.nome.slice(p.length + 3) : f.nome);
-    });
+    items.forEach((f) => mappa.set(f.id, nomeFermataBreve(f.nome)));
     return mappa;
   }
 
   function voceHTML(f, ruolo, motivo, rimuovi, nome) {
     const classe = classeTipo(f.tipo);
-    const mostrato = nome || f.nome;
+    const mostrato = nome || nomeLuogo(f);
+    const dettaglio = dettaglioFermata(f);
     const bottone = '<button class="voce" role="option" data-voce="' + esc(f.id) + '" data-ruolo="' + esc(ruolo) + '">' +
       '<span class="voce-ico ' + classe + '">' + iconaTipo(f.tipo) + '</span>' +
       '<span class="voce-testo"><span class="voce-nome"' +
       (mostrato === f.nome ? '' : ' title="' + esc(f.nome) + '"') + '>' + esc(mostrato) + '</span>' +
-      (f.indirizzo ? '<span class="voce-indirizzo">' + esc(f.indirizzo) + '</span>' : '') +
+      (dettaglio ? '<span class="voce-indirizzo">' + esc(dettaglio) + '</span>' : '') +
       '<span class="voce-meta">' + esc(metaFermata(f)) + '</span>' +
       (motivo ? '<span class="voce-motivo">' + esc(motivo) + '</span>' : '') +
       '</span>' +
@@ -2559,7 +2563,7 @@
     // Niente bottoni dentro bottoni: la X dei recenti è un fratello della voce.
     return '<div class="voce-con-rimuovi" style="display:flex;align-items:center;gap:4px">' + bottone +
       '<button type="button" class="voce-rimuovi" data-rimuovi="' + esc(f.id) + '" aria-label="Rimuovi ' +
-      esc(nomeBreve(f.nome)) + ' dai recenti">' + ICONA_X + '</button></div>';
+      esc(nomeFermataBreve(f.nome)) + ' dai recenti">' + ICONA_X + '</button></div>';
   }
 
   function gruppiSuggerimenti(campo) {
@@ -2944,7 +2948,7 @@
     const valore = $(ruolo === 'partenza' ? 'val-partenza' : 'val-destinazione');
     if (!valore) return;
     const f = sel[ruolo];
-    valore.textContent = f ? f.nome : (ruolo === 'partenza' ? 'Da dove parti?' : 'Dove vai?');
+    valore.textContent = f ? nomeLuogo(f) : (ruolo === 'partenza' ? 'Da dove parti?' : 'Dove vai?');
     valore.classList.toggle('vuoto', !f);
   }
 
@@ -3035,8 +3039,8 @@
   }
 
   function etichettaViaggio(voce) {
-    const da = voce.partenza ? nomeBreve(voce.partenza.nome) : 'La mia posizione';
-    return da + ' → ' + nomeBreve(voce.destinazione.nome);
+    const da = voce.partenza ? nomeLuogo(voce.partenza) : 'La mia posizione';
+    return da + ' → ' + nomeLuogo(voce.destinazione);
   }
 
   function salvaViaggio() {
@@ -3152,9 +3156,10 @@
     const vuoto = ruolo === 'partenza' ? 'Da dove parti?' : 'Dove vai?';
     return '<div class="campo-riga">' +
       '<span class="pallino ' + (ruolo === 'partenza' ? 'pallino-p' : 'pallino-d') + '" aria-hidden="true"></span>' +
-      '<button type="button" class="campo" data-campo="' + ruolo + '">' +
+      '<button type="button" class="campo" data-campo="' + ruolo + '"' +
+      (f ? ' title="' + esc(f.nome) + '"' : '') + '>' +
       '<span class="eti">' + eti + '</span>' +
-      '<span class="val' + (f ? '' : ' vuoto') + '" id="val-' + ruolo + '">' + esc(f ? f.nome : vuoto) + '</span>' +
+      '<span class="val' + (f ? '' : ' vuoto') + '" id="val-' + ruolo + '">' + esc(f ? nomeLuogo(f) : vuoto) + '</span>' +
       '</button></div>';
   }
 
@@ -3990,14 +3995,14 @@
         const prossima = prossimeAllaFermata(f.id, 1)[0];
         return '<button type="button" class="voce" data-apri-fissa="' + esc(f.id) + '">' +
           '<span class="voce-ico">' + ICONA_BUS + '</span>' +
-          '<span class="voce-testo"><span class="voce-nome">' + esc(nomeBreve(f.nome)) + '</span>' +
+          '<span class="voce-testo"><span class="voce-nome">' + esc(nomeFermataBreve(f.nome)) + '</span>' +
           '<span class="voce-motivo">' + (prossima
             ? 'Linea ' + esc(prossima.linea) + ' · ' + esc(hhmm(prossima.secondi))
             : 'Tocca per gli orari') + '</span></span>' + ICONA_PIU + '</button>';
       }).join('');
     }
     if (!elenco.length) return testa;
-    const titolo = sel.partenza && sel.partenza.lat != null ? 'Vicine a ' + nomeBreve(sel.partenza.nome) : 'Fermate vicine';
+    const titolo = sel.partenza && sel.partenza.lat != null ? 'Vicine a ' + nomeLuogo(sel.partenza) : 'Fermate vicine';
     const nomi = nomiCompatti(elenco);
     return testa + '<div class="gruppo">' + esc(titolo) + '</div>' +
       elenco.map((f) => voceHTML(f, 'destinazione', '', false, nomi.get(f.id))).join('');
@@ -4054,7 +4059,7 @@
     // Il titolo si compone solo con entrambi i capi scelti: aprendo gli orari
     // di una fermata senza percorso il vecchio codice leggeva null.nome.
     document.title = (sel.partenza && sel.destinazione)
-      ? nomeBreve(sel.partenza.nome) + ' → ' + nomeBreve(sel.destinazione.nome) + ' · Muovi Bologna'
+      ? nomeLuogo(sel.partenza) + ' → ' + nomeLuogo(sel.destinazione) + ' · Muovi Bologna'
       : 'Muovi Bologna';
     const piede = $('drawer-aggiornato');
     if (piede) {
@@ -4070,9 +4075,10 @@
     miniFermata = f;
     const box = $('mini-fermata');
     if (!box) return;
-    $('mini-nome').textContent = f.nome;
+    $('mini-nome').textContent = nomeLuogo(f);
     const linee = lineaDi(f).slice(0, 4);
     $('mini-meta').textContent = (eIndirizzo(f) ? 'Indirizzo' : 'Palina ' + f.id) +
+      (dettaglioFermata(f) ? ' · ' + dettaglioFermata(f) : '') +
       ' · zona ' + f.zona + (linee.length ? ' · ' + linee.join(' · ') : '');
     box.hidden = false;
     // La mini-card occupa il bordo inferiore: i comandi mappa si tolgono.
@@ -5053,7 +5059,7 @@
     return String(nome).replace(/^Bologna - /, '');
   }
 
-  function etichettaFermata(id) { return nomeBreve(nomeFermata(id)); }
+  function etichettaFermata(id) { return nomeFermataBreve(nomeFermata(id)); }
 
   // Solo una parte delle fermate del dataset regionale ha gli orari GTFS:
   // le altre (pali secondari, stazioni ferroviarie) vanno sostituite con quelle vicine.
@@ -5400,7 +5406,7 @@
       const risparmio = Math.round((migliore.arrivoDestinazione - arrivo) / 60000);
       if (risparmio >= 2) {
         routing.suggerimento = {
-          nome: nomeBreve(vicina.nome),
+          nome: nomeFermataBreve(vicina.nome),
           minuti: Math.max(1, Math.round(cammino / 60)),
           risparmio: risparmio
         };
@@ -6094,7 +6100,7 @@
         programmati.push({
           linea: String(partenza.linea),
           ora: hhmm(partenza.orario),
-          destinazione: capolinea ? nomeBreve(capolinea.nome) : (partenza.capolinea || '')
+          destinazione: capolinea ? nomeFermataBreve(capolinea.nome) : (partenza.capolinea || '')
         });
       });
     }
@@ -6245,7 +6251,7 @@
       live.avvisa = null;
     }
     let html = '<div class="orari-testa"><div>' +
-      '<h2 class="orari-nome">' + esc(fermata ? fermata.nome : 'Scegli una fermata') + '</h2>' +
+      '<h2 class="orari-nome">' + esc(fermata ? nomeLuogo(fermata) : 'Scegli una fermata') + '</h2>' +
       (fermata ? '<p class="orari-pos">' + esc(riferimentoFermata(fermata)) + '</p>' : '') +
       '</div>' +
       '<button type="button" class="btn-aggiorna' + (live.caricamento ? ' gira' : '') +
@@ -6346,7 +6352,7 @@
     return Linee.cerca(indice, testo).map((voce) => ({
       nome: voce.nome,
       tipo: voce.tipo,
-      capolinea: voce.versi.map((id) => nomeBreve(nomeFermata(id)))
+      capolinea: voce.versi.map((id) => nomeFermataBreve(nomeFermata(id)))
     }));
   }
 
@@ -6414,10 +6420,10 @@
         '<select data-linea-verso aria-label="Direzione della linea">' +
         versi.map((voce) => '<option value="' + esc(voce.capolinea) + '"' +
           (voce.capolinea === lineaVista.capolinea ? ' selected' : '') + '>→ ' +
-          esc(nomeBreve(nomeFermata(voce.capolinea))) + '</option>').join('') +
+          esc(nomeFermataBreve(nomeFermata(voce.capolinea))) + '</option>').join('') +
         '</select></label>';
     } else if (versi.length === 1) {
-      html += '<p class="linea-direzione-sola">→ ' + esc(nomeBreve(nomeFermata(versi[0].capolinea))) + '</p>';
+      html += '<p class="linea-direzione-sola">→ ' + esc(nomeFermataBreve(nomeFermata(versi[0].capolinea))) + '</p>';
     }
     if (fermate.length) {
       html += '<ol class="linea-fermate">' + fermate.map((id, indice) => {
@@ -6425,7 +6431,7 @@
         const capolinea = indice === fermate.length - 1;
         return '<li' + (capolinea ? ' class="capolinea"' : '') + '><button type="button" class="linea-fermata" data-fermata-linea="' +
           esc(id) + '"><span class="linea-testo"><span class="linea-stop">' +
-          esc(f ? nomeBreve(f.nome) : id) + '</span>' +
+          esc(f ? nomeFermataBreve(f.nome) : id) + '</span>' +
           (f && f.zona ? '<span class="linea-meta">zona ' + esc(f.zona) + '</span>' : '') +
           '</span></button></li>';
       }).join('') + '</ol>';
@@ -7041,7 +7047,7 @@
     const vuoto = $('menu-recente-vuoto');
     if (recente && vuoto) {
       if (sel.partenza && sel.destinazione) {
-        recente.innerHTML = '<span>' + esc(nomeBreve(sel.partenza.nome)) + ' → ' + esc(nomeBreve(sel.destinazione.nome)) + '</span>' +
+        recente.innerHTML = '<span>' + esc(nomeLuogo(sel.partenza)) + ' → ' + esc(nomeLuogo(sel.destinazione)) + '</span>' +
           '<small>' + esc(quandoEtichetta()) + '</small>';
         recente.hidden = false;
         vuoto.hidden = true;
