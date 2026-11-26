@@ -6396,7 +6396,7 @@
       return;
     }
     const versi = Linee.versi(linea);
-    if (!versi.some((voce) => voce.capolinea === lineaVista.capolinea)) {
+    if (!versi.some((voce) => String(voce.capolinea) === String(lineaVista.capolinea))) {
       lineaVista.capolinea = versi.length ? versi[0].capolinea : null;
     }
     const fermate = Linee.fermateVerso(linea, lineaVista.capolinea);
@@ -6419,7 +6419,7 @@
       html += '<label class="linea-direzione"><span class="linea-direzione-eti">Direzione</span>' +
         '<select data-linea-verso aria-label="Direzione della linea">' +
         versi.map((voce) => '<option value="' + esc(voce.capolinea) + '"' +
-          (voce.capolinea === lineaVista.capolinea ? ' selected' : '') + '>→ ' +
+          (String(voce.capolinea) === String(lineaVista.capolinea) ? ' selected' : '') + '>→ ' +
           esc(nomeFermataBreve(nomeFermata(voce.capolinea))) + '</option>').join('') +
         '</select></label>';
     } else if (versi.length === 1) {

@@ -40,6 +40,19 @@ test('i versi sono i capolinea, con le fermate nel verso giusto', () => {
   assert.deepEqual(Linee.fermateVerso(linea, 'A'), ['C', 'B', 'A']);
 });
 
+test('la direzione scelta funziona anche con capolinea numerici', () => {
+  // La tendina restituisce una stringa, i gruppi del GTFS usano numeri.
+  const linea = {
+    gruppi: new Map([
+      [3056, { capolinea: 3056, fermate: ['A', 'B'], corse: [], offsets: [0, 300] }],
+      [455, { capolinea: 455, fermate: ['X', 'Y'], corse: [], offsets: [0, 300] }]
+    ])
+  };
+  assert.deepEqual(Linee.fermateVerso(linea, '455'), ['X', 'Y']);
+  assert.deepEqual(Linee.fermateVerso(linea, 455), ['X', 'Y']);
+  assert.equal(Linee.gruppoPrincipale(linea, '455').capolinea, 455);
+});
+
 test('le partenze rispettano il servizio attivo e scartano l\'ultima fermata', () => {
   const linea = Linee.lineaDi(Linee.indice(orari), '20');
   const oggi = Linee.partenze(linea, 'C', [0], 0);

@@ -5,6 +5,7 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 ## [Non pubblicato]
 
 - **Ricerca per linea**: scrivendo «20» nella ricerca compaiono le linee oltre alle fermate; la scheda della linea mostra il tracciato sulla mappa, le direzioni, l'elenco delle fermate, l'ultima corsa e il ritardo tipico osservato.
+- **Direzioni della linea**: scegliendo una direzione dalla tendina cambiano davvero fermate e tracciato; prima il confronto tra l'ID numerico del capolinea e il valore testuale della tendina riportava sempre la prima direzione.
 - **Nomi delle fermate**: l'elenco e le linee mostrano solo il nome specifico («Casalecchio Marconi» invece di «Casalecchio di Reno - Casalecchio Marconi»); il comune compare nella riga dell'indirizzo, per esempio «Casalecchio di Reno · Via Marconi Fr 40».
 - **Ultima corsa** segnalata nelle opzioni di percorso quando la tappa usa l'ultima partenza utile della giornata.
 - **Avviso «scendi alla prossima»**: vibrazione e testo una fermata (circa 250 m) prima della discesa, una volta sola.

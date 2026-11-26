@@ -91,11 +91,15 @@
     return Array.from(perCapolinea.values()).sort((a, b) => b.corse - a.corse);
   }
 
+  function stessoCapolinea(a, b) {
+    return a != null && b != null && String(a) === String(b);
+  }
+
   function gruppoPrincipale(linea, capolinea) {
     if (!linea) return null;
     let migliore = null;
     linea.gruppi.forEach((gruppo) => {
-      if (capolinea && gruppo.capolinea !== capolinea) return;
+      if (capolinea && !stessoCapolinea(gruppo.capolinea, capolinea)) return;
       if (!migliore || gruppo.corse.length > migliore.corse.length) migliore = gruppo;
     });
     return migliore;
@@ -126,7 +130,7 @@
     if (!linea) return [];
     const elenco = [];
     linea.gruppi.forEach((gruppo) => {
-      if (capolinea && gruppo.capolinea !== capolinea) return;
+      if (capolinea && !stessoCapolinea(gruppo.capolinea, capolinea)) return;
       const k = indiceFermata == null ? 0 : indiceFermata;
       // All'ultima fermata il bus arriva: non è una partenza.
       if (k < 0 || k >= gruppo.fermate.length - 1) return;
@@ -148,7 +152,7 @@
     if (!linea) return null;
     let massimo = null;
     linea.gruppi.forEach((gruppo) => {
-      if (capolinea && gruppo.capolinea !== capolinea) return;
+      if (capolinea && !stessoCapolinea(gruppo.capolinea, capolinea)) return;
       const k = gruppo.fermate.lastIndexOf(idFermata);
       if (k < 0 || k >= gruppo.fermate.length - 1) return;
       gruppo.corse.forEach((corsa) => {
