@@ -462,7 +462,11 @@
   .lista-arrivi{position:relative;}
   .arrivo-item{list-style:none;}
   .arrivo-item + .arrivo-item{border-top:1px solid var(--bordo);}
-  .arrivo{display:grid;grid-template-columns:52px 44px minmax(0,1fr) auto;align-items:center;gap:8px;width:100%;min-height:46px;padding:6px 0;border:0;background:transparent;text-align:left;cursor:pointer;position:relative;}
+  .arrivo{display:flex;align-items:center;width:100%;min-height:46px;padding:0;border:0;background:transparent;text-align:left;position:relative;}
+  .arrivo-principale{display:grid;grid-template-columns:52px 44px minmax(0,1fr) auto;align-items:center;gap:8px;flex:1;min-width:0;min-height:46px;padding:6px 0;border:0;background:transparent;text-align:left;cursor:pointer;}
+  .arrivo-chevron{width:36px;height:44px;flex:0 0 auto;border:0;background:transparent;color:var(--testo-2);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .arrivo-chevron svg{transition:transform .18s;}
+  .arrivo-chevron[aria-expanded="true"] svg{transform:rotate(180deg);}
   .arrivo-tempo{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.2px;}
   .arrivo-tempo .unita{font-size:10px;font-weight:500;color:var(--testo-2);margin-left:2px;}
   .arrivo .badge-linea{justify-self:start;min-width:44px;}

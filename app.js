@@ -5900,15 +5900,23 @@
           '" data-avvisa-ora="' + esc(arrivo.ora) + '">' + (attivo ? 'Togli l\'avviso' : 'Avvisami') + '</button></div>' +
           '</div>'
         : '';
-      return '<li class="arrivo-item"><button type="button" class="arrivo" data-arrivo="' + indice +
-        '" aria-expanded="' + (aperto ? 'true' : 'false') + '">' +
+      // La riga apre la linea; il chevron resta per i dettagli della corsa e
+      // per l'avviso a due minuti, senza nascondere l'azione principale.
+      return '<li class="arrivo-item"><div class="arrivo">' +
+        '<button type="button" class="arrivo-principale" data-linea-arrivo="' + esc(arrivo.linea) +
+        '" aria-label="Apri la linea ' + esc(arrivo.linea) + '">' +
         '<span class="arrivo-tempo">' + tempo + '</span>' +
         '<span class="badge-linea"' + colore + '>' + esc(arrivo.linea) + '</span>' +
         '<span class="arrivo-meta">' + esc(meta) + '</span>' +
         // Solo le corse reali hanno l'etichetta: quella programmata È la norma
         // e occupava lo spazio della destinazione.
         (arrivo.tipo === 'live' ? '<span class="tag-live">LIVE</span>' : '') +
-        '</button>' + dettaglio + '</li>';
+        '</button>' +
+        '<button type="button" class="arrivo-chevron" data-arrivo="' + indice +
+        '" aria-expanded="' + (aperto ? 'true' : 'false') +
+        '" aria-label="Dettagli della corsa ' + esc(arrivo.linea) + ' delle ' + esc(arrivo.ora) + '">' +
+        Icone.svg('chevron-down', 16) + '</button>' +
+        '</div>' + dettaglio + '</li>';
     }).join('') + '</ul>';
   }
 
@@ -7349,7 +7357,13 @@
         }
         return;
       }
-      // Timeline degli arrivi: la riga si apre e mostra il dettaglio della corsa.
+      // Il corpo della riga porta alla linea; il chevron apre il dettaglio
+      // della corsa senza perdere l'accesso all'avviso.
+      const lineaArrivo = evento.target.closest('[data-linea-arrivo]');
+      if (lineaArrivo) {
+        apriLinea(lineaArrivo.getAttribute('data-linea-arrivo'));
+        return;
+      }
       const arrivo = evento.target.closest('[data-arrivo]');
       if (arrivo) {
         const indice = parseInt(arrivo.getAttribute('data-arrivo'), 10);
