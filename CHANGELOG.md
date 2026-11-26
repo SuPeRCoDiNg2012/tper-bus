@@ -4,6 +4,8 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- **Un solo percorso consigliato**: niente più tasti «Veloce»/«Ottimizzato» né righe che spiegano il confronto. L'algoritmo sceglie da sé, entro il 15% del tempo minimo, la soluzione con meno cambi, cammino e attese; le altre restano sotto «Altre soluzioni».
+- **Meteo silenzioso**: pioggia, neve e vento forte continuano a far pesare di più i tratti a piedi, ma la scheda non lo scrive più.
 - **Ricerca per linea**: scrivendo «20» nella ricerca compaiono le linee oltre alle fermate; la scheda della linea mostra il tracciato sulla mappa, le direzioni, l'elenco delle fermate, l'ultima corsa e il ritardo tipico osservato.
 - **Direzioni della linea**: scegliendo una direzione dalla tendina cambiano davvero fermate e tracciato; prima il confronto tra l'ID numerico del capolinea e il valore testuale della tendina riportava sempre la prima direzione.
 - **Nomi delle fermate**: l'elenco e le linee mostrano solo il nome specifico («Casalecchio Marconi» invece di «Casalecchio di Reno - Casalecchio Marconi»); il comune compare nella riga dell'indirizzo, per esempio «Casalecchio di Reno · Via Marconi Fr 40».

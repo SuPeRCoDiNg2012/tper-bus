@@ -196,15 +196,8 @@
   .sheet[data-stato="meta"] .riep-azioni{position:sticky;bottom:0;z-index:1;margin-top:12px;padding:10px 0 calc(6px + env(safe-area-inset-bottom,0px));background:linear-gradient(to bottom,rgba(255,255,255,0),#fff 14px);}
   .riep-azioni .btn{flex:1;}
   .riep-azioni .btn-tenue{flex:0 0 auto;padding:0 20px;min-height:44px;}
-  /* Selettore del criterio: due chip, una attiva. Sta dentro il riepilogo,
-     quindi sparisce quando il pannello passa al dettaglio. */
-  .criteri{display:flex;gap:8px;margin:2px 0 2px;}
-  .chip-criterio{min-height:32px;padding:0 12px;border:0;border-radius:999px;background:#F2F2F2;color:var(--testo);font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;}
-  .chip-criterio.attiva{background:var(--rosso);color:#fff;}
-  .criterio-spiega{margin:0;font-size:12px;font-weight:500;color:var(--testo-2);}
-  .criterio-riga{margin:8px 0 0;font-size:12px;font-weight:500;color:var(--testo-2);}
+  .nota-percorso{margin:0;font-size:12px;font-weight:500;color:var(--testo-2);}
   .badge-piano{display:inline-block;margin-left:8px;padding:2px 6px;border-radius:6px;background:#F2F2F2;color:var(--testo-2);font-size:11px;font-weight:600;vertical-align:middle;letter-spacing:0;}
-  .badge-piano.ottimo{background:transparent;color:var(--rosso);border:1px solid rgba(193,18,31,.25);}
   .badge-piano.rischio{background:transparent;color:var(--rosso);border:1px solid var(--rosso);}
   .riepilogo{animation:micro-entra .15s ease-out;}
   @media (prefers-reduced-motion: reduce){.riepilogo{animation:none;}}
@@ -550,7 +543,6 @@
     .btn:hover{background:#EAEAEA;}
     .btn-primario:hover{background:#A50F1A;}
     .btn-tenue:hover{background:#EAEAEA;}
-    .chip-criterio:hover{border-color:var(--bordo-2);}
     .chip-vuoto:hover{border-color:var(--testo);}
     .opzione-riga:hover{border-color:var(--bordo-2);}
     .altre:hover{color:var(--rosso);}
@@ -716,10 +708,6 @@
       <summary><span class="spazio">Informazioni e fonti dati</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
       <div class="info" id="menu-info-corpo"></div>
     </details>
-    <button class="voce-menu" id="menu-criterio" hidden>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18"/><path d="M12 3v18"/><circle cx="12" cy="12" r="9"/></svg>
-      <span class="spazio">Imposta "Ottimizzato" come predefinito</span>
-    </button>
     <button class="voce-menu" id="menu-aggiorna" hidden>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
       <span class="spazio">Aggiorna app</span>

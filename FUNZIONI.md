@@ -72,9 +72,9 @@ Geometria dei percorsi pedonali presi da OSRM, con validazione.
 | `lunghezza(coordinate)` | Lunghezza in metri di una linea. |
 | `valida(coordinate, massimoMetri)` | Scarta geometrie assurde (percorsi di decine di km). |
 
-## routing.js — 32 funzioni
+## routing.js — 28 funzioni
 
-Il motore: orari GTFS, rete, cambi, criteri, tracciati delle linee.
+Il motore: orari GTFS, rete, cambi, scelta del percorso migliore, tracciati delle linee.
 
 | Funzione | Cosa fa |
 | --- | --- |
@@ -93,14 +93,14 @@ Il motore: orari GTFS, rete, cambi, criteri, tracciati delle linee.
 | `normalizzaElenco(valore)` | Lista di linee da stringa o array, senza doppioni. |
 | `calcola(daId, aId, quando, opzioni)` | API pubblica del motore per una ricerca. |
 | `partenzeFermata(id, quando)` | Prossime partenze da una fermata. |
-| `calcolaConfronto(daId, aId, quando, opzioni)` | Calcolo più lento per confronto o ripiego. |
 | `firmaEsito(e)` | Due soluzioni con la stessa firma sono la stessa proposta. |
 | `punteggio(esito)` | Punteggio interno usato per ordinare. |
-| `costo(esito, criterio)` | Costo di un esito secondo il criterio scelto. |
-| `confronta(pool, criterio)` | Confronto fra due pool di soluzioni. |
 | `perTempo(a, b)` | Comparatore: prima chi arriva prima. |
 | `perCosto(a, b)` | Comparatore: prima chi costa meno. |
-| `valuta(pool, criterio)` | Migliore soluzione di un pool per il criterio. |
+| `poolPulito(pool)` | Pool senza duplicati e con il punteggio calcolato. |
+| `migliore(pool)` | Il percorso scelto: minor costo entro il 15% del tempo minimo. |
+| `graduatoria(pool)` | Pool ordinato: in testa il migliore, poi le alternative. |
+| `alternative(daId, aId, quando, opzioni)` | Pool calcolato dal motore per la scelta migliore. |
 | `pianificaQuando(data, ora, origini, destinazioni, maxCambi, vietate, camminoMax)` | Pianifica su una data/ora esplicita. |
 | `soluzioni(data, origini, destinazioni, maxCambi, camminoMax, vietateBase)` | Tutte le soluzioni di una ricerca, già filtrate. |
 | `raccogli(vietate)` | Soluzioni raccolte girando attorno alle linee vietate. |
@@ -129,7 +129,7 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `ritardoHTML(e, indice)` | Ritardo live di una corsa; sotto i 2 minuti niente. |
 | `dettaglioHTML(e, etichetta)` | Itinerario completo di una singola opzione. |
 | `opzioneHTML(e, indice, vista, etichetta)` | Riga compatta di un'opzione, si apre al clic. |
-| `esito(vista, etichetta)` | Tutta la scheda percorso: righe, dettaglio, criteri. |
+| `esito(vista, etichetta)` | Tutta la scheda percorso: righe e dettaglio. |
 | `minutiA(ora, adessoMinuti)` | Minuti a un orario `HH:MM`, circolari sulla mezzanotte. |
 | `chiaveLinea(linea)` | Linea base: `13A` e `13` sono la stessa corsa. |
 | `minutiVerso(ora, adessoMinuti)` | Minuti al prossimo passaggio, senza l'ambiguità delle 12 ore. |
@@ -153,17 +153,14 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 
 ---
 
-# app.js — 300 funzioni
+# app.js — 329 funzioni
 
-## Stato locale e preferenze — 16
+## Stato locale e preferenze — 13
 
 | Funzione | Cosa fa |
 | --- | --- |
 | `impostaAbbonamento(valore)` | Salva l'abbonamento e ricalcola la scheda biglietto. |
 | `leggiCamminata()` | Soglia a piedi scelta dall'utente. |
-| `criterioValido(valore)` | Il criterio è fra quelli ammessi? |
-| `criterioPredefinito()` | Criterio di partenza (ottimizzato). |
-| `leggiCriterio()` | Criterio salvato, con ripiego sul predefinito. |
 | `raggioCamminata()` | Raggio in metri della soglia a piedi. |
 | `lineeEvitate()` | Linee da evitare, lette dallo storage. |
 | `vietatePer(extra)` | Linee vietate per una ricerca, più l'eccezione. |
@@ -423,7 +420,7 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `selezionaEsiti(esiti, arrivo)` | Sceglie le opzioni da mostrare, senza doppioni. |
 | `respira()` | Cede il controllo al browser fra due ricerche. |
 
-## Calcolo percorsi (UI) — 12
+## Calcolo percorsi (UI) — 5
 
 | Funzione | Cosa fa |
 | --- | --- |
@@ -432,24 +429,14 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `calcola(quando, vietate)` | Avvia il calcolo principale. |
 | `calcolaConCambi(quando)` | Ripiego con più cambi. |
 | `aggiungi(esito, quando)` | Aggiunge un esito al pool, senza duplicati. |
-| `ordinaPer(elenco, criterio)` | Ordina quello che è già in memoria. |
-| `soluzioneConfronto(criterio)` | Soluzione da confrontare con la migliore. |
-| `altraSoluzione()` | Passa all'altra soluzione proposta. |
-| `spiegaSoluzione(scelta, altra)` | Spiega perché una soluzione è meglio. |
-| `htmlCriteri()` | Riga dei criteri (veloce, ottimizzato, …). |
-| `htmlBadgePiano()` | Badge del criterio attivo. |
-| `htmlSpiegazione()` | Testo che spiega la scelta. |
 
-## Meteo e suggerimenti — 6
+## Meteo e suggerimenti — 3
 
 | Funzione | Cosa fa |
 | --- | --- |
-| `caricaMeteo()` | Meteo attuale da Open-Meteo per la zona. |
-| `descrizioneMeteo()` | Nota meteo in una riga. |
+| `caricaMeteo()` | Meteo attuale da Open-Meteo: pesa solo i tratti a piedi. |
 | `htmlSuggerimenti()` | Consigli: corsa scartata e camminata alla fermata dopo. |
-| `impostaCriterio(criterio)` | Cambia criterio senza skeleton. |
-| `contaScelteOttimizzato()` | Quante volte si è scelto «ottimizzato». |
-| `rigaCriterioHTML()` | Riga con criterio scelto e motivo. |
+| `htmlAvvisoPiano(esito)` | Badge «Cambio stretto» sul percorso scelto. |
 
 ## Preparazione della ricerca — 14
 

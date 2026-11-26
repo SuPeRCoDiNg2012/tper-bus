@@ -19,12 +19,12 @@
   const INF = 0x7fffffff;
 
   /* ------------------------------------------------------------------ *
-   * Pesi del criterio "ottimizzato"
+   * Pesi del percorso migliore
    * Tutti i numeri che pesano l'attrito di un viaggio stanno qui: si tarano
-   * senza toccare né la ricerca né la UI. Un criterio nuovo (green, comfort)
-   * è un altro blocco come questo più una voce nel selettore.
+   * senza toccare né la ricerca né la scheda. L'utente non sceglie niente:
+   * il motore confronta le soluzioni trovate e restituisce quella migliore.
    * ------------------------------------------------------------------ */
-  const PESI_OTTIMIZZATO = {
+  const PESI_MIGLIORE = {
     MAX_RITARDO: 0.15,            // +15% di tempo massimo rispetto al veloce
     PESO_CAMBIO: 300,             // un cambio vale 5 minuti
     PESO_CAMMINO: 1.3,            // 1 m a piedi ≈ 1,3 s
@@ -38,9 +38,8 @@
     PENALITA_CAMBI_2PLUS: 2400    // più di due cambi
   };
   const PASSO_PEDONALE = 1.25;    // m/s, la stessa stima usata per i cammini brevi
-  // Quanto pesa un metro a piedi nel criterio "ottimizzato". L'app lo alza
-  // quando piove o tira vento: il motore non sa niente di meteo, riceve solo
-  // un moltiplicatore.
+  // Quanto pesa un metro a piedi. L'app lo alza quando piove o tira vento: il
+  // motore non sa niente di meteo, riceve solo un moltiplicatore.
   let pesoCammino = 1;
   const CAMBIO_CORTO = 120;       // secondi sotto i quali un cambio è a rischio
   const ATTESA_LUNGA = 45 * 60;   // secondi oltre i quali l'attesa è "lunga"
@@ -519,13 +518,6 @@
     }
 
     const ora = secondiDa(data);
-    // Criterio richiesto: 'veloce' resta una sola ricerca (è già il minimo
-    // arrivo), 'ottimizzato' guarda anche le alternative vicine.
-    if (opzioni && opzioni.criterio === 'ottimizzato') {
-      const scelte = confronta(soluzioni(data, origini, destinazioni, maxCambi, camminoMax, vietate));
-      return scelte.ottimizzato || scelte.veloce || null;
-    }
-
     // Dopo mezzanotte le corse serali appartengono al giorno precedente e
     // hanno orari oltre 24:00: pianificaQuando confronta entrambi i giorni
     // sullo stesso asse temporale (mezzanotte del giorno prima).
@@ -570,10 +562,11 @@
   }
 
   /**
-   * I due criteri in un colpo solo: una ricerca, un pool, due scelte. Evita di
-   * ripetere la ricerca quando la scheda deve mostrare entrambe le proposte.
+   * Pool di soluzioni attorno alla richiesta, senza sceglierne una: serve
+   * all'app che deve comunque mostrare le alternative. La scelta della
+   * migliore la fa `migliore`.
    */
-  function calcolaConfronto(daId, aId, quando, opzioni) {
+  function alternative(daId, aId, quando, opzioni) {
     if (!dati) throw new Error('Orari non ancora caricati');
     const data = quando || new Date();
     const maxCambi = opzioni && opzioni.maxCambi != null ? opzioni.maxCambi : 3;
@@ -582,23 +575,13 @@
     const camminoMax = opzioni && opzioni.camminoMax != null ? Number(opzioni.camminoMax) : null;
     const origini = normalizzaElenco(daId);
     const destinazioni = normalizzaElenco(aId);
-    if (!origini.length || !destinazioni.length) {
-      return { veloce: null, ottimizzato: null, alternative: [], uguali: true, errore: { errore: 'senza-orari' } };
-    }
-    if (origini.length === 1 && destinazioni.length === 1 && origini[0].indice === destinazioni[0].indice) {
-      return { veloce: null, ottimizzato: null, alternative: [], uguali: true, errore: { errore: 'stessa-fermata' } };
-    }
-    const scelte = confronta(soluzioni(data, origini, destinazioni, maxCambi, camminoMax, vietate));
-    return {
-      veloce: scelte.veloce,
-      ottimizzato: scelte.ottimizzato,
-      alternative: scelte.alternative,
-      uguali: scelte.uguali
-    };
+    if (!origini.length || !destinazioni.length) return [];
+    if (origini.length === 1 && destinazioni.length === 1 && origini[0].indice === destinazioni[0].indice) return [];
+    return soluzioni(data, origini, destinazioni, maxCambi, camminoMax, vietate);
   }
 
   /* ------------------------------------------------------------------ *
-   * Punteggio: due criteri sullo stesso pool di soluzioni
+   * Punteggio e scelta del percorso migliore
    * ------------------------------------------------------------------ */
   // Firma di un viaggio: linee con i loro orari più i tratti a piedi. Due
   // soluzioni con la stessa firma sono la stessa proposta.
@@ -644,7 +627,7 @@
     const numeroCambi = esito.cambi != null ? esito.cambi : Math.max(0, tappe.length - 1);
     const numeroLinee = linee.size;
     const metriCammino = Math.round(tempoCammino * PASSO_PEDONALE);
-    const p = PESI_OTTIMIZZATO;
+    const p = PESI_MIGLIORE;
     let costoOttimizzato = tempoTotale +
       numeroCambi * p.PESO_CAMBIO +
       metriCammino * p.PESO_CAMMINO * pesoCammino +
@@ -674,17 +657,8 @@
     return misure;
   }
 
-  function costo(esito, criterio) {
-    const misure = punteggio(esito);
-    if (!misure) return Infinity;
-    return criterio === 'ottimizzato' ? misure.costoOttimizzato : misure.costoVeloce;
-  }
-
-  /**
-   * Confronto sui due criteri di un pool già calcolato: nessuna ricerca in più.
-   * È la funzione che rende istantaneo il cambio criterio nella scheda.
-   */
-  function confronta(pool, criterio) {
+  // Un esito per firma: due soluzioni con le stesse corse sono la stessa.
+  function poolPulito(pool) {
     const elenco = [];
     const visti = new Set();
     (pool || []).forEach((esito) => {
@@ -694,48 +668,36 @@
       visti.add(firma);
       elenco.push(esito);
     });
-    if (!elenco.length) return { veloce: null, ottimizzato: null, alternative: [], uguali: true };
-
-    const perTempo = (a, b) => a.punteggio.costoVeloce - b.punteggio.costoVeloce ||
-      a.punteggio.tempoTotale - b.punteggio.tempoTotale;
-    const veloce = elenco.slice().sort(perTempo)[0];
-    // L'ottimizzato non può costare più del 15% in tempo: dentro la soglia si
-    // sceglie il minor attrito, fuori si resta sul veloce.
-    const limite = veloce.punteggio.tempoTotale * (1 + PESI_OTTIMIZZATO.MAX_RITARDO);
-    const ammesse = elenco.filter((esito) => esito.punteggio.tempoTotale <= limite);
-    const perCosto = (a, b) => a.punteggio.costoOttimizzato - b.punteggio.costoOttimizzato ||
-      a.punteggio.tempoTotale - b.punteggio.tempoTotale;
-    let ottimizzato = ammesse.slice().sort(perCosto)[0] || veloce;
-    // Mai "peggiore in tutto" e mai una differenza invisibile: l'ottimizzato
-    // resta solo se guadagna qualcosa che l'utente può capire (un cambio, un
-    // tratto a piedi, mezz'ora di attesa). Altrimenti è la stessa proposta.
-    if (ottimizzato !== veloce) {
-      const a = ottimizzato.punteggio;
-      const b = veloce.punteggio;
-      const tempoNonMigliore = a.tempoTotale >= b.tempoTotale;
-      const attritoNonMigliore = a.numeroCambi >= b.numeroCambi &&
-        a.metriCammino >= b.metriCammino && a.tempoAttesa >= b.tempoAttesa;
-      const guadagno = a.numeroCambi < b.numeroCambi ||
-        a.metriCammino + 100 <= b.metriCammino ||
-        a.tempoAttesa + 300 <= b.tempoAttesa ||
-        (a.numeroLinee < b.numeroLinee && a.tempoTotale < b.tempoTotale);
-      if ((tempoNonMigliore && attritoNonMigliore) || !guadagno) ottimizzato = veloce;
-    }
-    return {
-      veloce: veloce,
-      ottimizzato: ottimizzato,
-      alternative: elenco.slice().sort(perTempo),
-      uguali: firmaEsito(veloce) === firmaEsito(ottimizzato),
-      // Scelta già fatta per il criterio richiesto: la UI non deve decidere.
-      scelto: criterio === 'ottimizzato' ? ottimizzato : veloce
-    };
+    return elenco;
   }
 
-  // Migliore soluzione di un pool per il criterio richiesto.
-  function valuta(pool, criterio) {
-    const scelte = confronta(pool);
-    if (criterio === 'ottimizzato') return scelte.ottimizzato || scelte.veloce || null;
-    return scelte.veloce || null;
+  const perTempo = (a, b) => a.punteggio.tempoTotale - b.punteggio.tempoTotale;
+  const perCosto = (a, b) => a.punteggio.costoOttimizzato - b.punteggio.costoOttimizzato ||
+    a.punteggio.tempoTotale - b.punteggio.tempoTotale;
+
+  /**
+   * La soluzione migliore di un pool già calcolato, senza altre ricerche.
+   * Vince il minor costo complessivo entro il 15% di tempo in più rispetto
+   * alla più veloce: dentro la soglia contano cambi, cammino e attese, fuori
+   * si resta sulla più veloce. È una regola sola, quindi la scheda mostra un
+   * percorso e non un confronto.
+   */
+  function migliore(pool) {
+    const elenco = poolPulito(pool);
+    if (!elenco.length) return null;
+    const veloce = elenco.slice().sort(perTempo)[0];
+    const limite = veloce.punteggio.tempoTotale * (1 + PESI_MIGLIORE.MAX_RITARDO);
+    const ammesse = elenco.filter((esito) => esito.punteggio.tempoTotale <= limite);
+    return ammesse.slice().sort(perCosto)[0] || veloce;
+  }
+
+  /** Pool ordinato: prima la migliore, poi le altre per arrivo. */
+  function graduatoria(pool) {
+    const elenco = poolPulito(pool);
+    if (!elenco.length) return [];
+    const scelto = migliore(elenco);
+    const resto = elenco.filter((esito) => esito !== scelto).sort(perTempo);
+    return scelto ? [scelto].concat(resto) : resto;
   }
 
   // Come `calcola`, ma per la data scelta: dopo mezzanotte le corse serali
@@ -918,12 +880,12 @@
     caricaTracciati: caricaTracciati,
     tratta: tratta,
     calcola: calcola,
-    calcolaConfronto: calcolaConfronto,
+    alternative: alternative,
     partenzeFermata: partenzeFermata,
     punteggio: punteggio,
-    confronta: confronta,
-    valuta: valuta,
-    PESI_OTTIMIZZATO: PESI_OTTIMIZZATO,
+    migliore: migliore,
+    graduatoria: graduatoria,
+    PESI_MIGLIORE: PESI_MIGLIORE,
     /** Moltiplicatore del peso del cammino (1 = tempo asciutto, 2 = pioggia). */
     impostaPesoCammino: function (valore) {
       const numero = Number(valore);

@@ -302,13 +302,13 @@ test('veloce restituisce sempre l\'arrivo minore', () => {
   ]);
   const lento = esitoFinto([tappaFinta('27', 600, 3000, 8, 600)]);
 
-  assert.equal(routing.valuta([lento, veloce], 'veloce'), veloce);
-  assert.equal(routing.confronta([lento, veloce]).veloce, veloce);
+  assert.equal(routing.migliore([lento, veloce]), veloce);
+  assert.equal(routing.graduatoria([lento, veloce])[0], veloce);
   assert.equal(veloce.punteggio.tempoTotale, 2100);
   assert.equal(veloce.punteggio.numeroCambi, 1);
 });
 
-test('ottimizzato riduce i cambi a parità di tempi ragionevoli', () => {
+test('il percorso migliore riduce i cambi a parità di tempi ragionevoli', () => {
   const routing = require('../routing');
   // Veloce: 2000 s con due cambi. Ottimizzato: 2200 s (+10%) con un cambio.
   const dueCambi = esitoFinto([
@@ -321,11 +321,11 @@ test('ottimizzato riduce i cambi a parità di tempi ragionevoli', () => {
     tappaFinta('27', 1200, 2200, 6, 60 + 600)
   ]);
 
-  assert.equal(routing.valuta([dueCambi, unCambio], 'veloce'), dueCambi);
-  assert.equal(routing.valuta([dueCambi, unCambio], 'ottimizzato'), unCambio);
+  assert.equal(routing.migliore([dueCambi, unCambio]), unCambio);
+  assert.equal(routing.migliore([unCambio, dueCambi]), unCambio);
 });
 
-test('ottimizzato scarta la soluzione oltre il +15%', () => {
+test('il percorso migliore scarta la soluzione oltre il +15%', () => {
   const routing = require('../routing');
   const veloce = esitoFinto([
     tappaFinta('20', 600, 1100, 4, 300),
@@ -334,7 +334,7 @@ test('ottimizzato scarta la soluzione oltre il +15%', () => {
   // 2500 s = +25%: comoda (zero cambi) ma fuori soglia.
   const comoda = esitoFinto([tappaFinta('27', 600, 2500, 12, 60 + 600)]);
 
-  assert.equal(routing.valuta([veloce, comoda], 'ottimizzato'), veloce);
+  assert.equal(routing.migliore([veloce, comoda]), veloce);
 });
 
 test('cambi uguali: a parità di attrito vince il tempo minore', () => {
@@ -348,7 +348,7 @@ test('cambi uguali: a parità di attrito vince il tempo minore', () => {
     tappaFinta('27', 1200, 2100, 5, 600)
   ]);
 
-  assert.equal(routing.valuta([dopo, prima], 'ottimizzato'), prima);
+  assert.equal(routing.migliore([dopo, prima]), prima);
 });
 
 test('la penalità del cambio corto batte il cambio in meno', () => {
@@ -365,41 +365,37 @@ test('la penalità del cambio corto batte il cambio in meno', () => {
     tappaFinta('27', 1400, 2100, 4, 60)
   ]);
 
-  assert.equal(routing.valuta([sicuro, rischioso], 'veloce'), sicuro);
-  assert.equal(routing.valuta([sicuro, rischioso], 'ottimizzato'), sicuro);
+  assert.equal(routing.migliore([sicuro, rischioso]), sicuro);
+  assert.equal(routing.migliore([rischioso, sicuro]), sicuro);
   assert.equal(rischioso.punteggio.cambioRischioso, true);
   assert.equal(sicuro.punteggio.cambioRischioso, false);
 });
 
-test('calcolaConfronto è coerente con calcola per lo stesso criterio', async () => {
+test('alternative e migliore restano coerenti con calcola', async () => {
   const routing = await caricaRouting(dati([
     [0, 0, 0, 28800, 1, 600],       // L1 A 08:00 → B 08:10
     [1, 0, 1, 29700, 1, 600]        // L2 B 08:15 → C 08:25
   ]));
 
-  const veloce = routing.calcola('A', 'C', GIORNO, { maxCambi: 3, criterio: 'veloce' });
-  const ottimizzato = routing.calcola('A', 'C', GIORNO, { maxCambi: 3, criterio: 'ottimizzato' });
-  const confronto = routing.calcolaConfronto('A', 'C', GIORNO, { maxCambi: 3 });
+  const esito = routing.calcola('A', 'C', GIORNO, { maxCambi: 3 });
+  const pool = routing.alternative('A', 'C', GIORNO, { maxCambi: 3 });
 
-  assert.ok(veloce.punteggio);
-  assert.ok(ottimizzato.punteggio);
-  assert.equal(confronto.veloce.arrivo, veloce.arrivo);
-  assert.equal(confronto.ottimizzato.arrivo, ottimizzato.arrivo);
-  assert.equal(confronto.veloce.punteggio.costoVeloce, veloce.punteggio.costoVeloce);
-  assert.equal(confronto.ottimizzato.punteggio.costoOttimizzato, ottimizzato.punteggio.costoOttimizzato);
-  assert.ok(Array.isArray(confronto.alternative));
-  assert.ok(confronto.alternative.length >= 1);
+  assert.ok(esito.punteggio);
+  assert.ok(Array.isArray(pool));
+  assert.ok(pool.length >= 1);
+  // Il percorso migliore del pool è quello che calcola restituisce da solo.
+  assert.equal(routing.migliore(pool.concat([esito])).arrivo, esito.arrivo);
 });
 
-test('il criterio assente vale veloce (retrocompatibilità)', async () => {
+test('la scelta non dipende da opzioni lasciate dall\u2019esterno', async () => {
   const routing = await caricaRouting(dati([
     [0, 0, 0, 28800, 1, 600],
     [1, 0, 1, 29700, 1, 600]
   ]));
-  const senzaCriterio = routing.calcola('A', 'C', GIORNO, { maxCambi: 3 });
-  const esplicito = routing.calcola('A', 'C', GIORNO, { maxCambi: 3, criterio: 'veloce' });
-  assert.equal(senzaCriterio.arrivo, esplicito.arrivo);
-  assert.equal(senzaCriterio.punteggio.costoVeloce, esplicito.punteggio.costoVeloce);
+  const semplice = routing.calcola('A', 'C', GIORNO, { maxCambi: 3 });
+  const conOpzione = routing.calcola('A', 'C', GIORNO, { maxCambi: 3, criterio: 'ottimizzato' });
+  assert.equal(semplice.arrivo, conOpzione.arrivo);
+  assert.equal(semplice.punteggio.costoOttimizzato, conOpzione.punteggio.costoOttimizzato);
 });
 
 test('partenzeFermata elenca tutte le corse del giorno, senza i capolinea', async () => {
