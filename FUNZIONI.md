@@ -1,6 +1,6 @@
 # Tutte le funzioni di Muovi Bologna
 
-Indice completo del codice: **361 funzioni** — 290 in `app.js` e 71 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
+Indice completo del codice: **363 funzioni** — 291 in `app.js` e 72 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
 
 Nessun framework e nessun bundler: `index.html` carica gli script con `<script>` normali, `app.js` è l'unico file grande e gli altri moduli sono oggetti globali (`Utilita`, `Tariffe`, `Piedi`, `Routing`, `VistaPercorso`, `Icone`).
 
@@ -107,12 +107,13 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | --- | --- |
 | `svg(nome, dimensione, classe, opzioni)` | Icona SVG inline dal set interno. |
 
-## sw.js — 2 funzioni
+## sw.js — 3 funzioni
 
 | Funzione | Cosa fa |
 | --- | --- |
 | `versioneCache(nome)` | Versione della cache dal nome del file. |
 | `pulisciCacheVecchie()` | Cancella le cache delle versioni precedenti. |
+| `potaturaCache()` | Toglie dalla cache statica i file che non esistono più. |
 
 ## controllori-api/worker.js — 6 funzioni
 
@@ -129,7 +130,7 @@ Il backend delle segnalazioni (Worker + D1).
 
 ---
 
-# app.js — 290 funzioni
+# app.js — 291 funzioni
 
 ## Stato locale e preferenze — 11
 
@@ -499,12 +500,13 @@ Il backend delle segnalazioni (Worker + D1).
 | `abilitaTrascinamento(elemento)` | Gestisce trascinamento e slancio del pannello. |
 | `abilitaScorrimentoSheet()` | Scroll interno al pannello quando è pieno. |
 
-## App, menu, service worker — 12
+## App, menu, service worker — 13
 
 | Funzione | Cosa fa |
 | --- | --- |
 | `renderInfo()` | Disegna il pannello «Info». |
 | `renderLogErrori()` | Mostra il log degli errori. |
+| `cancellaDati()` | Svuota storage, cache e service worker, poi riavvia. |
 | `sincronizzaMenu()` | Aggiorna lo stato del menu. |
 | `apriMenu()` | Apre il menu. |
 | `chiudiMenu()` | Chiude il menu. |

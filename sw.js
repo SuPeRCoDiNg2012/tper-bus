@@ -3,8 +3,8 @@
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'muovi-bologna-static-v118';
-const CACHE_DATI = 'muovi-bologna-data-v118';
+const CACHE_STATICA = 'muovi-bologna-static-v119';
+const CACHE_DATI = 'muovi-bologna-data-v119';
 
 const ASSET_STATICI = [
   './',
@@ -17,6 +17,7 @@ const ASSET_STATICI = [
   './tariffe.js',
   './piedi.js',
   './manifest.json',
+  './privacy.html',
   './icons/icon-192.svg',
   './icons/icon-512.svg',
   './icons/icon-192.png',
@@ -52,12 +53,33 @@ function pulisciCacheVecchie() {
   ));
 }
 
+// Potatura: nella cache statica restano le voci della versione in uso. I file
+// che non esistono più (rinominati o rimossi) occupavano spazio per sempre.
+const PATH_STATICI = new Set(ASSET_STATICI.map((p) => new URL(p, self.location.href).pathname));
+
+function potaturaCache() {
+  return caches.open(CACHE_STATICA).then((cache) =>
+    cache.keys().then((richieste) => Promise.all(
+      richieste
+        .filter((richiesta) => !PATH_STATICI.has(new URL(richiesta.url).pathname))
+        .map((richiesta) => cache.delete(richiesta))
+    ))
+  );
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     // cache: 'reload' salta la cache HTTP del browser: senza, una nuova
     // versione del service worker poteva installare i file vecchi.
+    // allSettled e non addAll: un singolo asset mancante (un'icona, una pagina)
+    // faceva fallire tutta l'installazione e l'app restava senza cache offline.
     caches.open(CACHE_STATICA).then((cache) =>
-      cache.addAll(ASSET_STATICI.map((url) => new Request(url, { cache: 'reload' })))
+      Promise.allSettled(ASSET_STATICI.map((url) =>
+        cache.add(new Request(url, { cache: 'reload' }))
+      )).then((esiti) => {
+        const falliti = esiti.filter((esito) => esito.status === 'rejected');
+        if (falliti.length) console.warn('[sw] asset non in cache:', falliti.length);
+      })
     ).then(pulisciCacheVecchie)
   );
   // La nuova versione resta in attesa finché l'utente non tocca "Aggiorna":
@@ -74,7 +96,7 @@ self.addEventListener('activate', (event) => {
       nomi
         .filter((n) => n !== CACHE_STATICA && n !== CACHE_DATI)
         .map((n) => caches.delete(n))
-    ))
+    )).then(potaturaCache)
   );
   self.clients.claim();
 });
@@ -126,7 +148,9 @@ self.addEventListener('fetch', (event) => {
           // nella cache HTTP del browser, o i dati aggiornati non arriverebbero.
           const fetchPromise = fetch(event.request, { cache: 'no-cache' })
             .then((rispostaRete) => {
-              cache.put(event.request, rispostaRete.clone());
+              // Solo risposte buone in cache: un 404 o un 500 salvato qui
+              // restava servito per giorni come se fosse un dato valido.
+              if (rispostaRete && rispostaRete.ok) cache.put(event.request, rispostaRete.clone());
               return rispostaRete;
             })
             .catch(() => rispostaCache);
@@ -145,15 +169,18 @@ self.addEventListener('fetch', (event) => {
     url.pathname.endsWith('/app.js') || url.pathname.endsWith('/routing.js') ||
     url.pathname.endsWith('/utilita.js') || url.pathname.endsWith('/vista-percorso.js') ||
     url.pathname.endsWith('/icone.js') || url.pathname.endsWith('/tariffe.js') ||
-    url.pathname.endsWith('/piedi.js') || url.pathname.endsWith('/manifest.json');
+    url.pathname.endsWith('/piedi.js') || url.pathname.endsWith('/manifest.json') ||
+    url.pathname.endsWith('/privacy.html');
   if (isApp) {
     event.respondWith(
       // no-cache rivalida sempre: il network-first non basta se il browser
       // risponde dalla propria cache HTTP con l'app.js di ieri.
       fetch(event.request, { cache: 'no-cache' })
         .then((rispostaRete) => {
-          const copia = rispostaRete.clone();
-          caches.open(CACHE_STATICA).then((cache) => cache.put(event.request, copia)).catch(() => {});
+          if (rispostaRete && rispostaRete.ok) {
+            const copia = rispostaRete.clone();
+            caches.open(CACHE_STATICA).then((cache) => cache.put(event.request, copia)).catch(() => {});
+          }
           return rispostaRete;
         })
         .catch(() => caches.open(CACHE_STATICA).then((cache) =>
@@ -169,8 +196,10 @@ self.addEventListener('fetch', (event) => {
     caches.open(CACHE_STATICA).then((cache) =>
       cache.match(event.request).then((rispostaCache) => {
         if (rispostaCache) return rispostaCache;
+        // Una navigazione sconosciuta va in rete (così un URL inesistente
+        // risponde 404 davvero) e solo offline ripiega sull'app.
         if (event.request.mode === 'navigate') {
-          return cache.match('./index.html').then((r) => r || fetch(event.request));
+          return fetch(event.request).catch(() => cache.match('./index.html').then((r) => r || Response.error()));
         }
         return fetch(event.request);
       })

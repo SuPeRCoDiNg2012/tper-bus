@@ -250,8 +250,11 @@
     return (testo || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   }
   function due(valore) { return String(valore).padStart(2, '0'); }
+  // "0,00 €" non deve comparire da nessuna parte: zero significa che il viaggio
+  // è coperto dall'abbonamento, e va detto così.
   function euro(valore) {
-    return valore === 0 ? '0,00 €' : valore.toFixed(2).replace('.', ',') + ' €';
+    if (valore == null) return '';
+    return valore === 0 ? 'Incluso' : valore.toFixed(2).replace('.', ',') + ' €';
   }
   function tipoEtichetta(tipo) {
     return tipo === 'treno' ? 'Treno' : tipo === 'entrambi' ? 'Bus e treno' : 'Bus';
@@ -567,10 +570,12 @@
   }
 
   // Due pali della stessa fermata hanno lo stesso nome: nell'elenco ne basta uno.
+  // La chiave però include il comune: due fermate omonime in comuni diversi
+  // (una "Stazione" a Bologna e una a Imola) non sono la stessa fermata.
   function senzaDoppioni(elenco) {
     const visti = new Set();
     return elenco.filter((f) => {
-      const chiave = normalizza(f.nome);
+      const chiave = normalizza(f.nome) + '|' + normalizza(f.comune || f.zona || '');
       if (visti.has(chiave)) return false;
       visti.add(chiave);
       return true;
@@ -5707,7 +5712,27 @@
       '<div class="campo-relay"><input id="input-proxy" type="text" placeholder="https://mio-relay.example/?url={url}" value="' + esc(leggi(K_PROXY) || '') + '">' +
       '<button type="button" data-azione="salva-proxy">Salva</button></div>' +
       '<button type="button" data-azione="azzera-proxy">Usa il relay predefinito</button></div>' +
-      '<p>App non ufficiale, non affiliata a TPER.</p>';
+      '<div><h3>Privacy</h3><p>Nessun dato personale lascia il telefono: preferenze e percorsi recenti restano in localStorage, la posizione serve solo a trovare le fermate vicine e non viene salvata. Nessun tracciamento, nessuna statistica.</p>' +
+      '<p><a href="privacy.html">Informativa completa</a> · <button type="button" class="link-mini" data-azione="cancella-dati">Cancella tutti i dati</button></p></div>' +
+      '<p><b>App non ufficiale</b>, non affiliata a TPER. Orari e prezzi possono essere imprecisi: verifica sempre su <a href="https://www.tper.it" target="_blank" rel="noopener">tper.it</a>.</p>';
+  }
+
+  // "Cancella tutti i dati": preferenze, cache e service worker. Sul server non
+  // c'è niente da cancellare, perché l'app non manda dati personali.
+  function cancellaDati() {
+    try { localStorage.clear(); } catch (errore) { /* storage non disponibile */ }
+    if (typeof caches !== 'undefined') {
+      caches.keys()
+        .then((nomi) => Promise.all(nomi.map((nome) => caches.delete(nome))))
+        .catch(() => {});
+    }
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      navigator.serviceWorker.getRegistrations()
+        .then((registrazioni) => Promise.all(registrazioni.map((r) => r.unregister())))
+        .catch(() => {});
+    }
+    mostraToast('Dati cancellati. L\'app si riavvia vuota.', 1200);
+    setTimeout(() => { try { location.reload(); } catch (errore) { /* niente */ } }, 900);
   }
 
   function renderLogErrori() {
@@ -6022,6 +6047,10 @@
       if (azione === 'installa') {
         if (window.installaApp) window.installaApp();
         else mostraToast('Usa il menu del browser → "Aggiungi a schermata home"');
+      }
+      if (azione === 'cancella-dati') {
+        cancellaDati();
+        return;
       }
     });
     document.addEventListener('keydown', (evento) => {
