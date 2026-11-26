@@ -28,6 +28,7 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 - **Luoghi condivisi**: Web Share Target per ricevere un luogo o un link da Maps e da altre app, con lettura delle coordinate e geocodifica di riserva.
 - **Ritardo che rompe il viaggio**: quando HelloBus segnala un cambio perso, un pulsante ricalcola da adesso evitando la linea non raggiungibile.
 - **Nessun viaggio**: al posto dell'orario fisso «domani alle 08:00» si cerca la prima corsa utile nelle prossime 24 ore.
+- **Tabellone della fermata**: le corse live che HelloBus anticipa o posticipa rispetto al GTFS prendono il capolinea dalla corsa programmata più vicina della stessa linea, invece di mostrare «Bus 5554». Tolto il pulsante «Fissa» dall'intestazione degli orari.
 - **Avviso «scendi alla prossima»** azzerato a ogni nuova navigazione: la vibrazione si ripete anche se la fermata di discesa è la stessa del viaggio precedente.
 - **Scorciatoie nel manifest** per Casa e Lavoro.
 - Non implementati e dichiarati come limiti: notifiche push (servono chiavi VAPID, un deploy del Worker e la crittografia Web Push), S1 Porretta (nessun GTFS verificabile con le fermate intermedie) e filtro «fermate accessibili» (il dataset non espone `wheelchair_boarding`).

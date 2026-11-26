@@ -116,18 +116,42 @@
     // Il capolinea si prende dal GTFS anche per le corse che restano fuori
     // dalla finestra: una riga live senza direzione non dice dove va il bus.
     const destinazioni = new Map();
+    const perLinea = new Map();
     (programmati || []).forEach((p) => {
-      const chiave = chiaveLinea(p.linea) + '|' + p.ora;
+      const base = chiaveLinea(p.linea);
+      const chiave = base + '|' + p.ora;
       if (p.destinazione) destinazioni.set(chiave, p.destinazione);
+      if (!perLinea.has(base)) perLinea.set(base, []);
+      if (p.destinazione) {
+        perLinea.get(base).push({
+          ora: p.ora,
+          destinazione: p.destinazione,
+          minuti: minutiVerso(p.ora, adessoMinuti)
+        });
+      }
       const minuti = minutiVerso(p.ora, adessoMinuti);
       if (minuti < minimo || minuti > massimo) return;
       aggiungi({ linea: String(p.linea), ora: p.ora, tipo: 'orario', bus: null, destinazione: p.destinazione || '' });
     });
     elenco.forEach((voce) => {
-      if (!voce.destinazione) {
-        voce.destinazione = destinazioni.get(chiaveLinea(voce.linea) + '|' + voce.ora) || '';
-      }
       voce.minuti = minutiVerso(voce.ora, adessoMinuti);
+      if (!voce.destinazione) {
+        const base = chiaveLinea(voce.linea);
+        let destinazione = destinazioni.get(base + '|' + voce.ora) || '';
+        // HelloBus a volte anticipa o posticipa di qualche minuto rispetto al
+        // GTFS: la corsa live non trova la riga con lo stesso orario e finiva
+        // per mostrare «Bus 5554» al posto del capolinea. Si usa la corsa
+        // programmata più vicina della stessa linea, entro 45 minuti.
+        if (!destinazione) {
+          const vicine = (perLinea.get(base) || [])
+            .slice()
+            .sort((a, b) => Math.abs(a.minuti - voce.minuti) - Math.abs(b.minuti - voce.minuti));
+          if (vicine.length && Math.abs(vicine[0].minuti - voce.minuti) <= 45) {
+            destinazione = vicine[0].destinazione;
+          }
+        }
+        voce.destinazione = destinazione;
+      }
     });
     return elenco.filter((voce) => voce.minuti >= minimo).sort((a, b) => a.minuti - b.minuti);
   }

@@ -192,6 +192,19 @@ test('gli arrivi uniscono tempo reale e orari programmati in un solo elenco', ()
   assert.equal(uniti[1].tipo, 'orario');
 });
 
+test('una corsa live in anticipo prende il capolinea dalla corsa programmata vicina', () => {
+  // HelloBus dice 13 min, il GTFS ha la stessa linea a 20 min: la riga live
+  // deve mostrare «Pilastro», non il numero del bus.
+  const uniti = Vista.arriviUniti(
+    [{ linea: '20', ora: '08:13', tipo: 'live', bus: '5554' }],
+    [{ linea: '20', ora: '08:20', destinazione: 'Pilastro' }],
+    8 * 60
+  );
+  assert.equal(uniti.length, 2);
+  assert.equal(uniti[0].tipo, 'live');
+  assert.equal(uniti[0].destinazione, 'Pilastro');
+});
+
 test('la variante della linea non duplica la corsa programmata', () => {
   // HelloBus dice 13A, il GTFS dice 13: è lo stesso bus, una riga sola.
   const uniti = Vista.arriviUniti(

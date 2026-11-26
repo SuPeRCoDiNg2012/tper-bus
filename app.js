@@ -3947,28 +3947,6 @@
     return (Array.isArray(ids) ? ids : []).map(fermataPerId).filter(Boolean).slice(0, 3);
   }
 
-  function eFissa(id) {
-    return (leggiJSON(K_FISSE) || []).indexOf(id) >= 0;
-  }
-
-  function alternaFermataFissa(id) {
-    if (!fermataPerId(id)) return;
-    const ids = (leggiJSON(K_FISSE) || []).filter((voce) => voce !== id);
-    if (!eFissa(id)) {
-      if (ids.length >= 3) {
-        mostraToast('Tieni al massimo tre fermate: togli prima una delle altre');
-        return;
-      }
-      ids.unshift(id);
-      mostraToast('Fermata fissata in home');
-    } else {
-      mostraToast('Fermata tolta dalla home');
-    }
-    scrivi(K_FISSE, JSON.stringify(ids.slice(0, 3)));
-    renderPercorso();
-    renderLive();
-  }
-
   function secondiAdesso() {
     const d = new Date();
     return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
@@ -6154,7 +6132,10 @@
         : '';
       const aperto = live.aperto === indice;
       const attivo = !!(live.avvisa && live.avvisa.linea === arrivo.linea && live.avvisa.ora === arrivo.ora);
-      const meta = arrivo.destinazione || (arrivo.bus ? 'Bus ' + arrivo.bus : 'Orario programmato');
+      // Il numero del bus non è una destinazione: resta nel dettaglio, mentre
+      // in riga si mostra il capolinea o, se il GTFS non lo sa, uno stato
+      // onesto invece di «Bus 5554».
+      const meta = arrivo.destinazione || (arrivo.tipo === 'live' ? 'Direzione non disponibile' : 'Orario programmato');
       const dettaglio = aperto
         ? '<div class="arrivo-dettaglio">' +
           '<div class="riga"><span>' + (arrivo.tipo === 'live' ? 'Bus ' + esc(arrivo.bus || '') : 'Orario programmato') + '</span>' +
@@ -6246,10 +6227,6 @@
       '<h2 class="orari-nome">' + esc(fermata ? fermata.nome : 'Scegli una fermata') + '</h2>' +
       (fermata ? '<p class="orari-pos">' + esc(riferimentoFermata(fermata)) + '</p>' : '') +
       '</div>' +
-      (fermata ? '<button type="button" class="btn-fissa' + (eFissa(fermata.id) ? ' attiva' : '') +
-        '" data-fissa="' + esc(fermata.id) + '" aria-pressed="' + (eFissa(fermata.id) ? 'true' : 'false') +
-        '" aria-label="' + (eFissa(fermata.id) ? 'Togli dalla home' : 'Fissa in home') + '">' +
-        (eFissa(fermata.id) ? 'In home' : 'Fissa') + '</button>' : '') +
       '<button type="button" class="btn-aggiorna' + (live.caricamento ? ' gira' : '') +
       '" data-azione="aggiorna" aria-label="Aggiorna gli arrivi"' + (fermata ? '' : ' disabled') + '>' +
       ICONA_REFRESH + '</button></div>';
@@ -7594,11 +7571,6 @@
     });
     $('sheet-corpo').addEventListener('click', (evento) => {
       if (sopprimiClick) { evento.preventDefault(); evento.stopPropagation(); sopprimiClick = false; return; }
-      const fissa = evento.target.closest('[data-fissa]');
-      if (fissa) {
-        alternaFermataFissa(fissa.getAttribute('data-fissa'));
-        return;
-      }
       const apriFissa = evento.target.closest('[data-apri-fissa]');
       if (apriFissa) {
         const f = fermataPerId(apriFissa.getAttribute('data-apri-fissa'));
