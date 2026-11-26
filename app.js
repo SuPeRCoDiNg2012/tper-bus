@@ -6178,13 +6178,19 @@
           Math.abs(ritardoTipico(linea.nome)) + ' min, dai tuoi viaggi</p>'
         : '') +
       '</div></div>';
-    html += '<div class="chips-linea" role="group" aria-label="Direzione">' +
-      versi.map((voce) => {
-        const attivo = voce.capolinea === lineaVista.capolinea;
-        return '<button type="button" class="chip-filtro' + (attivo ? ' attivo' : '') + '" data-linea-verso="' +
-          esc(voce.capolinea) + '" aria-pressed="' + (attivo ? 'true' : 'false') + '">→ ' +
-          esc(nomeBreve(nomeFermata(voce.capolinea))) + '</button>';
-      }).join('') + '</div>';
+    // Una sola tendina invece di una fila di chip da scorrere: le linee con
+    // molte varianti (la 20 ne ha nove) restano leggibili e si scelgono con
+    // un tocco, anche da tastiera.
+    if (versi.length > 1) {
+      html += '<label class="linea-direzione"><span class="linea-direzione-eti">Direzione</span>' +
+        '<select data-linea-verso aria-label="Direzione della linea">' +
+        versi.map((voce) => '<option value="' + esc(voce.capolinea) + '"' +
+          (voce.capolinea === lineaVista.capolinea ? ' selected' : '') + '>→ ' +
+          esc(nomeBreve(nomeFermata(voce.capolinea))) + '</option>').join('') +
+        '</select></label>';
+    } else if (versi.length === 1) {
+      html += '<p class="linea-direzione-sola">→ ' + esc(nomeBreve(nomeFermata(versi[0].capolinea))) + '</p>';
+    }
     if (fermate.length) {
       html += '<ol class="linea-fermate">' + fermate.map((id, indice) => {
         const f = fermataPerId(id);
@@ -6222,6 +6228,9 @@
         return;
       }
       const punti = indiceCorsa != null ? TPERRouting.formaCorsa(indiceCorsa) : null;
+      // Il colore è quello ufficiale della linea (GTFS route_color), scurito
+      // solo se troppo chiaro per il fondo, come per i percorsi.
+      const colore = coloreTracciato(linea.nome) || '#C1121F';
       try {
         if (!mappa.getSource('linea-vista')) {
           mappa.addSource('linea-vista', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -6233,8 +6242,10 @@
           mappa.addLayer({
             id: 'linea-vista', type: 'line', source: 'linea-vista',
             layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#C1121F', 'line-width': 4 }
+            paint: { 'line-color': colore, 'line-width': 4 }
           });
+        } else if (mappa.getLayer('linea-vista')) {
+          mappa.setPaintProperty('linea-vista', 'line-color', colore);
         }
       } catch (errore) { return; }
       mappa.getSource('linea-vista').setData({
@@ -7232,15 +7243,15 @@
     abilitaTrascinamento($('grab'));
     abilitaScorrimentoSheet();
     $('sheet-corpo').addEventListener('scroll', aggiornaScrim, { passive: true });
+    $('vista-linea').addEventListener('change', (evento) => {
+      const verso = evento.target.closest('[data-linea-verso]');
+      if (!verso) return;
+      lineaVista.capolinea = verso.value;
+      renderLinea();
+      disegnaLineaMappa();
+    });
     $('sheet-corpo').addEventListener('click', (evento) => {
       if (sopprimiClick) { evento.preventDefault(); evento.stopPropagation(); sopprimiClick = false; return; }
-      const verso = evento.target.closest('[data-linea-verso]');
-      if (verso) {
-        lineaVista.capolinea = verso.getAttribute('data-linea-verso');
-        renderLinea();
-        disegnaLineaMappa();
-        return;
-      }
       const fissa = evento.target.closest('[data-fissa]');
       if (fissa) {
         alternaFermataFissa(fissa.getAttribute('data-fissa'));
