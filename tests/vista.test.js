@@ -234,3 +234,30 @@ test('la scheda espone quanto si è disposti a camminare, da 3 a 25 minuti', () 
   assert.match(Vista.controlli('2026-11-24', '08:00', 'partenza', 1), /value="3"/);
   assert.match(Vista.controlli('2026-11-24', '08:00', 'partenza', undefined), /value="10"/);
 });
+
+test('il filtro per linea usa la linea base: «13» tiene anche le 13A', () => {
+  const elenco = [
+    { linea: '13', ora: '08:00' },
+    { linea: '13A', ora: '08:10' },
+    { linea: '20', ora: '08:20' },
+    { linea: 'T1', ora: '08:30' }
+  ];
+  assert.deepEqual(Vista.filtraLinea(elenco, '13').map((v) => v.linea), ['13', '13A']);
+  // Anche chiedendo la variante si filtra sulla base.
+  assert.deepEqual(Vista.filtraLinea(elenco, '13A').map((v) => v.ora), ['08:00', '08:10']);
+  assert.deepEqual(Vista.filtraLinea(elenco, '20').map((v) => v.linea), ['20']);
+  // Nessun filtro = elenco intero, non lo stesso array (chi chiama può mutarlo).
+  const tutti = Vista.filtraLinea(elenco, null);
+  assert.equal(tutti.length, 4);
+  assert.notEqual(tutti, elenco);
+  assert.deepEqual(Vista.filtraLinea(null, '13'), []);
+  // Le corse senza linea non finiscono sotto una chip.
+  assert.deepEqual(Vista.filtraLinea([{ ora: '08:00' }], '13'), []);
+});
+
+test('le chip mostrano una linea sola per famiglia', () => {
+  const elenco = [{ linea: '13' }, { linea: '13A' }, { linea: '20' }, { linea: 'T1' }, { linea: '13' }];
+  assert.deepEqual(Vista.lineeElenco(elenco), ['13', '20', 'T1']);
+  assert.deepEqual(Vista.lineeElenco([]), []);
+  assert.deepEqual(Vista.lineeElenco(null), []);
+});

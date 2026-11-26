@@ -5389,14 +5389,17 @@
   function arriviHTML() {
     const fermata = fermataLive();
     let uniti = arriviUniti(fermata);
-    const linee = [];
-    uniti.forEach((voce) => {
-      const nome = String(voce.linea);
-      if (linee.indexOf(nome) < 0) linee.push(nome);
-    });
-    linee.sort((a, b) => a.localeCompare(b, 'it', { numeric: true }));
+    // Chip e filtro usano la linea base, come la deduplica: 13 e 13A sono la
+    // stessa corsa, quindi una chip sola e un filtro che le tiene entrambe.
+    const linee = typeof VistaPercorso.lineeElenco === 'function'
+      ? VistaPercorso.lineeElenco(uniti)
+      : Array.from(new Set(uniti.map((voce) => String(voce.linea)))).sort();
     if (orariGiorno.linea && linee.indexOf(orariGiorno.linea) < 0) orariGiorno.linea = null;
-    if (orariGiorno.linea) uniti = uniti.filter((voce) => String(voce.linea) === orariGiorno.linea);
+    if (orariGiorno.linea) {
+      uniti = typeof VistaPercorso.filtraLinea === 'function'
+        ? VistaPercorso.filtraLinea(uniti, orariGiorno.linea)
+        : uniti.filter((voce) => String(voce.linea) === orariGiorno.linea);
+    }
     const filtro = linee.length > 1
       ? '<div class="chips-linea" role="group" aria-label="Filtra per linea">' +
         chipFiltroLinea('', 'Tutte') + linee.map((l) => chipFiltroLinea(l, l)).join('') + '</div>'

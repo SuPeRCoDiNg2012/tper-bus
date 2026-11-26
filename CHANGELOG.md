@@ -4,6 +4,8 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- Filtro dell'elenco fermata: le chip usano la **linea base** come la deduplica, quindi «13» tiene anche le 13A e al posto di tre chip 97/97A/97C ne compare una sola, «97».
+
 - Pacchetto legale completo: informativa privacy (art. 13 GDPR), termini e condizioni d'uso, cookie policy con l'elenco delle chiavi locali, note legali con fonti, licenze e marchi. Le pagine condividono `legale.css`, si aprono dal piè del menu e restano consultabili offline. Nessun banner cookie: l'app non usa cookie, solo memoria tecnica esente da consenso.
 
 - Barra superiore ridisegnata: niente banda bianca, i comandi galleggiano sulla mappa. In alto a sinistra c'è **un solo tasto**: hamburger nella schermata iniziale, freccia indietro quando c'è un percorso o gli orari di una fermata aperti. La freccia risale di un gradino (pannello aperto → ridotto → home) senza perdere la tratta.

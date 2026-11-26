@@ -46,6 +46,30 @@
   }
 
   /**
+   * Nomi delle linee presenti, già ridotti alla linea base: 13 e 13A danno una
+   * chip sola, come la deduplica dell'elenco.
+   */
+  function lineeElenco(elenco) {
+    const nomi = [];
+    (elenco || []).forEach((voce) => {
+      const nome = chiaveLinea(voce && voce.linea);
+      if (nome && nomi.indexOf(nome) < 0) nomi.push(nome);
+    });
+    return nomi.sort((a, b) => a.localeCompare(b, 'it', { numeric: true }));
+  }
+
+  /**
+   * Righe della linea scelta, confrontate sulla linea base: filtrare «13»
+   * tiene anche le corse 13A, che la deduplica considera la stessa linea.
+   */
+  function filtraLinea(elenco, linea) {
+    const righe = elenco || [];
+    if (!linea) return righe.slice();
+    const base = chiaveLinea(linea);
+    return righe.filter((voce) => chiaveLinea(voce && voce.linea) === base);
+  }
+
+  /**
    * Minuti al prossimo passaggio, senza l'ambiguità delle 12 ore: a mezzogiorno
    * esatto il calcolo circolare darebbe -720 (dodici ore fa) anche per una
    * corsa che deve ancora partire.
@@ -292,6 +316,8 @@
     dettaglio: dettaglioHTML,
     arriviUniti: arriviUniti,
     chiaveLinea: chiaveLinea,
+    lineeElenco: lineeElenco,
+    filtraLinea: filtraLinea,
     minutiA: minutiA,
     ICONA_PEDANA: ICONA_PEDANA
   };

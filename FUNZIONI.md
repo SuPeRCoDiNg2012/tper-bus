@@ -1,6 +1,6 @@
 # Tutte le funzioni di Muovi Bologna
 
-Indice completo del codice: **379 funzioni** — 300 in `app.js` e 79 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
+Indice completo del codice: **381 funzioni** — 300 in `app.js` e 81 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
 
 Nessun framework e nessun bundler: `index.html` carica gli script con `<script>` normali, `app.js` è l'unico file grande e gli altri moduli sono oggetti globali (`Utilita`, `Tariffe`, `Piedi`, `Routing`, `VistaPercorso`, `Icone`).
 
@@ -84,7 +84,7 @@ Il motore: orari GTFS, rete, cambi, criteri, tracciati delle linee.
 | `caricaTracciati(urlGz, urlRaw)` | Carica i tracciati delle linee su richiesta. |
 | `impostaCammini(coppie)` | Lunghezze a piedi fra fermate, calcolate una volta. |
 
-## vista-percorso.js — 17 funzioni
+## vista-percorso.js — 19 funzioni
 
 Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 
@@ -106,6 +106,8 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `minutiA(ora, adessoMinuti)` | Minuti a un orario `HH:MM`, circolari sulla mezzanotte. |
 | `chiaveLinea(linea)` | Linea base: `13A` e `13` sono la stessa corsa. |
 | `minutiVerso(ora, adessoMinuti)` | Minuti al prossimo passaggio, senza l'ambiguità delle 12 ore. |
+| `lineeElenco(elenco)` | Linee presenti ridotte alla base: una chip sola per famiglia. |
+| `filtraLinea(elenco, linea)` | Righe della linea scelta, confrontate sulla linea base. |
 | `arriviUniti(realtime, programmati, adessoMinuti, opzioni)` | Un solo elenco di arrivi: live + programmati, deduplicati e ordinati. |
 
 ## icone.js — 1 funzione
