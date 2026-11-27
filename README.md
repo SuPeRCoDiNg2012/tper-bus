@@ -48,6 +48,7 @@ tper-zone-calc/
 │   ├── icon-maskable-192.png / -512.png       # Icone maskable Android
 │   ├── apple-touch-icon.png                   # Icona iOS 180×180
 │   ├── icon-192.svg / icon-512.svg            # Sorgenti vettoriali
+│   ├── marchio.svg                            # Marchio compatto per barra e onboarding
 │   └── icon-maskable-192.svg / -512.svg
 ├── data/
 │   ├── fermate.json                # 9.634 fermate: bus reali + 42 stazioni ferroviarie (tutte le fermate delle linee Vignola, Porretta e Pianoro)
