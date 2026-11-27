@@ -411,8 +411,7 @@
       navigaHTML();
     html += '<div class="avviso nota-tracciato" id="nota-tracciato" hidden>' +
       Icone.svg('triangle-alert', 16) +
-      '<span>Senza tracciato GTFS per un tratto: sulla mappa è una <b>linea diritta tratteggiata</b> tra le fermate, non il percorso reale del bus.</span></div>' +
-      '<p class="nota-piccola">Orari programmati; il primo bus mostra il passaggio reale quando c\'è.</p>';
+      '<span>Senza tracciato: sulla mappa è una linea tratteggiata.</span></div>';
     return html;
   }
 

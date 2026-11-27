@@ -343,7 +343,9 @@
   }
   function metaFermata(f) {
     const linee = lineaDi(f).slice(0, 3).join(' · ');
-    return 'Palina ' + f.id + ' · ' + tipoEtichetta(f.tipo) + ' · Zona ' + f.zona + (linee ? ' · ' + linee : '');
+    // Il tipo (bus/treno) è già nell'icona della riga: qui restano solo i dati
+    // che l'occhio non può dedurre.
+    return 'Palina ' + f.id + ' · Zona ' + f.zona + (linee ? ' · ' + linee : '');
   }
 
   function eIndirizzo(luogo) {
@@ -4365,12 +4367,9 @@
       '<span class="interruttore"><input type="checkbox" id="check-abbonamento"' + (abbonamento ? ' checked' : '') +
       ' aria-label="Ho l\'abbonamento urbano"><span class="binario"></span></span></div>' +
       '<p class="b-spiega" id="spiega-abbonamento" hidden>L\'abbonamento urbano copre la zona 500 (Bologna città) e le zone neutre 501–509. Per uscire servono le integrazioni extraurbane.</p>' +
-      (consigli.length
-        ? '<div><p class="micro" style="margin:0 0 4px">Forse ti conviene</p>' +
-          consigli.map((testo) => '<p class="b-conviene">' + testo + '</p>').join('') + '</div>'
-        : '') +
+      (consigli.length ? '<p class="b-conviene">' + consigli[0] + '</p>' : '') +
       convieneHTML(r) +
-      '<a href="' + URL_UFFICIALE + '" target="_blank" rel="noopener">Verifica sul calcolatore TPER</a>' +
+      '<a href="' + URL_UFFICIALE + '" target="_blank" rel="noopener">Calcolatore TPER</a>' +
       '</div></details>';
   }
 
@@ -4428,7 +4427,6 @@
       VistaPercorso.dettaglio(e, etichettaFermata) +
       '<div class="live-percorso" id="live-percorso" hidden></div>' +
       bigliettoHTML(r) +
-      '<p class="micro">Orari programmati; il primo bus mostra il passaggio reale quando c\'è.</p>' +
       '</div>';
   }
 
@@ -4573,7 +4571,7 @@
     const fisse = fermateFisse();
     let testa = '';
     if (fisse.length) {
-      testa = '<div class="gruppo">Le mie fermate</div>' + fisse.map((f) => {
+      testa = fisse.map((f) => {
         const prossima = prossimeAllaFermata(f.id, 1)[0];
         return '<button type="button" class="voce" data-apri-fissa="' + esc(f.id) + '">' +
           '<span class="voce-ico">' + ICONA_BUS + '</span>' +
@@ -6494,8 +6492,7 @@
       ? 'Aggiornato ora'
       : eta === 1 ? 'Aggiornato 1 min fa' : 'Aggiornato ' + eta + ' min fa';
     return '<div class="stato-live"><span class="punto' + (liveCount ? '' : ' off') + '"></span>' +
-      '<span>' + quando +
-      (liveCount ? ' · ' + liveCount + ' bus localizzati via GPS' : ' · solo orario programmato') + '</span>' +
+      '<span>' + quando + (liveCount ? '' : ' · solo orari') + '</span>' +
       (eta != null && eta >= 2 ? '<button type="button" class="link-mini" data-azione="aggiorna">Aggiorna</button>' : '') +
       '</div>';
   }
@@ -6579,13 +6576,13 @@
       // Il numero del bus non è una destinazione: resta nel dettaglio, mentre
       // in riga si mostra il capolinea o, se il GTFS non lo sa, uno stato
       // onesto invece di «Bus 5554».
-      const meta = arrivo.destinazione || (arrivo.tipo === 'live' ? 'Direzione non disponibile' : 'Orario programmato');
+      const meta = arrivo.destinazione || '';
       const dettaglio = aperto
         ? '<div class="arrivo-dettaglio">' +
           '<div class="riga"><span>' + (arrivo.tipo === 'live' ? 'Bus ' + esc(arrivo.bus || '') : 'Orario programmato') + '</span>' +
           '<span>ore ' + esc(arrivo.ora) + '</span></div>' +
           (arrivo.destinazione ? '<div class="riga"><span>Direzione</span><span>' + esc(arrivo.destinazione) + '</span></div>' : '') +
-          '<div class="riga"><span>Avviso a 2 minuti</span>' +
+          '<div class="riga"><span>Avviso</span>' +
           '<button type="button" class="link-mini" data-azione="avvisa" data-avvisa-linea="' + esc(arrivo.linea) +
           '" data-avvisa-ora="' + esc(arrivo.ora) + '">' + (attivo ? 'Togli l\'avviso' : 'Avvisami') + '</button></div>' +
           '</div>'
@@ -6737,17 +6734,17 @@
     if (fermata && typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
       html += '<button type="button" class="btn-schermo' + (schermoSempre ? ' acceso' : '') +
         '" data-azione="schermo" aria-pressed="' + (schermoSempre ? 'true' : 'false') + '">' +
-        (schermoSempre ? 'Schermo acceso: tocca per liberarlo' : 'Tieni lo schermo acceso') + '</button>';
+        'Schermo acceso' + '</button>';
     }
 
     if (!fermata) {
-      html += '<div class="box">Tocca una fermata sulla mappa per vedere gli orari.</div>';
+      html += '<div class="box">Tocca una fermata sulla mappa.</div>';
     } else if (live.stato === 'senza-linee') {
-      html += '<div class="box">Qui passano solo treni: per loro vale l\'orario programmato, non il tempo reale.</div>';
+      html += '<div class="box">Qui passano solo treni: valgono gli orari programmati.</div>';
       html += arriviHTML();
     } else if (live.stato === 'non-gestita') {
       // Non è un errore: nell'elenco unico restano le corse programmate.
-      html += '<div class="box">Per questa linea il tempo reale non è disponibile: valgono gli orari programmati.</div>';
+      html += '<div class="box">Tempo reale non disponibile.</div>';
       html += arriviHTML();
     } else {
       html += statoLiveHTML();
@@ -6764,7 +6761,7 @@
           '<button type="button" class="link" data-azione="aggiorna">Riprova</button></div>';
       } else {
         // Un solo elenco: prima le corse reali, poi quelle programmate.
-        html += arriviHTML() || '<div class="box">Nessun passaggio in programma.</div>';
+        html += arriviHTML() || '<div class="box">Nessun passaggio.</div>';
       }
     }
     box.innerHTML = html;
@@ -7778,7 +7775,6 @@
       onboarding.slide += 1;
       aggiornaOnboarding();
     });
-    $('ob-salta').addEventListener('click', chiudiOnboarding);
     window.addEventListener('popstate', indietroBrowser);
     $('menu-errori').addEventListener('click', () => {
       const box = $('log-errori');

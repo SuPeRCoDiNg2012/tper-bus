@@ -598,7 +598,8 @@
   .ob-testo{font-size:14px;color:var(--testo-2);margin:0;line-height:1.5;}
   .ob-marchio{position:absolute;top:calc(20px + env(safe-area-inset-top,0px));left:20px;display:flex;align-items:center;gap:7px;font-size:15px;font-weight:800;letter-spacing:-.3px;}
   .ob-marchio img{width:22px;height:22px;border-radius:6px;}
-  .onboarding-piede{display:flex;align-items:center;justify-content:space-between;gap:10px;max-width:420px;margin:0 auto;width:100%;}
+  .onboarding-piede{display:flex;align-items:center;justify-content:flex-end;gap:10px;max-width:420px;margin:0 auto;width:100%;}
+  .onboarding-piede .btn{flex:1;}
   .ob-punti{display:flex;gap:6px;}
   .ob-punto{width:7px;height:7px;border-radius:50%;background:var(--bordo-2);}
   .ob-punto.attivo{background:var(--rosso);}
@@ -729,28 +730,11 @@
   <div class="ob-marchio"><img src="./icons/marchio.svg" alt="" width="22" height="22"><span>Muovi Bologna</span></div>
   <div class="ob-slide" data-slide="0">
     <span class="ob-ico" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg></span>
-    <span class="ob-num">1 di 3</span>
-    <h2 class="ob-titolo">Cerca una fermata o un indirizzo</h2>
-    <p class="ob-testo">Scrivi dove vai: l'app trova fermate, luoghi e indirizzi e calcola il percorso con i bus TPER.</p>
-  </div>
-  <div class="ob-slide" data-slide="1" hidden>
-    <span class="ob-ico" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg></span>
-    <span class="ob-num">2 di 3</span>
-    <h2 class="ob-titolo">Confronta le alternative e scegli</h2>
-    <p class="ob-testo">Tempi, prezzi e cambi di ogni soluzione: apri le alternative e prendi quella che ti conviene.</p>
-  </div>
-  <div class="ob-slide" data-slide="2" hidden>
-    <span class="ob-ico" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 22 2l-9 19-2-8-8-2Z"/></svg></span>
-    <span class="ob-num">3 di 3</span>
-    <h2 class="ob-titolo">Avvia la navigazione e ricevi avvisi</h2>
-    <p class="ob-testo">Con "Avvia" l'app ti segue passo per passo, ti dice dove scendere e tiene acceso il tempo reale.</p>
+    <h2 class="ob-titolo">Dove vai?</h2>
+    <p class="ob-testo">Fermate, percorso e prezzo.</p>
   </div>
   <div class="onboarding-piede">
-    <button type="button" class="btn btn-tenue" id="ob-salta">Salta</button>
-    <div class="ob-punti" aria-hidden="true">
-      <span class="ob-punto attivo"></span><span class="ob-punto"></span><span class="ob-punto"></span>
-    </div>
-    <button type="button" class="btn btn-primario" id="ob-avanti">Avanti</button>
+    <button type="button" class="btn btn-primario" id="ob-avanti">Inizia</button>
   </div>
 </div>
 

@@ -169,12 +169,14 @@ test('il percorso calcolato offre il pulsante per avviare la navigazione', () =>
   assert.match(piedi, /data-azione="avvia-navigazione"/);
 });
 
-test('il percorso riserva un riquadro all’orario reale e dichiara i treni', () => {
+test('il percorso riserva un riquadro all’orario reale', () => {
   const html = render(viaggio());
   // Il riquadro nasce vuoto e nascosto: lo riempie l'app con il passaggio
   // reale del primo bus, quando TPER lo fornisce.
   assert.match(html, /id="live-percorso" hidden/);
-  assert.match(html, /Orari programmati; il primo bus mostra il passaggio reale/);
+  // Niente spiegazioni sotto la scheda: la riga «Orari programmati…» è stata
+  // tolta per lasciare parlare i dati.
+  assert.doesNotMatch(html, /Orari programmati;/);
 });
 
 test('gli arrivi uniscono tempo reale e orari programmati in un solo elenco', () => {
