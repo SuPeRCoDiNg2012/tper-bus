@@ -39,6 +39,7 @@
   const K_FISSE = 'tperzc_fermate_fisse_v1';
   const K_VIAGGI = 'tperzc_viaggi_salvati_v1';
   const K_ERRORI = 'tperzc_errori_v1';
+  const K_TEMA = 'tperzc_tema_v1';
   // Preferenze dei vecchi criteri di percorso, non più lette dall'app. Le
   // versioni con e senza prefisso coprono anche installazioni molto vecchie.
   const CHIAVI_CRITERI_OBSOLETI = [
@@ -3581,7 +3582,7 @@
             ? '<button type="button" class="menu-pref-modifica" data-azione="pref-scegli" data-slot="' + voce.slot +
               '" aria-label="Cambia ' + voce.etichetta + '">' + Icone.svg('pencil', 18) + '</button>' +
               '<button type="button" class="menu-pref-avviso' + (acceso ? ' acceso' : '') + '" data-azione="pref-avviso" data-slot="' +
-              voce.slot + '" aria-pressed="' + (acceso ? 'true' : 'false') + '" aria-label="Avvisa 5 minuti prima del bus da ' +
+              voce.slot + '" aria-pressed="' + (acceso ? 'true' : 'false') + '" aria-label="Avvisa quando devo uscire per il bus da ' +
               voce.etichetta + '">' + Icone.svg(acceso ? 'bell' : 'bell-off', 18) + '</button>' +
               '<button type="button" class="menu-pref-rimuovi" data-azione="pref-rimuovi" data-slot="' + voce.slot +
               '" aria-label="Rimuovi ' + voce.etichetta + '">' + ICONA_X + '</button>'
@@ -3600,6 +3601,7 @@
   const AVVISO_INTERVALLO = 60000;
   const AVVISO_ARRIVO_MINUTI = 2;
   const AVVISO_ARRIVO_INTERVALLO = 15000;
+  const PASSO_MINUTO_METRI = 75;      // 4,5 km/h: passo normale, semafori compresi
   let avvisiTimer = null;
   let avvisiArrivoTimer = null;
   const avvisiInviati = new Set();
@@ -3656,6 +3658,23 @@
     return fermateVicine(luogo.lat, luogo.lon, 1)[0] || null;
   }
 
+  // Minuti a piedi da un indirizzo alla fermata: distanza in linea d'aria con
+  // un 25% di allungo per le strade. È una stima, e la notifica lo dice.
+  function minutiCammino(da, a) {
+    if (!da || !a) return null;
+    const km = Tariffe.distanzaKm(da, a);
+    if (km == null) return null;
+    return Math.max(1, Math.round((km * 1000 * 1.25) / PASSO_MINUTO_METRI));
+  }
+
+  // Da casa serve uscire prima: la soglia diventa il cammino più un minuto di
+  // margine. Sotto i tre minuti la fermata è sotto casa e vale l'avviso fisso.
+  function minutiPerUscire(luogo, fermata) {
+    if (!luogo || !fermata || !eIndirizzo(luogo)) return null;
+    const minuti = minutiCammino(luogo, fermata);
+    return minuti != null && minuti >= 3 ? minuti : null;
+  }
+
   async function controllaAvvisi() {
     const attivi = preferitiValidi().filter((voce) => avvisoAttivo(voce.slot));
     if (!attivi.length) return;
@@ -3671,16 +3690,25 @@
       } catch (errore) {
         continue;
       }
+      // Da un indirizzo la soglia è il tempo a piedi: l'avviso serve a uscire
+      // di casa, non a sapere che il bus passerà mentre sei ancora sul divano.
+      const esci = minutiPerUscire(voce.luogo, fermata);
+      const soglia = esci || AVVISO_MINUTI;
       const prossimo = arrivi
-        .filter((a) => a.minuti != null && a.minuti >= 0 && a.minuti <= AVVISO_MINUTI)
+        .filter((a) => a.minuti != null && a.minuti >= 0 && a.minuti <= soglia)
         .sort((a, b) => a.minuti - b.minuti)[0];
       if (!prossimo) continue;
       const chiave = [voce.slot, prossimo.linea, prossimo.ora, giorno].join('|');
       if (avvisiInviati.has(chiave)) continue;
       avvisiInviati.add(chiave);
-      const titolo = 'Bus ' + prossimo.linea + ' tra ' + prossimo.minuti + ' min';
-      const corpo = voce.etichetta + ' · ' + nomeBreve(voce.luogo.nome) + ' · ' + prossimo.ora;
-      await mostraNotifica(titolo, corpo, fermata.id);
+      const titolo = esci
+        ? 'Esci ora: bus ' + prossimo.linea + ' tra ' + prossimo.minuti + ' min'
+        : 'Bus ' + prossimo.linea + ' tra ' + prossimo.minuti + ' min';
+      const corpo = esci
+        ? voce.etichetta + ' · ' + esci + ' min a piedi fino a ' + nomeBreve(fermata.nome) +
+          ' · bus alle ' + prossimo.ora
+        : voce.etichetta + ' · ' + nomeBreve(voce.luogo.nome) + ' · ' + prossimo.ora;
+      await mostraNotifica(titolo, corpo, fermata.id, esci ? 'esci-' + chiave : undefined);
     }
   }
 
@@ -3714,9 +3742,17 @@
     else if (Notification.permission === 'granted') stato.textContent = 'Attive';
     else if (Notification.permission === 'denied') stato.textContent = 'Bloccate';
     else stato.textContent = 'Attiva';
+    // Su iPhone il permesso esiste solo con l'app nella schermata Home.
+    const soloHome = $('menu-notifiche-ios');
+    if (soloHome) soloHome.hidden = !notificheSoloDaHome();
   }
 
   async function attivaNotificheMenu() {
+    renderNotificheMenu();
+    if (notificheSoloDaHome()) {
+      mostraToast('Su iPhone aggiungi prima l\'app alla Home: Condividi → Aggiungi alla Home');
+      return;
+    }
     const permesso = await permessoNotifiche();
     renderNotificheMenu();
     if (permesso === 'granted') {
@@ -3731,19 +3767,80 @@
     }
   }
 
+  // Su iPhone le notifiche e il service worker esistono solo con l'app
+  // aggiunta alla Home: senza dirlo, il permesso sembra semplicemente rotto.
+  function notificheSoloDaHome() {
+    const ua = navigator.userAgent || '';
+    const ios = /iPhone|iPad|iPod/.test(ua) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!ios) return false;
+    const inHome = window.navigator.standalone === true ||
+      !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    return !inHome;
+  }
+
+  // Tema: scelta esplicita dell'utente, altrimenti quella del sistema.
+  function temaPreferito() {
+    const salvato = leggi(K_TEMA);
+    if (salvato === 'scuro') return true;
+    if (salvato === 'chiaro') return false;
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }
+
+  function applicaTema(scuro, salva) {
+    document.documentElement.setAttribute('data-tema', scuro ? 'scuro' : 'chiaro');
+    // La barra di sistema segue il tema, altrimenti resta bianca su fondo scuro.
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', scuro ? '#121212' : '#FFFFFF');
+    const check = $('menu-tema');
+    if (check) check.checked = scuro;
+    if (salva) scrivi(K_TEMA, scuro ? 'scuro' : 'chiaro');
+  }
+
+  // La corsa avvisata può essere in anticipo o in ritardo: se il tempo reale
+  // della stessa corsa è in memoria (da meno di tre minuti), l'avviso lo segue
+  // invece di fidarsi dell'orario di tabella.
+  function corsaAvvisata() {
+    if (!live.avvisa || !live.items || !live.items.length) return null;
+    if (!live.ts || Date.now() - live.ts > 3 * 60000) return null;
+    const programmato = minutiA(live.avvisa.ora);
+    let migliore = null;
+    live.items.forEach((voce) => {
+      if (String(voce.linea).toUpperCase() !== live.avvisa.linea) return;
+      if (voce.minuti == null) return;
+      const scarto = voce.minuti - programmato;
+      // Oltre venti minuti di distanza è un'altra corsa della stessa linea.
+      if (Math.abs(scarto) > 20) return;
+      if (!migliore || Math.abs(scarto) < Math.abs(migliore.scarto)) {
+        migliore = { voce: voce, scarto: scarto };
+      }
+    });
+    return migliore;
+  }
+
   // Avviso a 2 minuti della corsa scelta negli orari: una sola notifica per
   // fermata, linea, ora e giorno, anche se il controllo gira ogni 15 secondi.
   function controllaAvvisoArrivo() {
     if (!live.avvisa || !live.fermata) return;
     if (routing.giorno && routing.giorno !== oggiISO()) return;
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-    const minuti = minutiA(live.avvisa.ora);
-    if (minuti == null || minuti < 0 || minuti > AVVISO_ARRIVO_MINUTI) return;
+    const trovata = corsaAvvisata();
+    const reale = !!(trovata && trovata.voce.tipo === 'live');
+    const minuti = trovata ? trovata.voce.minuti : minutiA(live.avvisa.ora);
+    if (minuti == null || minuti < 0) return;
     const chiave = [oggiISO(), live.fermata.id, live.avvisa.linea, live.avvisa.ora].join('|');
+    // Bus rallentato dopo la notifica: la corsa torna lontana, quindi l'avviso
+    // si riarma e riparte davvero due minuti prima del passaggio reale.
+    if (avvisiArrivoInviati.has(chiave) && minuti > AVVISO_ARRIVO_MINUTI + 2) {
+      avvisiArrivoInviati.delete(chiave);
+    }
+    if (minuti > AVVISO_ARRIVO_MINUTI) return;
     if (avvisiArrivoInviati.has(chiave)) return;
     avvisiArrivoInviati.add(chiave);
-    const titolo = 'Bus ' + live.avvisa.linea + ' tra ' + Math.max(0, minuti) + ' min';
-    const corpo = nomeLuogo(live.fermata) + ' · ore ' + live.avvisa.ora;
+    const quando = reale ? trovata.voce.ora : live.avvisa.ora;
+    const titolo = 'Bus ' + live.avvisa.linea + ' tra ' + Math.max(0, minuti) + ' min' +
+      (reale ? ' (tempo reale)' : '');
+    const corpo = nomeLuogo(live.fermata) + ' · ore ' + quando;
     void mostraNotifica(titolo, corpo, live.fermata.id, 'arrivo-' + chiave);
   }
 
@@ -3804,8 +3901,12 @@
     renderPreferiti();
     avviaAvvisi();
     controllaAvvisi();
-    mostraToast('Ti avviso 5 minuti prima del bus da ' + voce.etichetta +
-      " (con l'app aperta o in background)");
+    const fermata = fermataPerAvviso(voce.luogo);
+    const esci = minutiPerUscire(voce.luogo, fermata);
+    mostraToast(esci
+      ? 'Ti avviso quando devi uscire: circa ' + esci + ' min a piedi fino a ' + nomeBreve(fermata.nome)
+      : 'Ti avviso 5 minuti prima del bus da ' + voce.etichetta +
+        " (con l'app aperta o in background)");
   }
 
   function apriCercaPreferito(slot) {
@@ -4268,8 +4369,55 @@
         ? '<div><p class="micro" style="margin:0 0 4px">Forse ti conviene</p>' +
           consigli.map((testo) => '<p class="b-conviene">' + testo + '</p>').join('') + '</div>'
         : '') +
+      convieneHTML(r) +
       '<a href="' + URL_UFFICIALE + '" target="_blank" rel="noopener">Verifica sul calcolatore TPER</a>' +
       '</div></details>';
+  }
+
+  // Confronto biglietti/abbonamento: il prezzo dell'abbonamento non è nei dati
+  // aperti TPER, quindi lo scrive chi lo paga invece di inventarlo.
+  function convieneHTML(r) {
+    if (!r || !r.prezzo || r.prezzo <= 0) return '';
+    return '<details class="conviene" data-prezzo="' + esc(String(r.prezzo)) + '">' +
+      '<summary>Ti conviene l\'abbonamento?</summary>' +
+      '<div class="conviene-corpo">' +
+      '<label class="conviene-riga"><span>Corse a settimana</span>' +
+      '<input type="number" id="conviene-corse" inputmode="numeric" min="1" max="60" step="1" value="10"></label>' +
+      '<label class="conviene-riga"><span>Abbonamento al mese (€)</span>' +
+      '<input type="number" id="conviene-prezzo" inputmode="decimal" min="0" step="0.10" placeholder="39,00"></label>' +
+      '<p class="conviene-esito" id="conviene-esito" role="status"></p>' +
+      '<p class="micro" style="margin:0">Ogni corsa costa ' + esc(euro(r.prezzo)) +
+      '. Il prezzo dell\'abbonamento non è nei dati aperti: scrivi quello che paghi davvero.</p>' +
+      '</div></details>';
+  }
+
+  function aggiornaConvenienza() {
+    const esito = $('conviene-esito');
+    if (!esito) return;
+    const box = esito.closest('.conviene');
+    if (!box) return;
+    const campoCorse = $('conviene-corse');
+    const campoPrezzo = $('conviene-prezzo');
+    const prezzoAbbonamento = campoPrezzo ? Number(campoPrezzo.value) : NaN;
+    const conto = Tariffe.convenienza({
+      corseSettimana: campoCorse ? Number(campoCorse.value) : NaN,
+      prezzoAbbonamento: prezzoAbbonamento,
+      prezzoCorsa: Number(box.getAttribute('data-prezzo'))
+    });
+    if (!conto) {
+      esito.textContent = 'Scrivi quante corse fai a settimana.';
+      return;
+    }
+    const testa = 'Con ' + conto.corseMese + ' corse al mese spendi ' + euro(conto.spesaMese) + ' in biglietti';
+    if (conto.conviene === null) {
+      esito.textContent = testa + '. Scrivi il prezzo dell\'abbonamento per il confronto.';
+    } else if (conto.conviene) {
+      esito.textContent = testa + ': l\'abbonamento conviene già da ' + conto.sogliaCorse +
+        ' corse al mese e con il tuo risparmi ' + euro(conto.risparmio) + '.';
+    } else {
+      esito.textContent = testa + ', meno dell\'abbonamento da ' + euro(prezzoAbbonamento) +
+        ': per ora non conviene. Conviene da ' + conto.sogliaCorse + ' corse al mese.';
+    }
   }
 
   function htmlDettaglio(r) {
@@ -6499,6 +6647,56 @@
   }
 
   // Vista orari: arrivi della fermata scelta, aggiornati ogni 30 secondi.
+  /* --- Palina: schermo sempre acceso -------------------------------- */
+  // In fermata il telefono sta in mano con gli arrivi aperti: la Wake Lock API
+  // evita che lo schermo si spenga mentre si aspetta il bus.
+  let schermoSempre = false;
+  let sentinellaSchermo = null;
+
+  async function chiediSchermo() {
+    if (!('wakeLock' in navigator)) return false;
+    try {
+      sentinellaSchermo = await navigator.wakeLock.request('screen');
+      sentinellaSchermo.addEventListener('release', () => { sentinellaSchermo = null; });
+      return true;
+    } catch (errore) {
+      sentinellaSchermo = null;
+      return false;
+    }
+  }
+
+  function rilasciaSchermo() {
+    schermoSempre = false;
+    if (!sentinellaSchermo) return;
+    const sentinella = sentinellaSchermo;
+    sentinellaSchermo = null;
+    try { sentinella.release(); } catch (errore) { /* già rilasciata dal browser */ }
+  }
+
+  async function alternaSchermo() {
+    if (schermoSempre) {
+      rilasciaSchermo();
+      renderLive();
+      mostraToast('Lo schermo può spegnersi di nuovo');
+      return;
+    }
+    if (!('wakeLock' in navigator)) {
+      mostraToast('Questo browser non può tenere lo schermo acceso');
+      return;
+    }
+    schermoSempre = true;
+    const ok = await chiediSchermo();
+    if (!ok) schermoSempre = false;
+    renderLive();
+    mostraToast(ok ? 'Schermo acceso finché resti sugli arrivi' : 'Lo schermo non può restare acceso');
+  }
+
+  // Il browser toglie il wake lock quando la pagina va in background: al
+  // ritorno si richiede da soli, senza un altro tocco.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && schermoSempre && !sentinellaSchermo) chiediSchermo();
+  });
+
   function renderLive() {
     const box = $('vista-orari');
     if (!box) return;
@@ -6533,6 +6731,13 @@
         '<button type="button" class="btn btn-tenue" data-azione="orari-partenza">Parti da qui</button>' +
         '<button type="button" class="btn btn-tenue" data-azione="orari-destinazione">Vai qui</button>' +
         '</div>';
+    }
+    // Palina sempre accesa: il telefono appoggiato alla fermata non deve
+    // spegnersi proprio mentre guardi quanto manca.
+    if (fermata && typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+      html += '<button type="button" class="btn-schermo' + (schermoSempre ? ' acceso' : '') +
+        '" data-azione="schermo" aria-pressed="' + (schermoSempre ? 'true' : 'false') + '">' +
+        (schermoSempre ? 'Schermo acceso: tocca per liberarlo' : 'Tieni lo schermo acceso') + '</button>';
     }
 
     if (!fermata) {
@@ -6806,6 +7011,8 @@
       avviaTimerLive();
     } else {
       fermaTimerLive();
+      // Uscendo dagli arrivi la palina non serve più: lo schermo torna libero.
+      if (schermoSempre) rilasciaSchermo();
     }
     aggiornaScrim();
     aggiornaBarra();
@@ -7331,6 +7538,8 @@
     }
     const statoPosizione = $('menu-posizione-stato');
     if (statoPosizione) statoPosizione.textContent = posizioneUtente ? 'Attiva' : 'Trova';
+    const tema = $('menu-tema');
+    if (tema) tema.checked = document.documentElement.getAttribute('data-tema') === 'scuro';
     renderNotificheMenu();
   }
 
@@ -7609,6 +7818,17 @@
     });
     $('menu-posizione').addEventListener('click', () => { chiudiMenu(); posizioneComePartenza(); });
     $('menu-notifiche').addEventListener('click', () => { attivaNotificheMenu(); });
+    $('menu-tema').addEventListener('change', (evento) => {
+      applicaTema(evento.target.checked, true);
+    });
+    // Senza una scelta salvata il tema segue il sistema, anche se cambia
+    // mentre l'app è aperta.
+    const scuroDiSistema = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    if (scuroDiSistema && scuroDiSistema.addEventListener) {
+      scuroDiSistema.addEventListener('change', () => {
+        if (!leggi(K_TEMA)) applicaTema(temaPreferito(), false);
+      });
+    }
     $('menu-linee').addEventListener('change', (evento) => {
       mostraLineeTutte(evento.target.checked);
     });
@@ -7630,6 +7850,18 @@
       if (togli) rimuoviViaggio(togli.getAttribute('data-rimuovi-viaggio'));
     });
     $('menu-info').addEventListener('toggle', () => { if ($('menu-info').open) renderInfo(); });
+    // Il confronto biglietti/abbonamento si aggiorna mentre si scrive, senza
+    // ridisegnare la scheda: un re-render farebbe perdere il fuoco al campo.
+    $('sheet-corpo').addEventListener('input', (evento) => {
+      const id = evento.target && evento.target.id;
+      if (id === 'conviene-corse' || id === 'conviene-prezzo') aggiornaConvenienza();
+    });
+    // Il calcolo compare appena si apre il riquadro, non solo dopo il primo
+    // tasto premuto. `toggle` non va in bolla: serve la fase di cattura.
+    $('sheet-corpo').addEventListener('toggle', (evento) => {
+      const nodo = evento.target;
+      if (nodo && nodo.classList && nodo.classList.contains('conviene')) aggiornaConvenienza();
+    }, true);
     $('input-evita').addEventListener('keydown', (evento) => {
       if (evento.key !== 'Enter') return;
       evento.preventDefault();
@@ -8001,6 +8233,7 @@
           aggiornaQuando(isoDi(domani), '08:00');
         }
         if (azione === 'aggiorna') caricaLive(true);
+        if (azione === 'schermo') alternaSchermo();
         if (azione === 'torna-bus') {
           routing.stato = 'ok';
           routing.piedi = null;
@@ -8152,6 +8385,8 @@
    * Avvio
    * ------------------------------------------------------------------ */
   async function avvia() {
+    // Tema prima della mappa: così all'apertura non si vede un lampo bianco.
+    applicaTema(temaPreferito(), false);
     // Spazio, errori e conteggio degli usi vanno sistemati prima di tutto:
     // la pulizia deve avvenire quando le cache sono ancora scrivibili.
     pulisciCriteriObsoleti();

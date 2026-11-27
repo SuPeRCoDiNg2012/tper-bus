@@ -1,6 +1,6 @@
 # Tutte le funzioni di Muovi Bologna
 
-Indice completo del codice: **405 funzioni** — 325 in `app.js` e 80 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
+Indice completo del codice: **430 funzioni** — 340 in `app.js` e 90 negli altri moduli (in `routing.js` cinque sono scritte come costanti interne) — raggruppate per area. Una riga per funzione, nell'ordine in cui compaiono nel file. La colonna «cosa fa» è volutamente di poche parole: serve a ritrovare il punto giusto, non a sostituire la lettura del codice.
 
 Nessun framework e nessun bundler: `index.html` carica gli script con `<script>` normali, `app.js` è l'unico file grande e gli altri moduli sono oggetti globali (`Utilita`, `Tariffe`, `Piedi`, `Routing`, `VistaPercorso`, `Icone`).
 
@@ -49,10 +49,11 @@ Indice delle linee costruito dagli orari GTFS: ricerca «dove passa il 20», dir
 | `ultimaAllaFermata(linea, capolinea, idFermata, attive)` | Ultima corsa che passa davvero da una fermata. |
 | `cerca(linee, testo)` | Linee per nome esatto, prefisso o contenuto. |
 
-## tariffe.js — 6 funzioni
+## tariffe.js — 7 funzioni
 
 | Funzione | Cosa fa |
 | --- | --- |
+| `convenienza(opzioni)` | Corse al mese, spesa in biglietti, soglia di pareggio e risparmio rispetto a un abbonamento dal prezzo indicato. |
 | `isZonaUrbana(zona)` | La zona è quella urbana di Bologna? |
 | `etichettaZona(zona)` | Nome leggibile della zona: urbana, neutra o extraurbana. |
 | `distanzaKm(a, b)` | Distanza in linea d'aria; `null` se manca una coordinata. |
@@ -153,7 +154,7 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 
 ---
 
-# app.js — 329 funzioni
+# app.js — 340 funzioni
 
 ## Stato locale e preferenze — 13
 
@@ -257,10 +258,12 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `coordinateFermata(id)` | Coordinate di una fermata dall'id. |
 | `proiettaSuLinea(punto, linea)` | Punto più vicino su una linea, con distanza. |
 
-## Piedi e tracciato — 13
+## Piedi e tracciato — 15
 
 | Funzione | Cosa fa |
 | --- | --- |
+| `minutiCammino(da, a)` | Minuti a piedi fra due punti: linea d'aria con un 25% per le strade, passo 4,5 km/h. |
+| `minutiPerUscire(luogo, fermata)` | Minuti di cammino per l'avviso «esci ora», `null` se la fermata è sotto casa. |
 | `piediCaricati()` | Geometrie pedonali già scaricate. |
 | `piediSalvati()` | Geometrie pedonali lette dalla cache locale. |
 | `geometriaPiedi(da, a)` | Geometria pedonale in cache, se c'è. |
@@ -337,10 +340,12 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `rigaCampoHTML(ruolo)` | Riga di un campo (partenza o arrivo). |
 | `pannelloQuandoHTML()` | Pannello data e ora. |
 
-## Preferiti, avvisi, onboarding — 19
+## Preferiti, avvisi, onboarding — 21
 
 | Funzione | Cosa fa |
 | --- | --- |
+| `notificheSoloDaHome()` | Vero su iPhone quando l'app non è nella schermata Home. |
+| `corsaAvvisata()` | La corsa dell'avviso a 2 minuti secondo il tempo reale, se è in memoria. |
 | `preferitiSalvati()` | Preferiti letti dallo storage. |
 | `preferitiValidi()` | Preferiti che si risolvono ancora. |
 | `salvaPreferito(slot, luogo)` | Salva un preferito in uno slot. |
@@ -373,10 +378,12 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `renderPercorso()` | Unica sorgente del pannello percorso. |
 | `collegaCampi()` | Aggancia i due campi di ricerca. |
 
-## Scheda viaggio e biglietto — 22
+## Scheda viaggio e biglietto — 24
 
 | Funzione | Cosa fa |
 | --- | --- |
+| `convieneHTML(r)` | Riquadro «Ti conviene l'abbonamento?» con i due campi. |
+| `aggiornaConvenienza()` | Ricalcola spesa e pareggio senza ridisegnare la scheda. |
 | `totaleMinuti(e)` | Durata totale di un esito in minuti. |
 | `trattaAPiedi()` | La ricerca è solo cammino (sotto 400 m)? |
 | `trenoNellItinerario()` | C'è un treno nell'itinerario? |
@@ -458,10 +465,13 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `costruisci(punti, profondita)` | Nodo dell'albero spaziale. |
 | `piuVicine(nodo, f, raggio, migliore, quante)` | Le N fermate più vicine nell'albero. |
 
-## Percorso e dati live — 14
+## Percorso e dati live — 17
 
 | Funzione | Cosa fa |
 | --- | --- |
+| `chiediSchermo()` | Chiede alla Wake Lock API di tenere acceso lo schermo. |
+| `rilasciaSchermo()` | Lascia spegnere lo schermo e azzera lo stato. |
+| `alternaSchermo()` | Accende o spegne la palina con schermo sempre acceso. |
 | `disegnaPercorso()` | Disegna la scheda percorso e il tracciato. |
 | `calcolaPercorso()` | Prepara i dati e calcola il percorso. |
 | `avviaSuggerimento(richiesta)` | Applica un suggerimento in una riga. |
@@ -519,10 +529,12 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `abilitaTrascinamento(elemento)` | Gestisce trascinamento e slancio del pannello. |
 | `abilitaScorrimentoSheet()` | Scroll interno al pannello quando è pieno. |
 
-## App, menu, service worker — 13
+## App, menu, service worker — 15
 
 | Funzione | Cosa fa |
 | --- | --- |
+| `temaPreferito()` | Tema scelto dall'utente, altrimenti quello del sistema. |
+| `applicaTema(scuro, salva)` | Applica il tema a `<html>`, alla barra di sistema e al menu, e lo salva. |
 | `renderInfo()` | Disegna il pannello «Info». |
 | `renderLogErrori()` | Mostra il log degli errori. |
 | `cancellaDati()` | Svuota storage, cache e service worker, poi riavvia. |

@@ -107,6 +107,32 @@ test('zone urbane e numeri accettati come stringhe', () => {
   assert.equal(Tariffe.isZonaUrbana('510'), false);
 });
 
+test('convenienza abbonamento: corse al mese e soglia di pareggio', () => {
+  const conto = Tariffe.convenienza({ corseSettimana: 10, prezzoAbbonamento: 39, prezzoCorsa: 2.3 });
+  assert.equal(conto.corseMese, 43);          // 10 × 52 / 12
+  assert.equal(conto.spesaMese, 98.9);
+  assert.equal(conto.sogliaCorse, 17);        // 39 / 2,30 → 17 corse
+  assert.equal(conto.conviene, true);
+  assert.equal(conto.risparmio, 59.9);
+
+  // Abbonamento caro: i biglietti costano meno.
+  const caro = Tariffe.convenienza({ corseSettimana: 2, prezzoAbbonamento: 39, prezzoCorsa: 2.3 });
+  assert.equal(caro.corseMese, 9);
+  assert.equal(caro.conviene, false);
+  assert.ok(caro.risparmio < 0);
+
+  // Senza il prezzo dell'abbonamento resta solo quanto si spende.
+  const senza = Tariffe.convenienza({ corseSettimana: 10, prezzoCorsa: 2.3 });
+  assert.equal(senza.sogliaCorse, null);
+  assert.equal(senza.conviene, null);
+  assert.equal(senza.spesaMese, 98.9);
+
+  // Dati inutili: nessun conto inventato.
+  assert.equal(Tariffe.convenienza({ corseSettimana: 0, prezzoCorsa: 2.3 }), null);
+  assert.equal(Tariffe.convenienza({}), null);
+  assert.equal(Tariffe.convenienza(null), null);
+});
+
 test('l\'etichetta della zona dice se è urbana, neutra o extraurbana', () => {
   assert.deepEqual(Tariffe.etichettaZona('500'), { titolo: 'Zona 500', nota: 'Area urbana di Bologna · 1 zona' });
   assert.deepEqual(Tariffe.etichettaZona(509), { titolo: 'Zona 509', nota: 'Zona neutra dell’area urbana (cuscinetto)' });

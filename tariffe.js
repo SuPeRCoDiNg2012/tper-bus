@@ -155,6 +155,33 @@
     };
   }
 
+  /**
+   * Confronto biglietti/abbonamento. Il prezzo dell'abbonamento non è nei dati
+   * aperti TPER: lo passa chi lo paga, invece di inventarlo qui.
+   * @param opzioni { corseSettimana, prezzoAbbonamento, prezzoCorsa }
+   */
+  function convenienza(opzioni) {
+    const corseSettimana = Number(opzioni && opzioni.corseSettimana);
+    const prezzoCorsa = Number(opzioni && opzioni.prezzoCorsa);
+    if (!isFinite(corseSettimana) || corseSettimana <= 0) return null;
+    if (!isFinite(prezzoCorsa) || prezzoCorsa <= 0) return null;
+    const corseMese = Math.round((corseSettimana * 52) / 12);
+    const spesaMese = Math.round(corseMese * prezzoCorsa * 100) / 100;
+    const prezzoAbbonamento = Number(opzioni && opzioni.prezzoAbbonamento);
+    if (!isFinite(prezzoAbbonamento) || prezzoAbbonamento <= 0) {
+      return { corseMese: corseMese, spesaMese: spesaMese, sogliaCorse: null, risparmio: null, conviene: null };
+    }
+    const sogliaCorse = Math.ceil(prezzoAbbonamento / prezzoCorsa);
+    const risparmio = Math.round((spesaMese - prezzoAbbonamento) * 100) / 100;
+    return {
+      corseMese: corseMese,
+      spesaMese: spesaMese,
+      sogliaCorse: sogliaCorse,
+      risparmio: risparmio,
+      conviene: risparmio > 0
+    };
+  }
+
   const API = {
     ZONE_URBANE: ZONE_URBANE,
     TARIFFE_BUS: TARIFFE_BUS,
@@ -165,6 +192,7 @@
     prezzoTreno: prezzoTreno,
     avvisoConfine: avvisoConfine,
     calcolaMex: calcolaMex,
+    convenienza: convenienza,
     calcola: calcola
   };
 
