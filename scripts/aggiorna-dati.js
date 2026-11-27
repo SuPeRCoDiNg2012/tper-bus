@@ -7,8 +7,9 @@
  * `.github/workflows/aggiorna-dati.yml`.
  *
  * FASI
- *   1. fermate bus     dataset della Regione (CKAN); se non risponde, export
- *                      Opendatasoft del Comune di Bologna con gli stessi campi
+ *   1. fermate bus     export Opendatasoft del Comune di Bologna; se non
+ *                      risponde, CKAN regionale e infine il servizio XML TPER
+ *                      OpenDataLineeFermate (stessa granularità fermata+linea)
  *   2. conversione     scripts/converti-fermate-autobus.py
  *   3. GTFS TPER       versione corrente letta da SolWeb, oppure VERSIONE_GTFS
  *   4. orari e colori  scripts/preprocess-orari.js + estrai-colori-linee.py
@@ -55,6 +56,8 @@ const PRIMA = path.join(TMP, 'prima');
 const UA = 'MuoviBologna/1.0 (aggiornamento dati)';
 const CKAN_FERMATE = 'https://dati.emilia-romagna.it/api/3/action/package_show?id=tper-fermate-autobus';
 const ODS_FERMATE = 'https://opendata.comune.bologna.it/api/explore/v2.1/catalog/datasets/tper-fermate-autobus/exports/json';
+const ODS_FERMATE_V2 = 'https://opendata.comune.bologna.it/api/v2/catalog/datasets/tper-fermate-autobus/exports/json';
+const FERMATE_TPER = 'https://solwsweb.tper.it/web-services/open-data.asmx/OpenDataLineeFermate';
 const DETTAGLIO_GTFS = 'https://solweb.tper.it/web/tools/open-data/open-data-detail.aspx?filename=gommagtfsbo';
 const BASE_DOWNLOAD_GTFS = 'https://solweb.tper.it/web/tools/open-data/open-data-download.aspx';
 const GTFS_TRENI_PREDEFINITO = 'https://github.com/deryclem/trenitalia-gtfs/raw/main/gtfs-trenitalia.zip';
@@ -117,6 +120,48 @@ function sembraDatasetFermate(dati) {
   return Boolean(primo) && primo.codice !== undefined && primo.codice_zona !== undefined;
 }
 
+/** Decodifica le poche entità XML usate nei campi TPER. */
+function decodificaXml(testo) {
+  return String(testo || '')
+    .replace(/&#(\d+);/g, (_, codice) => String.fromCodePoint(Number(codice)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, codice) => String.fromCodePoint(parseInt(codice, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+/** Estrae i record fermata+linea dal XML OpenDataLineeFermate di TPER. */
+function recordFermateDaXml(xml) {
+  const record = [];
+  const tabelle = String(xml || '').match(/<Table\b[^>]*>[\s\S]*?<\/Table>/gi) || [];
+  const campo = (blocco, nome) => {
+    const trovato = blocco.match(new RegExp('<' + nome + '\\b[^>]*>([\\s\\S]*?)<\\/' + nome + '>', 'i'));
+    return trovato ? decodificaXml(trovato[1]).trim() : '';
+  };
+  for (const blocco of tabelle) {
+    const codice = campo(blocco, 'codice_fermata');
+    const linea = campo(blocco, 'codice_linea');
+    const zona = campo(blocco, 'codice_zona');
+    if (!codice || !linea || !zona) continue;
+    const latTesto = campo(blocco, 'latitudine');
+    const lonTesto = campo(blocco, 'longitudine');
+    const lat = Number(latTesto);
+    const lon = Number(lonTesto);
+    record.push({
+      codice,
+      codice_linea: linea,
+      codice_zona: Number(zona),
+      denominazione: campo(blocco, 'denominazione'),
+      ubicazione: campo(blocco, 'ubicazione'),
+      comune: campo(blocco, 'comune'),
+      geopoint: latTesto && lonTesto && Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null
+    });
+  }
+  return record;
+}
+
 /** Il dataset nuovo è accettabile rispetto a quello vecchio? */
 function riduzioneAccettabile(vecchio, nuovo, soglia) {
   const limite = soglia == null ? SOGLIA_RIDUZIONE : soglia;
@@ -144,7 +189,8 @@ function stessoContenuto(vecchio, nuovo) {
 
 const API = {
   versioneDaDettaglio, urlGtfs, risorsaJsonCkan, sembraDatasetFermate,
-  riduzioneAccettabile, senzaData, stessoContenuto
+  riduzioneAccettabile, senzaData, stessoContenuto, recordFermateDaXml,
+  fondiFermatePrecedenti
 };
 module.exports = API;
 
@@ -175,12 +221,12 @@ function esegui(comando, argomenti) {
   if (esito.status !== 0) throw new Error(comando + ' è uscito con codice ' + esito.status);
 }
 
-async function scarica(url, destinazione, minimoByte) {
+async function scarica(url, destinazione, minimoByte, timeoutMs) {
   if (!url) throw new Error('URL mancante');
   const risposta = await fetch(url, {
     headers: { 'User-Agent': UA, Accept: '*/*' },
     redirect: 'follow',
-    signal: AbortSignal.timeout(180000)
+    signal: AbortSignal.timeout(timeoutMs || 180000)
   });
   if (!risposta.ok) throw new Error('HTTP ' + risposta.status + ' su ' + url);
   const dati = Buffer.from(await risposta.arrayBuffer());
@@ -194,6 +240,41 @@ async function scarica(url, destinazione, minimoByte) {
   return dati;
 }
 
+function pausa(ms) {
+  return new Promise((risolvi) => setTimeout(risolvi, ms));
+}
+
+/** Riprova un download: un errore di rete o un 5xx non deve fermare la notte. */
+async function scaricaConTentativi(url, destinazione, minimoByte, tentativi, timeoutMs) {
+  const numero = tentativi == null ? 2 : tentativi;
+  let ultimo = null;
+  for (let tentativo = 1; tentativo <= numero; tentativo += 1) {
+    try {
+      return await scarica(url, destinazione, minimoByte, timeoutMs);
+    } catch (errore) {
+      ultimo = errore;
+      if (tentativo < numero) {
+        console.log('  tentativo ' + tentativo + ' fallito (' + errore.message + '), riprovo');
+        await pausa(1500 * tentativo);
+      }
+    }
+  }
+  throw ultimo;
+}
+
+/** Scarica il XML TPER e lo converte nella forma piatta attesa dal convertitore. */
+async function scaricaFermateTper(destinazione) {
+  const xml = await scaricaTestoConTentativi(FERMATE_TPER, 120000);
+  const record = recordFermateDaXml(xml);
+  if (!sembraDatasetFermate(record)) {
+    throw new Error('XML TPER senza un elenco fermata+linea utilizzabile');
+  }
+  fs.mkdirSync(path.dirname(destinazione), { recursive: true });
+  fs.writeFileSync(destinazione, JSON.stringify(record));
+  console.log('  scaricati ' + record.length + ' record fermata+linea → ' + path.relative(RADICE, destinazione));
+  return record;
+}
+
 async function scaricaTesto(url, ms) {
   const risposta = await fetch(url, {
     headers: { 'User-Agent': UA, Accept: 'text/html,application/json' },
@@ -202,6 +283,23 @@ async function scaricaTesto(url, ms) {
   });
   if (!risposta.ok) throw new Error('HTTP ' + risposta.status + ' su ' + url);
   return risposta.text();
+}
+
+async function scaricaTestoConTentativi(url, ms, tentativi) {
+  const numero = tentativi == null ? 2 : tentativi;
+  let ultimo = null;
+  for (let tentativo = 1; tentativo <= numero; tentativo += 1) {
+    try {
+      return await scaricaTesto(url, ms);
+    } catch (errore) {
+      ultimo = errore;
+      if (tentativo < numero) {
+        console.log('  tentativo ' + tentativo + ' fallito (' + errore.message + '), riprovo');
+        await pausa(1500 * tentativo);
+      }
+    }
+  }
+  throw ultimo;
 }
 
 function scompatta(zip, cartella) {
@@ -233,6 +331,38 @@ function ripristina() {
   return true;
 }
 
+/**
+ * Il XML TPER non contiene tutte le fermate storiche del dataset ODS. Se si
+ * usa come ripiego, rimette le fermate bus precedenti che mancano: meglio
+ * aggiornare orari e treni con qualche fermata vecchia che perdere 700 fermate.
+ */
+function fondiFermatePrecedenti(percorsoFermate, percorsoLinee) {
+  if (!esiste(percorsoFermate) || !esiste(percorsoLinee)) return;
+  const nuoveFermate = leggiJSON(percorsoFermate);
+  const nuoveLinee = leggiJSON(percorsoLinee);
+  const vecchieFermate = esiste(path.join(PRIMA, 'fermate.json')) ? leggiJSON(path.join(PRIMA, 'fermate.json')) : null;
+  const vecchieLinee = esiste(path.join(PRIMA, 'linee-per-fermata.json')) ? leggiJSON(path.join(PRIMA, 'linee-per-fermata.json')) : null;
+  if (!vecchieFermate || !Array.isArray(vecchieFermate.fermate)) return;
+
+  const presenti = new Set(nuoveFermate.fermate.map((f) => String(f.id)));
+  const mancanti = vecchieFermate.fermate.filter((f) => f.tipo === 'bus' && !presenti.has(String(f.id)));
+  if (!mancanti.length) return;
+
+  nuoveFermate.fermate.push(...mancanti);
+  nuoveFermate.fermate.sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'it'));
+  nuoveFermate.fonte = String(nuoveFermate.fonte || '') + '; fallback TPER: fermate precedenti mantenute';
+  if (vecchieLinee && vecchieLinee.linee) {
+    mancanti.forEach((f) => {
+      const linee = vecchieLinee.linee[f.id];
+      if (Array.isArray(linee) && linee.length) nuoveLinee.linee[f.id] = linee;
+    });
+    nuoveLinee.fonte = String(nuoveLinee.fonte || '') + '; fallback TPER: linee precedenti mantenute';
+  }
+  fs.writeFileSync(percorsoFermate, JSON.stringify(nuoveFermate, null, 2));
+  fs.writeFileSync(percorsoLinee, JSON.stringify(nuoveLinee, null, 2));
+  console.log('  fallback: mantenute ' + mancanti.length + ' fermate bus precedenti');
+}
+
 /* ------------------------------------------------------------------ *
  * Fasi
  * ------------------------------------------------------------------ */
@@ -241,27 +371,25 @@ async function faseFermate() {
   passo('Fermate bus');
   const file = path.join(TMP, 'fermate-grezze.json');
 
-  // Candidati in ordine: URL esplicito, risorsa JSON del CKAN regionale,
-  // export Opendatasoft. Si tiene il primo che contiene davvero i record.
+  // Candidati in ordine: URL esplicito, export Opendatasoft (v2.1 e v2),
+  // poi CKAN regionale e infine il XML diretto TPER. Si tiene il primo che
+  // contiene davvero i record fermata+linea.
   const candidati = [];
   if (process.env.URL_FERMATE) candidati.push({ nome: 'URL_FERMATE', url: process.env.URL_FERMATE });
   else {
-    try {
-      const json = JSON.parse(await scaricaTesto(CKAN_FERMATE, 30000));
-      const url = risorsaJsonCkan(json);
-      if (url) candidati.push({ nome: 'CKAN Regione', url });
-      else console.log('  CKAN: nessuna risorsa JSON piatta, salto');
-    } catch (errore) {
-      console.log('  CKAN non raggiungibile (' + errore.message + ')');
-    }
     candidati.push({ nome: 'Opendatasoft Comune di Bologna', url: ODS_FERMATE });
+    candidati.push({ nome: 'Opendatasoft Comune di Bologna (v2)', url: ODS_FERMATE_V2 });
   }
 
   let grezze = null;
+  let usatoTper = false;
+  const provati = new Set();
   for (const candidato of candidati) {
+    if (provati.has(candidato.url)) continue;
+    provati.add(candidato.url);
     try {
       console.log('  fonte: ' + candidato.nome);
-      await scarica(candidato.url, file, 500000);
+      await scaricaConTentativi(candidato.url, file, 500000, 2, 90000);
       const letto = leggiJSON(file);
       if (!sembraDatasetFermate(letto)) {
         throw new Error('contenuto inatteso (non è l\'elenco dei record fermata+linea)');
@@ -270,6 +398,43 @@ async function faseFermate() {
       break;
     } catch (errore) {
       console.log('  ' + candidato.nome + ' scartato: ' + errore.message);
+    }
+  }
+
+  // Il CKAN regionale è lento o irraggiungibile: lo si interroga solo dopo
+  // che gli export ODS hanno fallito, non a ogni esecuzione.
+  if (!grezze && !process.env.URL_FERMATE) {
+    try {
+      const json = JSON.parse(await scaricaTesto(CKAN_FERMATE, 12000));
+      const url = risorsaJsonCkan(json);
+      if (!url) {
+        console.log('  CKAN: nessuna risorsa JSON piatta, salto');
+      } else if (provati.has(url)) {
+        console.log('  CKAN: stessa risorsa già provata, salto');
+      } else {
+        provati.add(url);
+        console.log('  fonte: CKAN Regione');
+        await scaricaConTentativi(url, file, 500000, 2, 90000);
+        const letto = leggiJSON(file);
+        if (!sembraDatasetFermate(letto)) {
+          throw new Error('contenuto inatteso (non è l\'elenco dei record fermata+linea)');
+        }
+        grezze = letto;
+      }
+    } catch (errore) {
+      console.log('  CKAN non utilizzabile (' + errore.message + ')');
+    }
+  }
+
+  // Ultima risorsa: il servizio open data di TPER, che non passa da CKAN né
+  // da Opendatasoft. Il XML contiene gli stessi campi fermata+linea.
+  if (!grezze && !process.env.URL_FERMATE) {
+    try {
+      console.log('  fonte: TPER OpenDataLineeFermate');
+      grezze = await scaricaFermateTper(file);
+      usatoTper = true;
+    } catch (errore) {
+      console.log('  TPER OpenDataLineeFermate scartato: ' + errore.message);
     }
   }
   if (!grezze) throw new Error('nessuna fonte delle fermate utilizzabile');
@@ -281,6 +446,7 @@ async function faseFermate() {
     path.join('data', 'fermate.json'),
     path.join('data', 'linee-per-fermata.json')
   ]);
+  if (usatoTper) fondiFermatePrecedenti(percorsoData('fermate.json'), percorsoData('linee-per-fermata.json'));
 }
 
 async function faseGtfs() {
@@ -289,17 +455,17 @@ async function faseGtfs() {
   const cartella = path.join(TMP, 'gtfs-tper');
 
   if (process.env.URL_GTFS_TPER) {
-    await scarica(process.env.URL_GTFS_TPER, zip, 1000000);
+    await scaricaConTentativi(process.env.URL_GTFS_TPER, zip, 1000000);
   } else {
     let versione = (process.env.VERSIONE_GTFS || '').trim();
     if (versione && !/^\d{8}$/.test(versione)) throw new Error('VERSIONE_GTFS non valida: ' + versione);
     if (!versione) {
-      const html = await scaricaTesto(DETTAGLIO_GTFS, 45000);
+      const html = await scaricaTestoConTentativi(DETTAGLIO_GTFS, 45000);
       versione = versioneDaDettaglio(html);
       if (!versione) throw new Error('versione GTFS non trovata nella pagina SolWeb');
     }
     console.log('  versione GTFS: ' + versione);
-    await scarica(urlGtfs(versione), zip, 1000000);
+    await scaricaConTentativi(urlGtfs(versione), zip, 1000000);
   }
 
   fs.rmSync(cartella, { recursive: true, force: true });
@@ -323,7 +489,7 @@ async function faseTreni() {
   const urlTreni = process.env.URL_GTFS_TRENI || GTFS_TRENI_PREDEFINITO;
   const zipTreni = path.join(TMP, 'gtfs-treni.zip');
   const cartellaTreni = path.join(TMP, 'gtfs-treni');
-  await scarica(urlTreni, zipTreni, 1000000);
+  await scaricaConTentativi(urlTreni, zipTreni, 1000000);
   fs.rmSync(cartellaTreni, { recursive: true, force: true });
   scompatta(zipTreni, cartellaTreni);
 
@@ -335,7 +501,7 @@ async function faseTreni() {
   ]);
 
   const pdf = path.join(TMP, 'treni-locali.pdf');
-  await scarica(process.env.URL_PDF_TRENI || PDF_TRENI_PREDEFINITO, pdf, 10000);
+  await scaricaConTentativi(process.env.URL_PDF_TRENI || PDF_TRENI_PREDEFINITO, pdf, 10000);
   esegui('node', [
     path.join('scripts', 'aggiungi-treni-locali.js'),
     '--pdf', path.relative(RADICE, pdf),
@@ -343,7 +509,7 @@ async function faseTreni() {
   ]);
 
   const pdfS1 = path.join(TMP, 'treni-s1.pdf');
-  await scarica(process.env.URL_PDF_S1 || PDF_S1_PREDEFINITO, pdfS1, 10000);
+  await scaricaConTentativi(process.env.URL_PDF_S1 || PDF_S1_PREDEFINITO, pdfS1, 10000);
   esegui('node', [
     path.join('scripts', 'aggiungi-s1.js'),
     '--pdf', path.relative(RADICE, pdfS1),

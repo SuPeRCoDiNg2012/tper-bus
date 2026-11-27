@@ -62,6 +62,28 @@ test('fermate: riconosce l\'elenco dei record fermata+linea', () => {
   assert.equal(API.sembraDatasetFermate({ fermate: [] }), false);
 });
 
+test('fermate TPER: il XML fermata+linea diventa la forma piatta attesa', () => {
+  const xml = `<?xml version="1.0"?>
+    <DataSet><diffgr:diffgram><NewDataSet>
+      <Table><codice_linea>61</codice_linea><codice_fermata>2</codice_fermata>
+        <denominazione>STAZIONE CENTRALE</denominazione><ubicazione>PIAZZA MEDAGLIE D'ORO</ubicazione>
+        <comune>BOLOGNA</comune><latitudine>44.505145</latitudine><longitudine>11.342558</longitudine>
+        <codice_zona>500</codice_zona></Table>
+      <Table><codice_linea>61</codice_linea><codice_fermata>2</codice_fermata>
+        <denominazione>STAZIONE CENTRALE</denominazione><codice_zona>500</codice_zona></Table>
+      <Table><codice_linea>61</codice_linea><codice_fermata>3</codice_fermata></Table>
+    </NewDataSet></diffgr:diffgram></DataSet>`;
+  const record = API.recordFermateDaXml(xml);
+  assert.equal(record.length, 2);
+  assert.deepEqual(record[0], {
+    codice: '2', codice_linea: '61', codice_zona: 500,
+    denominazione: 'STAZIONE CENTRALE', ubicazione: "PIAZZA MEDAGLIE D'ORO",
+    comune: 'BOLOGNA', geopoint: { lat: 44.505145, lon: 11.342558 }
+  });
+  assert.equal(record[1].geopoint, null);
+  assert.deepEqual(API.recordFermateDaXml(''), []);
+});
+
 test('soglia di riduzione: blocca i cali oltre il 10%', () => {
   assert.equal(API.riduzioneAccettabile(9603, 9603), true);
   assert.equal(API.riduzioneAccettabile(9603, 9000), true);
