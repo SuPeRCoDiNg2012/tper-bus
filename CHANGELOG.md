@@ -4,7 +4,7 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
-- **Arrivi senza doppioni**: quando un bus è localizzato, la sua corsa programmata non compare più come seconda riga se lo scarto è di pochi minuti; l'abbinamento è uno a uno, quindi il bus successivo della stessa linea resta. Sparisce anche la doppia riga «Previsto» + «DaSatellite» dello stesso passaggio.
+- **Arrivi senza doppioni**: quando un bus è localizzato, la sua corsa programmata non compare più come seconda riga se lo scarto è di pochi minuti; l'abbinamento è uno a uno e la finestra si misura sulla frequenza della linea (mai più del passo meno un minuto e mezzo, al massimo 8 minuti), quindi il bus successivo resta e su una linea ogni 6 minuti un ritardo non assorbe la corsa precedente. Sparisce anche la doppia riga «Previsto» + «DaSatellite» dello stesso passaggio.
 - **Tema scuro**: interruttore nel menu, con la scelta salvata; finché non scegli segue il tema del sistema. La mappa resta chiara (lo stile è quello di OpenFreeMap), il resto dell'interfaccia diventa scuro.
 - **Esci ora**: se un preferito è un indirizzo, l'avviso calcola il tempo a piedi fino alla fermata e avvisa quando devi uscire, non quando passa il bus; dalla fermata sotto casa resta l'avviso a cinque minuti. La stima è dichiarata nella notifica.
 - **Avviso a 2 minuti sul tempo reale**: segue il passaggio reale della corsa invece dell'orario di tabella e si riarma se il bus slitta, così arriva davvero due minuti prima.

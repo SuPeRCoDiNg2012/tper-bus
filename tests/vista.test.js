@@ -243,18 +243,74 @@ test('«Previsto» e «DaSatellite» dello stesso passaggio danno una riga sola'
 });
 
 test('un live non nasconde due corse della stessa linea', () => {
-  // Due bus programmati a un minuto l'uno dall'altro: il live copre solo il più
-  // vicino, l'altro resta in elenco.
+  // Linea ogni 6 minuti: il live copre la corsa più vicina, quella dopo resta.
   const uniti = Vista.arriviUniti(
     [{ linea: '20', ora: '08:10', tipo: 'live', bus: '4412' }],
     [
-      { linea: '20', ora: '08:11', destinazione: 'Normandia' },
-      { linea: '20', ora: '08:12', destinazione: 'Normandia' }
+      { linea: '20', ora: '08:14', destinazione: 'Normandia' },
+      { linea: '20', ora: '08:20', destinazione: 'Normandia' }
     ],
     8 * 60
   );
-  assert.equal(uniti.length, 2);
+  assert.deepEqual(uniti.map((v) => v.ora), ['08:10', '08:20']);
   assert.equal(uniti[0].tipo, 'live');
+});
+
+test('la finestra si adatta alla frequenza: sulla linea ogni 6 minuti il bus prima resta', () => {
+  // Bus ogni 6 minuti: il live delle 08:11 è la corsa delle 08:11, non quella
+  // delle 08:05 in ritardo. Con la vecchia finestra fissa da 8 minuti la 08:05
+  // sarebbe sparita.
+  const uniti = Vista.arriviUniti(
+    [{ linea: '20', ora: '08:11', tipo: 'live', bus: '4412' }],
+    [
+      { linea: '20', ora: '08:05', destinazione: 'Normandia' },
+      { linea: '20', ora: '08:11', destinazione: 'Normandia' },
+      { linea: '20', ora: '08:17', destinazione: 'Normandia' }
+    ],
+    8 * 60
+  );
+  assert.deepEqual(uniti.map((v) => v.ora), ['08:05', '08:11', '08:17']);
+  assert.equal(uniti[1].tipo, 'live');
+});
+
+test('su una linea diradata la finestra resta ampia', () => {
+  // Ogni 30 minuti: un ritardo di 7 minuti è ancora la corsa delle 08:00.
+  const uniti = Vista.arriviUniti(
+    [{ linea: '19', ora: '08:07', tipo: 'live', bus: '4412' }],
+    [
+      { linea: '19', ora: '08:00', destinazione: 'Casteldebole' },
+      { linea: '19', ora: '08:30', destinazione: 'Casteldebole' }
+    ],
+    8 * 60
+  );
+  assert.deepEqual(uniti.map((v) => v.ora), ['08:07', '08:30']);
+});
+
+test('senza orari sufficienti la finestra resta quella massima', () => {
+  // Una sola corsa programmata: nessun passo da misurare, vale il tetto di 8.
+  const uniti = Vista.arriviUniti(
+    [{ linea: '20', ora: '08:08', tipo: 'live', bus: '4412' }],
+    [{ linea: '20', ora: '08:00', destinazione: 'Normandia' }],
+    8 * 60
+  );
+  assert.deepEqual(uniti.map((v) => v.ora), ['08:08']);
+});
+
+test('il passo si misura solo dentro la linea', () => {
+  // La 20 passa ogni 30 minuti, la 19 ogni 5: la finestra della 20 non deve
+  // restringersi per colpa delle corse della 19.
+  const uniti = Vista.arriviUniti(
+    [{ linea: '20', ora: '08:07', tipo: 'live', bus: '4412' }],
+    [
+      { linea: '20', ora: '08:00', destinazione: 'Normandia' },
+      { linea: '20', ora: '08:30', destinazione: 'Normandia' },
+      { linea: '19', ora: '08:05', destinazione: 'Casteldebole' },
+      { linea: '19', ora: '08:10', destinazione: 'Casteldebole' },
+      { linea: '19', ora: '08:15', destinazione: 'Casteldebole' }
+    ],
+    8 * 60
+  );
+  assert.deepEqual(uniti.map((v) => v.ora), ['08:05', '08:07', '08:10', '08:15', '08:30']);
 });
 
 test('la variante della linea non duplica la corsa programmata', () => {

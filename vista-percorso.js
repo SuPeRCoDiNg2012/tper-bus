@@ -93,8 +93,8 @@
    * entrambe le fonti vince quella con la posizione reale.
    * `realtime`: [{ linea, ora, tipo, bus }], `programmati`: [{ linea, ora, destinazione }].
    */
-  // Quanto può sbagliare HelloBus rispetto all'orario di tabella: oltre questa
-  // distanza è un'altra corsa della stessa linea, non la stessa in ritardo.
+  // Tetto massimo della finestra fra corsa reale e programmata. Il valore
+  // effettivo scende sulle linee frequenti: vedi `finestra` in arriviUniti.
   const SOGLIA_STESSA_CORSA = 8;
 
   function arriviUniti(realtime, programmati, adessoMinuti, opzioni) {
@@ -126,15 +126,43 @@
       aggiungiCandidata(arrivo.linea, arrivo.ora);
     });
     (programmati || []).forEach((p) => aggiungiCandidata(p.linea, p.ora));
+    // Passo della linea: distanza tipica fra due corse programmate. Una linea
+    // ogni 6 minuti non può avere la finestra di una ogni mezz'ora, altrimenti
+    // un bus in ritardo assorbe quello precedente.
+    const orariLinea = new Map();
+    candidate.forEach((c) => {
+      if (!orariLinea.has(c.base)) orariLinea.set(c.base, []);
+      orariLinea.get(c.base).push(c.minuti);
+    });
+    const passi = new Map();
+    orariLinea.forEach((minuti, base) => {
+      const ordinati = minuti.slice().sort((a, b) => a - b);
+      const scarti = [];
+      for (let i = 1; i < ordinati.length; i += 1) {
+        const scarto = ordinati[i] - ordinati[i - 1];
+        // I vuoti di servizio (notte, domenica) non sono il passo della linea.
+        if (scarto > 0 && scarto <= 60) scarti.push(scarto);
+      }
+      if (!scarti.length) return;
+      scarti.sort((a, b) => a - b);
+      passi.set(base, scarti[Math.floor(scarti.length / 2)]);
+    });
+    const finestra = (base) => {
+      const passo = passi.get(base);
+      if (!passo) return soglia;
+      // Sempre meno del passo: la corsa prima della stessa linea resta in elenco.
+      return Math.min(soglia, Math.max(0.5, passo - 1.5));
+    };
     // Associazione una a una, dalla coppia più vicina: un bus reale non può
     // nascondere due corse. Una corsa che viene dopo il passaggio reale è più
     // probabilmente quella successiva, quindi costa qualche punto in più.
     const coppie = [];
     candidate.forEach((c) => {
+      const limite = finestra(c.base);
       vivi.forEach((vivo, indice) => {
         if (vivo.base !== c.base) return;
         const scarto = vivo.minuti - c.minuti;
-        if (Math.abs(scarto) > soglia) return;
+        if (Math.abs(scarto) > limite) return;
         coppie.push({ chiave: c.chiave, indice: indice, peso: Math.abs(scarto) + (scarto < 0 ? 4 : 0) });
       });
     });
