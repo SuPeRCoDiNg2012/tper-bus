@@ -4,6 +4,7 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- **Ricerca luoghi e indirizzi come Maps**: prima si cerca in un riquadro attorno a partenza, GPS o centro mappa e solo se non c'è nulla si allarga all'area TPER (Bologna, Porretta, Vignola, Imola, Ferrara). I risultati sono deduplicati, riordinati per pertinenza e distanza e mostrano metri o chilometri; per le categorie («farmacia», «bar», «parco») vincono i più vicini. Le fermate che contengono la parola ma stanno dall'altra parte della regione non occupano più i primi posti. Cache indirizzi portata a `v2`.
 - **S1 Porretta**: 56 corse (23 andata, 33 ritorno) da Bologna C.le a Porretta Terme, importate dal PDF ufficiale TPER valido dal 14 giugno al 12 dicembre 2026. La corsa con nota 7 (sospesa nei festivi e prefestivi) resta fuori; le geometrie seguono i binari OpenStreetMap.
 - **Un solo percorso consigliato**: niente più tasti «Veloce»/«Ottimizzato» né righe che spiegano il confronto. L'algoritmo sceglie da sé, entro il 15% del tempo minimo, la soluzione con meno cambi, cammino e attese; le altre restano sotto «Altre soluzioni».
 - **Meteo silenzioso**: pioggia, neve e vento forte continuano a far pesare di più i tratti a piedi, ma la scheda non lo scrive più.

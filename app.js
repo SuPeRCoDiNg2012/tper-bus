@@ -34,7 +34,7 @@
   const K_ONBOARDING = 'tperzc_onboarding_visto_v1';
   const K_PREFERITI = 'tperzc_preferiti_v1';
   const K_AVVISI = 'tperzc_avvisi_v1';
-  const K_INDIRIZZI = 'tperzc_indirizzi_v1';
+  const K_INDIRIZZI = 'tperzc_indirizzi_v2';
   const K_RITARDI = 'tperzc_storico_ritardi_v2';
   const K_FISSE = 'tperzc_fermate_fisse_v1';
   const K_VIAGGI = 'tperzc_viaggi_salvati_v1';
@@ -49,6 +49,10 @@
   const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
   const NOMINATIM_PAUSA = 1100;      // ms tra due richieste: è la policy d'uso di OSM
   const LUOGHI_MIN = 3;              // caratteri minimi prima di cercare un luogo o indirizzo
+  const LUOGHI_MAX = 10;             // risultati Nominatim da chiedere e mostrare
+  // Area servita dal bacino TPER: Bologna, Porretta, Vignola, Imola, Ferrara.
+  // Un riquadro solo su Bologna tagliava fuori Porretta e la Val Samoggia.
+  const NOMINATIM_VIEWBOX = '10.95,44.90,11.90,44.05';
   // Meteo attuale per la zona di partenza: open-meteo non chiede chiavi e
   // risponde in JSON. Si chiede una volta ogni quarto d'ora, mai bloccante.
   const METEO_URL = 'https://api.open-meteo.com/v1/forecast';
@@ -2566,9 +2570,137 @@
     return gruppi;
   }
 
-  function gruppiFermate(query) {
+  function gruppiFermate(query, campo) {
     const risultati = cercaFermate(query);
+    const centro = centroRicerca(campo);
+    if (centro && risultati.length) {
+      const espanso = Utilita.espandi ? Utilita.espandi(query) : query;
+      const q = normalizza(espanso);
+      // Il dataset antepone il comune ("Porretta Terme - Berzantina"): per la
+      // ricerca conta il nome breve, altrimenti ogni fermata del comune
+      // sembrerebbe cercata per nome. Il nome completo vale solo se coincide.
+      const prefisso = (f) => normalizza(nomeLuogo(f)).indexOf(q) === 0 ||
+        normalizza(f.nome) === q;
+      const vicini = risultati
+        .map((f) => ({ f: f, d: distanzaMetri(centro, f), prima: prefisso(f) }))
+        // Le fermate che contengono la parola ma stanno dall'altra parte della
+        // regione non aiutano: restano solo quelle vicine, mentre una fermata
+        // cercata per nome resta trovabile anche se è lontana.
+        .filter((voce) => voce.prima || voce.d <= 25000)
+        .sort((a, b) => (Number(b.prima) - Number(a.prima)) || a.d - b.d)
+        .slice(0, 6)
+        .map((voce) => voce.f);
+      return vicini.length ? [{ titolo: 'Fermate', items: vicini }] : [];
+    }
     return risultati.length ? [{ titolo: 'Fermate', items: risultati }] : [];
+  }
+
+  /* --- Luoghi e indirizzi: pertinenza e vicinanza -------------------
+   * Nominatim non ha un "vicino a me": si cerca prima in un riquadro
+   * attorno alla partenza, al GPS o al centro della mappa e, solo se non
+   * trova nulla, si allarga all'area servita dal bacino TPER. Così
+   * "farmacia" restituisce le farmacie vicine, mentre "Porretta Terme"
+   * continua a funzionare anche cercando da Bologna. I risultati vengono
+   * poi riordinati per corrispondenza e distanza, non nell'ordine grezzo
+   * del servizio.
+   */
+  function normalizzaRicerca(testo) {
+    return normalizza(testo).replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function centroRicerca(campo) {
+    if (campo === 'destinazione' && sel.partenza && sel.partenza.lat != null && sel.partenza.lon != null) {
+      return { lat: sel.partenza.lat, lon: sel.partenza.lon };
+    }
+    if (posizioneUtente && posizioneUtente.lat != null && posizioneUtente.lon != null &&
+        (!posizioneUtente.ts || Date.now() - posizioneUtente.ts < 10 * 60 * 1000)) {
+      return { lat: posizioneUtente.lat, lon: posizioneUtente.lon };
+    }
+    if (mappa && typeof mappa.getCenter === 'function') {
+      const centro = mappa.getCenter();
+      if (centro && isFinite(centro.lat) && isFinite(centro.lng)) {
+        return { lat: centro.lat, lon: centro.lng };
+      }
+    }
+    return null;
+  }
+
+  function viewboxLocale(centro) {
+    const lat = 0.09;
+    const lon = 0.12;
+    return [centro.lon - lon, centro.lat + lat, centro.lon + lon, centro.lat - lat].join(',');
+  }
+
+  // Pertinenza testuale (nome, indirizzo, categoria) + vicinanza. Un nome
+  // esatto batte un risultato generico lontano; a parità, vince il più vicino.
+  function punteggioLuogo(luogo, queryNorm, centro) {
+    const nome = normalizzaRicerca(luogo.nome);
+    const contesto = normalizzaRicerca(luogo.indirizzo);
+    const categoria = normalizzaRicerca(luogo.categoria);
+    const testo = nome + ' ' + contesto + ' ' + categoria;
+    let punteggio = 0;
+    if (categoria === queryNorm) {
+      // Ricerca per categoria ("farmacia", "bar", "parco"): conta soprattutto
+      // la vicinanza, non il nome del singolo esercizio. È la differenza tra
+      // una lista di nomi in ordine alfabetico e i risultati di Maps.
+      if (nome === queryNorm) punteggio += 4;
+      else if (nome.indexOf(queryNorm) === 0) punteggio += 2;
+      else if (nome.indexOf(queryNorm) >= 0) punteggio += 1;
+      punteggio += 40;
+    } else {
+      if (nome === queryNorm) punteggio += 120;
+      else if (nome.indexOf(queryNorm) === 0) punteggio += 80;
+      else if (nome.indexOf(queryNorm) >= 0) punteggio += 45;
+      if (contesto.indexOf(queryNorm) >= 0) punteggio += 25;
+      if (categoria.indexOf(queryNorm) >= 0) punteggio += 20;
+    }
+    const parole = queryNorm.split(' ').filter(Boolean);
+    if (parole.length) {
+      const coperte = parole.filter((parola) => testo.indexOf(parola) >= 0).length;
+      punteggio += (coperte / parole.length) * 25;
+    }
+    if (/\d/.test(queryNorm) && luogo.genere === 'indirizzo') punteggio += 12;
+    punteggio += Math.min(15, (Number(luogo.importanza) || 0) * 15);
+    if (centro && luogo.distanza != null && isFinite(luogo.distanza)) {
+      punteggio += Math.max(0, 30 - luogo.distanza / 150);
+    }
+    return punteggio;
+  }
+
+  function stessaVoceLuogo(a, b) {
+    if (!a || !b || a.lat == null || a.lon == null || b.lat == null || b.lon == null) return false;
+    const distanza = distanzaMetri(a, b);
+    if (distanza < 8) return true;
+    if (normalizzaRicerca(a.nome) !== normalizzaRicerca(b.nome)) return false;
+    if (a.genere === 'indirizzo' && b.genere === 'indirizzo') return distanza < 300;
+    return distanza < 50;
+  }
+
+  function ordinaLuoghi(luoghi, testo, campo) {
+    const elenco = Array.isArray(luoghi) ? luoghi : [];
+    const centro = centroRicerca(campo);
+    const queryNorm = normalizzaRicerca(testo);
+    const copia = elenco.map((luogo) => {
+      const distanza = centro && luogo.lat != null && luogo.lon != null
+        ? Math.round(distanzaMetri(centro, { lat: luogo.lat, lon: luogo.lon }))
+        : (Number.isFinite(luogo.distanza) ? luogo.distanza : null);
+      return Object.assign({}, luogo, { distanza: distanza });
+    });
+    copia.forEach((luogo) => { luogo.punteggio = punteggioLuogo(luogo, queryNorm, centro); });
+    copia.sort((a, b) => (
+      b.punteggio - a.punteggio ||
+      (a.distanza == null ? Infinity : a.distanza) - (b.distanza == null ? Infinity : b.distanza)
+    ));
+    const unici = [];
+    copia.forEach((luogo) => {
+      if (unici.some((altro) => stessaVoceLuogo(altro, luogo))) return;
+      unici.push(luogo);
+    });
+    return unici.slice(0, LUOGHI_MAX).map((luogo) => {
+      const pulito = Object.assign({}, luogo);
+      delete pulito.punteggio;
+      return pulito;
+    });
   }
 
   // Etichette italiane per i risultati Nominatim. Il tipo OSM è più preciso
@@ -2621,13 +2753,15 @@
   function luogoHTML(luogo, ruolo) {
     const genere = luogo.genere === 'luogo' ? 'luogo' : 'indirizzo';
     const categoria = luogo.categoria || (genere === 'luogo' ? 'Luogo' : 'Indirizzo');
+    const distanza = luogo.distanza != null && isFinite(luogo.distanza) ? metriTesto(luogo.distanza) : '';
+    const meta = [categoria, distanza, luogo.zona ? 'zona ' + luogo.zona : ''].filter(Boolean).join(' · ');
     return '<button class="voce" role="option" data-indirizzo="1" data-lat="' + luogo.lat + '" data-lon="' + luogo.lon +
       '" data-nome="' + esc(luogo.nome) + '" data-dettaglio="' + esc(luogo.indirizzo || '') +
       '" data-genere="' + genere + '" data-categoria="' + esc(categoria) + '" data-ruolo="' + esc(ruolo) + '">' +
       '<span class="voce-ico ' + (genere === 'luogo' ? 'luogo' : 'geo') + '">' + ICONA_LUOGO + '</span>' +
       '<span class="voce-testo"><span class="voce-nome">' + esc(luogo.nome) + '</span>' +
       (luogo.indirizzo ? '<span class="voce-indirizzo">' + esc(luogo.indirizzo) + '</span>' : '') +
-      '<span class="voce-meta">' + esc(categoria) + ' · zona ' + esc(luogo.zona) + '</span></span>' +
+      '<span class="voce-meta">' + esc(meta) + '</span></span>' +
       ICONA_PIU +
       '</button>';
   }
@@ -2713,7 +2847,13 @@
     lista.innerHTML = html;
   }
 
-  async function chiediIndirizzi(testo, token) {
+  function urlNominatim(testo, viewbox) {
+    return NOMINATIM + '?format=jsonv2&addressdetails=1&namedetails=1&limit=' + LUOGHI_MAX +
+      '&dedupe=1&accept-language=it&countrycodes=it' +
+      '&viewbox=' + viewbox + '&bounded=1&q=' + encodeURIComponent(testo);
+  }
+
+  async function scaricaNominatim(url, token) {
     // Nominatim consente una richiesta al secondo: si aspetta il turno e si
     // annulla la richiesta precedente appena parte una ricerca nuova.
     const attesa = Math.max(0, ultimaRichiestaIndirizzi + NOMINATIM_PAUSA - Date.now());
@@ -2722,17 +2862,26 @@
     ultimaRichiestaIndirizzi = Date.now();
     if (indirizziAbort) indirizziAbort.abort();
     indirizziAbort = new AbortController();
-    const url = NOMINATIM + '?format=jsonv2&addressdetails=1&namedetails=1&limit=8&dedupe=1&accept-language=it&countrycodes=it' +
-      // bounded=1: senza, il viewbox è solo un suggerimento e la ricerca
-      // restituiva anche un "Mercato" di Napoli con la sua zona.
-      '&viewbox=11.20,44.62,11.50,44.34&bounded=1&q=' + encodeURIComponent(testo);
     const risposta = await fetch(url, {
       signal: segnaleConTimeout(indirizziAbort.signal, TIMEOUT_NOMINATIM),
       headers: { Accept: 'application/json' }
     });
     if (!risposta.ok) throw new Error('Nominatim: ' + risposta.status);
     const elenco = await risposta.json();
-    if (!Array.isArray(elenco)) return [];
+    return Array.isArray(elenco) ? elenco : [];
+  }
+
+  async function chiediIndirizzi(testo, token) {
+    const centro = centroRicerca(suggerimenti.campo);
+    // Prima il quartiere: è quello che rende la ricerca simile a Maps quando
+    // si cerca "farmacia" o "bar". Se il riquadro locale non ha nulla
+    // (per esempio "Porretta Terme" cercata da Bologna), si allarga.
+    let elenco = centro ? await scaricaNominatim(urlNominatim(testo, viewboxLocale(centro)), token) : [];
+    if (elenco === null) return null;
+    if (!elenco.length) {
+      elenco = await scaricaNominatim(urlNominatim(testo, NOMINATIM_VIEWBOX), token);
+      if (elenco === null) return null;
+    }
     const visti = new Set();
     const trovati = [];
     elenco.forEach((voce) => {
@@ -2765,19 +2914,21 @@
         zona: vicina ? vicina.zona : '500',
         tipo: 'indirizzo',
         genere: genere,
-        categoria: categoria
+        categoria: categoria,
+        importanza: Number(voce.importance) || 0
       });
     });
-    return trovati;
+    return ordinaLuoghi(trovati, testo, suggerimenti.campo);
   }
 
   function cercaIndirizzi(testo) {
-    const chiave = normalizza(testo);
+    const chiave = normalizzaRicerca(testo);
     const token = suggerimenti.token + 1;
     suggerimenti.token = token;
     suggerimenti.errore = false;
+    if (indirizziAbort) { indirizziAbort.abort(); indirizziAbort = null; }
     if (indirizziCache.has(chiave)) {
-      suggerimenti.indirizzi = indirizziCache.get(chiave);
+      suggerimenti.indirizzi = ordinaLuoghi(indirizziCache.get(chiave), testo, suggerimenti.campo);
       suggerimenti.caricamento = false;
       disegnaSuggerimenti();
       return;
@@ -2787,7 +2938,7 @@
     const salvati = leggiIndirizziCache(chiave);
     if (salvati) {
       indirizziCache.set(chiave, salvati);
-      suggerimenti.indirizzi = salvati;
+      suggerimenti.indirizzi = ordinaLuoghi(salvati, testo, suggerimenti.campo);
       suggerimenti.caricamento = false;
       disegnaSuggerimenti();
       return;
@@ -2851,18 +3002,25 @@
     suggerimenti.linee = testo.length >= 1 ? lineeSuggerite(testo) : [];
     if (testo.length >= 1) preparaLinee();
     if (testo.length >= 2) {
-      suggerimenti.gruppi = gruppiFermate(testo);
+      suggerimenti.gruppi = gruppiFermate(testo, campo);
     } else {
-      suggerimenti.token += 1;
-      if (indirizziAbort) { indirizziAbort.abort(); indirizziAbort = null; }
       suggerimenti.gruppi = gruppiSuggerimenti(campo);
     }
-    if (testo.length >= LUOGHI_MIN) cercaIndirizzi(testo);
-    else disegnaSuggerimenti();
+    if (testo.length >= LUOGHI_MIN) {
+      cercaIndirizzi(testo);
+    } else {
+      // Anche con due caratteri una richiesta precedente va annullata: altrimenti
+      // i risultati di "via" arriverebbero mentre l'utente ha già scritto "vi".
+      suggerimenti.token += 1;
+      if (indirizziAbort) { indirizziAbort.abort(); indirizziAbort = null; }
+      disegnaSuggerimenti();
+    }
   }
 
   function chiudiOverlay() {
     preferitoInCorso = null;
+    suggerimenti.token += 1;
+    if (indirizziAbort) { indirizziAbort.abort(); indirizziAbort = null; }
     const schermo = $('cerca');
     if (schermo) schermo.hidden = true;
     const input = $('cerca-input');

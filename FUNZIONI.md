@@ -312,7 +312,7 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `nomiCompatti(items)` | Nomi brevi senza prefissi ripetuti. |
 | `voceHTML(f, ruolo, motivo, rimuovi, nome)` | Riga di un suggerimento. |
 | `gruppiSuggerimenti(campo)` | Raggruppa i suggerimenti (recenti, vicini, …). |
-| `gruppiFermate(query)` | Gruppi di fermate per una query. |
+| `gruppiFermate(query, campo)` | Gruppi di fermate per una query, con le più vicine al centro di ricerca. |
 | `nomeNominatim(voce)` | Nome leggibile da un risultato Nominatim. |
 | `genereNominatim(voce)` | Genere di un indirizzo Nominatim. |
 | `categoriaNominatim(voce)` | Categoria di un indirizzo Nominatim. |
