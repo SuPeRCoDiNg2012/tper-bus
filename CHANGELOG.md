@@ -4,6 +4,7 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- **Marconi Express (MEX)**: aggiunto il people mover Bologna Centrale FS–Lazzaretto–Aeroporto con 3.591 corse dal GTFS ufficiale TPER `gtfsmex`, 3 fermate (`TRN001`, `TRN043`, `TRN044`) e geometria ufficiale. Il badge resta **MEX** (non REG), la tariffa è separata (12,80 € aeroporto–centrale, 2,30 € centrale–Lazzaretto) e non viene coperta dall'abbonamento TPER.
 - **Nuovo marchio e icone animate**: logo a “M” di transito con una fermata centrale, al posto del bus nei cerchi. Le icone hanno micro-animazioni ispirate ad animate-ui (menu che diventa X, frecce, scambio, campanella, refresh), disattivate con `prefers-reduced-motion`.
 - **Pulizia delle vecchie preferenze dei criteri**: all'avvio l'app rimuove da `localStorage` `tperzc_criterio_v1`, `tperzc_criterio_default_v1`, `tperzc_criterio_scelte_v1`, `tperzc_criterio_proposto_v1` e le varianti senza prefisso. Non sono più usate e non compaiono nella cookie policy; la pulizia non tocca le preferenze attuali.
 - **Overlay delle zone a bersaglio**: l'Area Urbana di Bologna non è più una serie di macchie separate. La 500 è un disco centrale, le neutre 501–509 una corona continua divisa in spicchi nella direzione delle loro fermate; le extraurbane restano cerchi locali. I raggruppamenti delle fermate si nascondono mentre l'overlay è acceso, così le aree e i numeri restano leggibili.

@@ -3987,8 +3987,27 @@
     return { treno: fermate.some((f) => f.tipo === 'treno'), fer: false };
   }
 
+  // Il people mover ha una tariffa separata: se l'itinerario scelto usa MEX
+  // non si applica né il biglietto urbano né la tariffa regionale a km.
+  function tappaMex() {
+    const scelta = (routing.opzioni && routing.opzioni.length)
+      ? (routing.opzioni[routing.aperto >= 0 ? routing.aperto : 0] || routing.esito)
+      : routing.esito;
+    if (!scelta || !Array.isArray(scelta.tappe)) return null;
+    return scelta.tappe.find((tappa) => String(tappa.linea).toUpperCase() === 'MEX') || null;
+  }
+
   function tariffaCorrente() {
     if (!sel.partenza || !sel.destinazione) return null;
+    const tappa = tappaMex();
+    if (tappa) {
+      // Il tratto MEX può essere raggiunto a piedi da una palina bus: per la
+      // tariffa contano gli estremi della monorotaia, non quelli del cammino.
+      const da = fermataPerId(tappa.da) || sel.partenza;
+      const a = fermataPerId(tappa.a) || sel.destinazione;
+      const mex = Tariffe.calcolaMex(da, a);
+      if (mex) return mex;
+    }
     return Tariffe.calcola(sel.partenza, sel.destinazione, abbonamento, trenoNellItinerario());
   }
 
@@ -5659,13 +5678,14 @@
       return;
     }
     const treno = tappa.tipo === 1 || tappa.tipo === 2;
+    const peopleMover = String(tappa.linea).toUpperCase() === 'MEX';
     const corsa = livePercorso.corsa;
     const linea = esc(tappa.linea);
     const programmato = hhmmDaSecondi(tappa.partenza);
     let html;
     let tag = '<span class="tag-orario">ORARIO</span>';
     if (treno) {
-      html = '<span>Treno <b>' + linea + '</b> alle <b>' + programmato + '</b>.</span>';
+      html = '<span>' + (peopleMover ? 'People mover' : 'Treno') + ' <b>' + linea + '</b> alle <b>' + programmato + '</b>.</span>';
     } else if (livePercorso.caricamento) {
       html = '<span class="punto off"></span><span>Controllo se il bus <b>' + linea +
         '</b> è in orario…</span>';
@@ -6561,9 +6581,10 @@
     const attive = serviziDelGiorno();
     const ultima = Linee.ultima(linea, lineaVista.capolinea, attive);
     const treno = linea.tipo === 1 || linea.tipo === 2;
+    const peopleMover = String(linea.nome).toUpperCase() === 'MEX';
     let html = '<div class="linea-testa"><div>' +
       '<h2 class="linea-nome">Linea ' + esc(linea.nome) + '</h2>' +
-      '<p class="linea-pos">' + (treno ? 'Treno' : 'Bus') + ' · ' +
+      '<p class="linea-pos">' + (peopleMover ? 'People mover' : treno ? 'Treno' : 'Bus') + ' · ' +
       (ultima ? 'ultima corsa ' + esc(hhmm(ultima.secondi)) : 'orari non disponibili per oggi') +
       '</p>' + (ritardoTipico(linea.nome) != null
         ? '<p class="linea-pos">Di solito ' + (ritardoTipico(linea.nome) > 0 ? '+' : '−') +

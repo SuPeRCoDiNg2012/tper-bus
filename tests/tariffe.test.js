@@ -48,6 +48,23 @@ test('treno con abbonamento urbano: serve comunque il biglietto regionale', () =
   assert.match(con.avviso, /abbonamento urbano/);
 });
 
+test('Marconi Express: tariffa separata, non coperta dall’abbonamento', () => {
+  const aeroporto = { id: 'TRN044', nome: 'Bologna - Aeroporto', zona: '500', tipo: 'treno', lat: 44.52876, lon: 11.29440 };
+  const lazzaretto = { id: 'TRN043', nome: 'Lazzaretto - Stazione', zona: '500', tipo: 'treno', lat: 44.51792, lon: 11.31785 };
+  const centrale = { id: 'TRN001', nome: 'Bologna - Stazione Centrale', zona: '500', tipo: 'entrambi', lat: 44.506234, lon: 11.342267 };
+
+  const aeroportoCentrale = Tariffe.calcolaMex(centrale, aeroporto);
+  assert.equal(aeroportoCentrale.prezzo, 12.8);
+  assert.equal(aeroportoCentrale.titolo, 'Biglietto Marconi Express');
+  assert.match(aeroportoCentrale.prezzoNota, /Aeroporto–Bologna Centrale/);
+
+  const centraleLazzaretto = Tariffe.calcolaMex(centrale, lazzaretto);
+  assert.equal(centraleLazzaretto.prezzo, 2.3);
+  assert.match(centraleLazzaretto.avviso, /separato dai titoli TPER/);
+
+  assert.equal(Tariffe.calcolaMex(urbano, extraBus), null);
+});
+
 test('scaglioni del treno: minimo 2,90 € e nessun prezzo oltre 200 km', () => {
   assert.equal(Tariffe.prezzoTreno(4), 2.9);
   assert.equal(Tariffe.prezzoTreno(14), 3.4);

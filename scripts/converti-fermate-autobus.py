@@ -90,6 +90,9 @@ STAZIONI_TRENO = [
     {"id": "TRN040", "nome": "Bologna - San Ruffillo", "tipo": "treno", "zona": "500", "lat": 44.4626716, "lon": 11.3730831},
     {"id": "TRN041", "nome": "Rastignano - Stazione", "tipo": "treno", "zona": "509", "lat": 44.4432202, "lon": 11.3574417},
     {"id": "TRN042", "nome": "Musiano - Pian di Macina", "tipo": "treno", "zona": "509", "lat": 44.4009170, "lon": 11.3439518},
+    # Marconi Express (people mover aeroporto): fermate del GTFS ufficiale TPER gtfsmex.
+    {"id": "TRN043", "nome": "Lazzaretto - Stazione", "tipo": "treno", "zona": "500", "lat": 44.5179200, "lon": 11.3178500},
+    {"id": "TRN044", "nome": "Bologna - Aeroporto", "tipo": "treno", "zona": "500", "lat": 44.5287600, "lon": 11.2944000},
 ]
 
 

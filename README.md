@@ -51,13 +51,13 @@ tper-zone-calc/
 │   ├── marchio.svg                            # Marchio compatto per barra e onboarding
 │   └── icon-maskable-192.svg / -512.svg
 ├── data/
-│   ├── fermate.json                # 9.634 fermate: bus reali + 42 stazioni ferroviarie (tutte le fermate delle linee Vignola, Porretta e Pianoro)
+│   ├── fermate.json                # 9.677 fermate: bus reali + stazioni ferroviarie e people mover
 │   ├── linee-per-fermata.json      # Linee che servono ciascuna fermata (dal dataset ufficiale)
 │   ├── linee-colori.json           # Colore ufficiale di ogni linea (GTFS route_color) per scheda e mappa
-│   ├── orari.json                  # Orari di tutte le corse bus + 224 corse treno (~6,1 MB)
-│   ├── orari.json.gz               # Stessa cosa in gzip (~277 KB): è questo che l'app scarica
-│   ├── tracciati.json              # Geometrie reali di bus e treni (1.679 forme, ~1,8 MB)
-│   └── tracciati.json.gz           # Stessa cosa in gzip (~420 KB): scaricata solo quando serve il percorso
+│   ├── orari.json                  # Orari di tutte le corse bus + 3.815 corse treno/people mover (~6,0 MB)
+│   ├── orari.json.gz               # Stessa cosa in gzip (~280 KB): è questo che l'app scarica
+│   ├── tracciati.json              # Geometrie reali di bus e treni/people mover (1.681 forme, ~1,9 MB)
+│   └── tracciati.json.gz           # Stessa cosa in gzip (~415 KB): scaricata solo quando serve il percorso
 ├── scripts/
 │   ├── converti-fermate-autobus.py # Converte il dataset ufficiale TPER (bus) nei due file dati sopra
 │   ├── estrai-colori-linee.py      # Estrae i colori ufficiali delle linee da routes.txt del GTFS
@@ -65,6 +65,7 @@ tper-zone-calc/
 │   ├── aggiungi-treni.js           # Unisce le corse del GTFS nazionale Trenitalia al dataset bus
 │   ├── aggiungi-treni-locali.js    # Aggiunge le corse S2A Vignola dai PDF TPER, con validazione
 │   ├── aggiungi-s1.js              # Aggiunge le corse S1 Bologna–Porretta dai PDF TPER, con validazione
+│   ├── aggiungi-mex.js             # Aggiunge il people mover Marconi Express dal GTFS TPER gtfsmex
 │   ├── ricostruisci-tracciati.js   # Riproietta le fermate sulle forme e ricostruisce i binari da OSM
 │   └── preprocess-gtfs.js          # (opzionale) elabora il GTFS completo, utile solo per dati extra
 ├── tests/
@@ -106,7 +107,7 @@ Le fonti e i controlli di sicurezza:
 
 - **Fermate**: prima l'API CKAN della Regione, poi l'export Opendatasoft del Comune di Bologna (stessi campi), che è quello usato quando il portale regionale non risponde.
 - **GTFS TPER**: la versione corrente viene letta dalla pagina SolWeb; nessun numero di versione da aggiornare a mano.
-- **Treni**: GTFS nazionale (mirror pubblico CC BY 4.0, sostituibile) e PDF ufficiali degli orari locali S1 e S2A. Le geometrie ferroviarie vengono ricostruite su OpenStreetMap con Overpass.
+- **Treni e people mover**: GTFS nazionale (mirror pubblico CC BY 4.0, sostituibile), PDF ufficiali S1/S2A e GTFS TPER `gtfsmex` per il Marconi Express. Le geometrie ferroviarie vengono ricostruite su OpenStreetMap con Overpass; la forma MEX resta quella ufficiale del GTFS.
 - **Niente dati a metà**: prima di scrivere, il dataset attuale viene copiato in `.tmp-dati/prima`. Se una fase fallisce, se manca una stazione o se le fermate, le corse o le forme calano di oltre il 10%, la copia viene ripristinata e il workflow esce in errore senza pubblicare nulla.
 - **Niente commit inutili**: se il contenuto è identico a parte il campo `aggiornato`, il workflow non produce modifiche e non fa commit.
 
@@ -117,7 +118,7 @@ npm run dati          # oppure: node scripts/aggiorna-dati.js
 npm test && npm run bump
 ```
 
-Quando una fonte cambia indirizzo si può passare un URL alternativo da **Run workflow** (`versione_gtfs`, `url_fermate`, `url_gtfs_treni`, `url_pdf_treni`, `url_pdf_s1`) o con le stesse variabili d'ambiente in locale (`VERSIONE_GTFS`, `URL_FERMATE`, `URL_GTFS_TPER`, `URL_GTFS_TRENI`, `URL_PDF_TRENI`, `URL_PDF_S1`). Quando TPER pubblica il nuovo orario ferroviario serve invece aggiornare il periodo di validità in `scripts/aggiungi-treni-locali.js` e `scripts/aggiungi-s1.js` (`VALIDITA`) insieme ai PDF: la pipeline si ferma dichiarandolo, non inventa corse.
+Quando una fonte cambia indirizzo si può passare un URL alternativo da **Run workflow** (`versione_gtfs`, `url_fermate`, `url_gtfs_treni`, `url_pdf_treni`, `url_pdf_s1`, `url_gtfs_mex`) o con le stesse variabili d'ambiente in locale (`VERSIONE_GTFS`, `URL_FERMATE`, `URL_GTFS_TPER`, `URL_GTFS_TRENI`, `URL_PDF_TRENI`, `URL_PDF_S1`, `URL_GTFS_MEX`). La versione di `gtfsmex` viene letta da SolWeb; `VERSIONE_GTFS_MEX` la forza solo se serve. Quando TPER pubblica il nuovo orario ferroviario serve invece aggiornare il periodo di validità in `scripts/aggiungi-treni-locali.js` e `scripts/aggiungi-s1.js` (`VALIDITA`) insieme ai PDF: la pipeline si ferma dichiarandolo, non inventa corse.
 
 ### A) Fermate bus + linee (metodo consigliato, un solo file)
 
@@ -143,7 +144,7 @@ Il dataset ufficiale sopra riguarda **solo gli autobus**. Le stazioni ferroviari
 
 In alternativa, per un elenco più completo delle linee ferroviarie, resta disponibile il percorso GTFS descritto nella sezione "Metodo alternativo (GTFS)" più sotto, da cui si possono estrarre anche le stazioni.
 
-Le 42 stazioni coprono l'intero elenco delle fermate delle linee **Bologna–Vignola** (18), **Bologna–Porretta** (17) e **Bologna–Pianoro** (7), comprese le fermate minori come Riale, Pilastrino, Zola, Crespellano, Vergato e Rastignano.
+Le stazioni coprono l'intero elenco delle fermate delle linee **Bologna–Vignola** (18), **Bologna–Porretta** (17) e **Bologna–Pianoro** (7), comprese le fermate minori come Riale, Pilastrino, Zola, Crespellano, Vergato e Rastignano. A queste si aggiungono le tre fermate del **Marconi Express**: Bologna Centrale FS, Lazzaretto e Aeroporto.
 
 Gli **orari dei treni** vengono dal GTFS nazionale Trenitalia via NAP (CC BY 4.0) e, per le linee locali, dai PDF ufficiali TPER: **S1 Bologna–Porretta** e **S2A Bologna–Vignola**. La S2A comprende Bologna C.le, Borgo Panigale, Casteldebole, Casalecchio Garibaldi, Ceretolo, Palasport, le fermate della Val Samoggia e Vignola. La S1 comprende Bologna C.le, Borgo Panigale, Casteldebole, Casalecchio Garibaldi, Casalecchio di Reno, Borgonuovo, Pontecchio Marconi, Sasso Marconi, Lama di Reno, Marzabotto, Pian di Venola, Pioppe di Salvaro, Vergato, Carbona, Riola, Silla e Porretta Terme. Le corse sono validate su sequenza fermate, orari monotoni e periodicità prima di entrare nel dataset; le corse S2A con nota 3 (periodicità estiva con sabati soppressi) e la corsa S1 con nota 7 (sospesa nei festivi e prefestivi) restano fuori. Dopo aver rigenerato il dataset bus, unisci le corse ferroviarie con:
 
@@ -152,6 +153,12 @@ node scripts/aggiungi-treni.js gtfs-trenitalia data/orari.json data/tracciati.js
 ```
 
 Lo script rifiuta di girare due volte sullo stesso dataset, così non duplica le corse. Se in futuro il GTFS nazionale includerà altre stazioni, aggiungile all'elenco `STAZIONI` in cima a `scripts/aggiungi-treni.js` (codice `stop_code` NAP e id `TRN…` usato in `data/fermate.json`).
+
+Il **Marconi Express** (MEX) viene letto dal GTFS ufficiale TPER separato [`gtfsmex`](https://solweb.tper.it/web/tools/open-data/open-data-detail.aspx?filename=gtfsmex), con 3.591 corse e le fermate `TRN001` (Bologna Centrale FS), `TRN043` (Lazzaretto) e `TRN044` (Aeroporto). Le date esatte del GTFS diventano eccezioni del calendario: non si inventano giorni di servizio. Lo script va eseguito dopo i treni:
+
+```bash
+node scripts/aggiungi-mex.js .tmp-dati/gtfs-mex data/orari.json data/tracciati.json data/fermate.json
+```
 
 Dopo l'unione ferroviaria esegui la riparazione delle geometrie:
 
@@ -242,11 +249,11 @@ python3 scripts/estrai-colori-linee.py gtfs-tper/routes.txt data/linee-colori.js
 
 Nel pannello del percorso la mappa mostra la linea del bus con la geometria ufficiale del GTFS, senza map matching stradale: il servizio di routing stradale, interrogato su queste forme, restituiva una strada più corta del percorso reale (misurato: −8% su una tratta di 638 m), cioè la via più veloce tra le fermate invece del giro che fa il bus. Se una tratta non ha geometria si disegna la linea diritta tratteggiata, dichiarata come tale. Senza rete si vedono comunque fermate, orari e prezzo.
 
-Lo stesso script legge anche `shapes.txt` e produce `data/tracciati.json`: la geometria reale di ogni linea (semplificata a 8 m di tolleranza e codificata come polilinea), allineata corsa per corsa a `orari.json`. È così che il pannello del percorso disegna sulla mappa il percorso del bus invece di una linea dritta tra le due fermate; i tratti a piedi restano tratteggiati. Per le corse ferroviarie le shapes del GTFS nazionale sono troppo rade (5–8 punti, con salti anche di 17 km): `scripts/ricostruisci-tracciati.js` le sostituisce con il percorso sulla rete ferroviaria OpenStreetMap, stazione per stazione, e riproietta le fermate sui binari. La geometria resta nel dataset, quindi l'app non contatta Overpass.
+Lo stesso script legge anche `shapes.txt` e produce `data/tracciati.json`: la geometria reale di ogni linea (semplificata a 8 m di tolleranza e codificata come polilinea), allineata corsa per corsa a `orari.json`. È così che il pannello del percorso disegna sulla mappa il percorso del bus invece di una linea dritta tra le due fermate; i tratti a piedi restano tratteggiati. Per le corse ferroviarie le shapes del GTFS nazionale sono troppo rade (5–8 punti, con salti anche di 17 km): `scripts/ricostruisci-tracciati.js` le sostituisce con il percorso sulla rete ferroviaria OpenStreetMap, stazione per stazione, e riproietta le fermate sui binari. La geometria MEX, già dettagliata nel GTFS (65 punti per verso), resta invece quella ufficiale e non viene ricostruita su OSM. La geometria resta nel dataset, quindi l'app non contatta Overpass.
 
 I **tratti a piedi** seguono le strade: l'app chiede la geometria a OSRM pedonale FOSSGIS (`routing.openstreetmap.de`), la salva in `localStorage` (massimo 100 tratti) e la riusa. Se il servizio non risponde, il tratto resta un segmento diritto tratteggiato: il calcolo del percorso non si blocca mai per il routing pedonale. Sulla linea partenza, cambi e arrivo hanno nodi distinti (rosso, anello bianco con corona, nero), mentre i pallini delle fermate intermedie sono proiettati sul tracciato disegnato e prendono il colore della linea su cui si trovano: restano la fermata reale, ma appoggiati alla linea invece di fluttuarle accanto (oltre 60 m di scarto la geometria è considerata inaffidabile e il pallino resta sulla fermata). Se una tratta non ha la geometria GTFS viene disegnata come linea diritta tratteggiata e la scheda del percorso lo dichiara.
 
-Ogni linea ha il suo colore, preso dal campo `route_color` del GTFS TPER (`data/linee-colori.json`): lo stesso compare nel badge della scheda viaggio, nei badge degli arrivi della vista orari e sul tracciato della mappa, così un cambio di linea si vede a colpo d'occhio. I colori ufficiali molto chiari vengono scuriti appena solo sulla mappa, per restare leggibili sul basemap chiaro; le linee senza colore nel GTFS restano rosso TPER. I treni hanno il badge rosso TPER e si chiamano per categoria, non con il nome della linea GTFS: **REG** per i regionali (anche i suburbani S1A/S2A, che sono regionali) e **RV** per i regionali veloci. Anche sulla mappa la tratta ferroviaria è rossa.
+Ogni linea ha il suo colore, preso dal campo `route_color` del GTFS TPER (`data/linee-colori.json`): lo stesso compare nel badge della scheda viaggio, nei badge degli arrivi della vista orari e sul tracciato della mappa, così un cambio di linea si vede a colpo d'occhio. I colori ufficiali molto chiari vengono scuriti appena solo sulla mappa, per restare leggibili sul basemap chiaro; le linee senza colore nel GTFS restano rosso TPER. I treni hanno il badge rosso TPER e si chiamano per categoria, non con il nome della linea GTFS: **REG** per i regionali (anche i suburbani S1A/S2A, che sono regionali), **RV** per i regionali veloci e **MEX** per il people mover Marconi Express. Anche sulla mappa la tratta ferroviaria è rossa.
 
 Oltre alle fermate si possono cercare **luoghi e indirizzi**: i suggerimenti arrivano da Nominatim (OpenStreetMap), con debounce e una richiesta al secondo come da policy d'uso. La ricerca parte da un riquadro attorno alla partenza, al GPS o al centro della mappa e, solo se non trova nulla, si allarga all'area TPER (Bologna, Porretta, Vignola, Imola, Ferrara): così «farmacia» trova quelle vicine e «Porretta Terme» funziona anche cercando da Bologna. I risultati sono deduplicati, riordinati per pertinenza e distanza e mostrano metri o chilometri; per una categoria («farmacia», «bar», «parco») valgono prima i più vicini. Si può scrivere direttamente il nome di un posto (per esempio "Mercato di Mezzo", "Farmacia Marco Polo", "Parco di Villa Spada") senza conoscerne l'indirizzo; i risultati sono divisi in **Luoghi** e **Indirizzi** e per i luoghi è indicata la categoria (mercato, farmacia, negozio, parco…). Il luogo o indirizzo scelto viene usato con le sue coordinate esatte: il percorso parte e arriva dalla fermata più comoda entro 500 m, mentre la zona per il prezzo è quella della fermata più vicina (quindi fuori dall'area urbana la stima può essere approssimativa).
 
@@ -271,6 +278,7 @@ Le zone neutre non aggiungono scatti se solo attraversate; aggiungono uno scatto
 - Bus 3 zone: 3,70 €
 - Bus 4 zone: 4,50 €
 - Treno regionale: tariffa regionale Trenitalia Tper a scaglioni di km, 2ª classe (1–10 km 2,90 €, 11–20 3,40 €, 21–30 4,00 €, 31–40 4,90 €, 41–50 5,40 €, 51–60 5,70 €, 61–70 6,40 €, …). Bologna–Imola sono 34 km, quindi 4,90 €: non 3,10 € come diceva la vecchia stima "a due zone". L'app misura i km in linea d'aria tra le due fermate, quindi vicino ai confini di scaglione il prezzo può differire di una fascia. Le linee FER (Bologna–Portomaggiore, Bologna–Vignola) fanno eccezione: lì valgono i titoli a zone, come sui bus.
+- Marconi Express (MEX): tariffa separata, non coperta dall'abbonamento TPER. Aeroporto–Bologna Centrale 12,80 €; Bologna Centrale–Lazzaretto 2,30 €. L'app la mostra quando il percorso usa MEX.
 
 **Verifica sempre il prezzo esatto su tper.it, trenitaliatper.it o sul calcolatore ufficiale** (https://solweb.tper.it/web/tools/zone-calculator.aspx): questa app fornisce una stima rapida, non un biglietto valido.
 
@@ -294,7 +302,7 @@ Una volta pubblicata su GitHub Pages/Netlify/Vercel/Cloudflare Pages (vedi sopra
 
 ## Test automatici
 
-La logica critica è coperta da test Node.js senza dipendenze esterne (50 test): dati e invarianti dei JSON, RAPTOR (diretto, cambi, cammini, calendari, dopo mezzanotte), tariffe, coordinate e risposta OSRM pedonale, icone Lucide, scheda percorso e un percorso reale Bologna C.le–Imola in treno con la sua geometria.
+La logica critica è coperta da test Node.js senza dipendenze esterne (127 test): dati e invarianti dei JSON, RAPTOR (diretto, cambi, cammini, calendari, dopo mezzanotte), tariffe MEX comprese, coordinate e risposta OSRM pedonale, icone Lucide, scheda percorso e percorsi reali Bologna C.le–Imola e Bologna C.le–Aeroporto con le loro geometrie.
 
 ```bash
 node --test tests
@@ -305,11 +313,11 @@ I test non richiedono browser né rete: usano i file in `data/` e un `fetch` sim
 ## Limiti noti
 
 - Il dataset bus è reale e completo (9.603 fermate), ma alcune fermate compaiono due volte con lo stesso nome: sono i due "pali" della stessa fermata, uno per ciascun senso di marcia. È normale: selezionando l'uno o l'altro il risultato del calcolo non cambia.
-- Le stazioni ferroviarie sono una lista curata a mano (11 stazioni principali): il dataset ufficiale TPER riguarda solo gli autobus. Aggiungine altre modificando `STAZIONI_TRENO` in `scripts/converti-fermate-autobus.py`. Gli orari dei treni coprono Bologna C.le, Imola, Pianoro, la S1 Bologna–Porretta e la S2A Bologna–Vignola; per le altre stazioni l'app suggerisce una fermata bus vicina.
+- Le stazioni ferroviarie e MEX sono una lista curata a mano: il dataset ufficiale TPER riguarda gli autobus. Aggiungine altre modificando `STAZIONI_TRENO` in `scripts/converti-fermate-autobus.py`. Gli orari coprono Bologna C.le, Imola, Pianoro, la S1 Bologna–Porretta, la S2A Bologna–Vignola e il Marconi Express; per le altre stazioni l'app suggerisce una fermata bus vicina.
 - I prezzi dei treni regionali sono stime a zone: il prezzo reale di Trenitalia Tper dipende dai chilometri effettivi della tratta.
 - Il dataset aggiornato copre l'intera rete TPER (anche zone di Ferrara/Imola oltre al bacino di Bologna): per queste zone più lontane l'app applica comunque la stessa logica generale urbano/extraurbano, ma le regole di confine specifiche (Zola Predosa, Sasso Marconi) restano pensate per il bacino di Bologna.
 - La logica di calcolo gestisce i casi "urbano↔urbano" e "urbano↔extraurbano" con regole precise; per tratte tra due zone extraurbane l'app rimanda al calcolatore ufficiale TPER, perché il numero di scatti dipende dal percorso esatto.
-- **Percorso**: il pianificatore usa gli orari programmati del GTFS e parte dalla data e ora scelte. Il cambio tra due bus chiede 3 minuti (30 secondi se è la stessa linea), quello che coinvolge un treno 4 (banchina e scale) e 6 tra due treni; le alternative si ottengono vietando a turno la linea principale, così non sono quattro partenze della stessa corsa. Con "Arriva entro" le opzioni sono ordinate dall'arrivo più tardi ma in tempo, con 5 minuti di margine richiesti sulla scadenza. La domenica il feed TPER include soprattutto corse extraurbane: per molte fermate urbane il risultato può essere "nessun collegamento", ed è un limite del dato, non dell'app. I treni sono usabili su Bologna C.le, Imola, Pianoro, la S1 Bologna–Porretta e la S2A Bologna–Vignola; per le altre stazioni ferroviarie (codici `TRN…`) non ci sono orari aperti e l'app suggerisce una fermata vicina.
+- **Percorso**: il pianificatore usa gli orari programmati del GTFS e parte dalla data e ora scelte. Il cambio tra due bus chiede 3 minuti (30 secondi se è la stessa linea), quello che coinvolge un treno 4 (banchina e scale) e 6 tra due treni; le alternative si ottengono vietando a turno la linea principale, così non sono quattro partenze della stessa corsa. Con "Arriva entro" le opzioni sono ordinate dall'arrivo più tardi ma in tempo, con 5 minuti di margine richiesti sulla scadenza. La domenica il feed TPER include soprattutto corse extraurbane: per molte fermate urbane il risultato può essere "nessun collegamento", ed è un limite del dato, non dell'app. I treni sono usabili su Bologna C.le, Imola, Pianoro, la S1 Bologna–Porretta e la S2A Bologna–Vignola; il Marconi Express collega Bologna C.le, Lazzaretto e l'aeroporto. Per le altre stazioni ferroviarie (codici `TRN…`) non ci sono orari aperti e l'app suggerisce una fermata vicina.
 - **Percorsi a piedi**: la geometria arriva da OSRM pedonale FOSSGIS, che richiede connessione. Senza rete, o se il servizio è occupato, i tratti a piedi restano segmenti diritti tratteggiati; il percorso e i prezzi funzionano comunque.
 - **Orari in tempo reale**: la vista orari interroga HelloBus, il servizio TPER con la posizione GPS dei bus. Anche la scheda del percorso mostra il passaggio reale della prima corsa bus (LIVE o orario programmato, con l'eventuale ritardo) e lo aggiorna ogni 30 secondi. Per i treni non esiste un feed in tempo reale aperto: l'app lo scrive e mostra l'orario programmato invece di inventare un ritardo. Il servizio non abilita CORS, quindi dal browser si passa da un Worker proprio (`hellobus-proxy.zeno-astolfi12.workers.dev`) e, in fallback, dal relay pubblico `api.allorigins.win`. I relay gratuiti possono essere lenti o non raggiungibili: in quel caso l'app mostra un messaggio con "Riprova" e il pulsante "Usa il relay predefinito". Nel menu → Informazioni e fonti dati puoi incollare un relay tuo (`https://tuo-relay/?url={url}`) per non dipendere da servizi terzi.
 - Alcuni codici fermata del dataset regionale non sono gestiti da HelloBus o non hanno corse nelle ore serali: l'app lo segnala con un messaggio invece di mostrare un elenco vuoto.

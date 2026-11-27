@@ -1,5 +1,5 @@
 {
-  "aggiornato": "2026-11-25",
+  "aggiornato": "2026-11-27",
   "fonte": "Dataset ufficiale TPER (open data) convertito con converti-fermate-autobus.py; stazioni ferroviarie integrate manualmente",
   "fermate": [
     {
@@ -86867,6 +86867,22 @@
       "lat": 44.615604,
       "lon": 11.369659,
       "indirizzo": "Via Galliera SP4 Km 7+480"
+    },
+    {
+      "id": "TRN043",
+      "nome": "Lazzaretto - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.51792,
+      "lon": 11.31785
+    },
+    {
+      "id": "TRN044",
+      "nome": "Bologna - Aeroporto",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.52876,
+      "lon": 11.2944
     }
   ]
 }

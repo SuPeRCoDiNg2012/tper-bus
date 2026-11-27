@@ -238,6 +238,7 @@
       }
       const durata = minuti(tappa.arrivo - tappa.partenza);
       const treno = tappa.tipo === 1 || tappa.tipo === 2;
+      const peopleMover = String(tappa.linea).toUpperCase() === 'MEX';
       // Il badge porta il colore ufficiale della linea, lo stesso del tracciato.
       const colore = !treno && tappa.colore
         ? ' style="background:' + esc(tappa.colore) + ';color:' + esc(tappa.coloreTesto || '#FFFFFF') + '"'
@@ -246,7 +247,7 @@
         '<span class="corsa-badge' + (treno ? ' treno' : '') + '"' + colore + '>' + esc(tappa.linea) + '</span>' +
         '<div class="corsa-corpo">' +
         '<div class="corsa-riga"><span class="corsa-ora">' + hhmm(tappa.partenza) + '</span><span class="corsa-fermata">' + esc(etichetta(tappa.da)) + '</span></div>' +
-        '<div class="corsa-info">' + (treno ? 'Treno' : tappa.fermate + ' ' + (tappa.fermate === 1 ? 'fermata' : 'fermate')) + ' · ' + Utilita.durata(durata) +
+        '<div class="corsa-info">' + (peopleMover ? 'People mover' : treno ? 'Treno' : tappa.fermate + ' ' + (tappa.fermate === 1 ? 'fermata' : 'fermate')) + ' · ' + Utilita.durata(durata) +
         ritardoHTML(e, indice) + (tappa.ultimaCorsa ? ' · <b class="ultima-corsa">ultima corsa</b>' : '') + '</div>' +
         '<div class="corsa-riga"><span class="corsa-ora">' + hhmm(tappa.arrivo) + '</span><span class="corsa-fermata">' + esc(etichetta(tappa.a)) + '</span></div>' +
         '</div></div>';

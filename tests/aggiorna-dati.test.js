@@ -25,6 +25,13 @@ test('URL del GTFS: contiene nome file e versione', () => {
   assert.match(url, /format=zip/);
 });
 
+test('URL del GTFS Marconi Express: nome file separato e versione', () => {
+  const url = API.urlGtfsMex('20260421');
+  assert.match(url, /filename=gtfsmex/);
+  assert.match(url, /version=20260421/);
+  assert.match(url, /format=zip/);
+});
+
 test('CKAN: sceglie la risorsa JSON e ignora le altre', () => {
   const risposta = {
     result: {

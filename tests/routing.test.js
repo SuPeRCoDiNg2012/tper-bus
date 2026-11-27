@@ -116,6 +116,8 @@ test('i treni si chiamano REG o RV, mai con il nome GTFS', () => {
   assert.equal(TPERRouting.etichettaTreno('REG'), 'REG');
   // I suburbani S1A/S2A sono regionali a tutti gli effetti.
   assert.equal(TPERRouting.etichettaTreno('S2A'), 'REG');
+  // Il people mover non è un regionale: sulla scheda deve restare MEX.
+  assert.equal(TPERRouting.etichettaTreno('MEX'), 'MEX');
   assert.equal(TPERRouting.etichettaTreno(null), 'REG');
 });
 

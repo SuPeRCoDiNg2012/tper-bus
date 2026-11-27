@@ -48,6 +48,13 @@ test('un treno mostra “Treno”, non “1 fermata”', () => {
   assert.match(html, /RV/);
 });
 
+test('il people mover MEX si chiama People mover, non Treno', () => {
+  const html = render(viaggio({}, corsa({ linea: 'MEX', tipo: 2, da: 'TRN001', a: 'TRN044' })));
+  assert.match(html, /People mover · 20 min/);
+  assert.doesNotMatch(html, /Treno · 20 min/);
+  assert.match(html, /MEX/);
+});
+
 test('un bus continua a mostrare il numero di fermate', () => {
   const html = render(viaggio({}, corsa({ linea: '20', tipo: 3, fermate: 1 })));
   assert.match(html, /1 fermata/);

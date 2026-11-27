@@ -448,7 +448,10 @@ async function main() {
   const formeTreno = new Set();
   orari.corse.forEach((corsa, indice) => {
     const forma = tracciati.corse[indice];
-    if (forma >= 0 && orari.linee[corsa[0]] && orari.linee[corsa[0]][1] === 2) formeTreno.add(forma);
+    const linea = orari.linee[corsa[0]];
+    // MEX è una monorotaia con una forma GTFS già dettagliata: non va
+    // ricostruita sulla rete ferroviaria OpenStreetMap, che non la contiene.
+    if (forma >= 0 && linea && linea[1] === 2 && linea[0] !== 'MEX') formeTreno.add(forma);
   });
 
   let formeCambiate = 0;

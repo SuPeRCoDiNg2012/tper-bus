@@ -27,6 +27,14 @@ on:
         description: 'URL alternativo del PDF orari S1 Porretta'
         required: false
         default: ''
+      versione_gtfs_mex:
+        description: 'Versione GTFS Marconi Express (YYYYMMDD). Vuoto = ultima disponibile'
+        required: false
+        default: ''
+      url_gtfs_mex:
+        description: 'URL alternativo del GTFS Marconi Express (gtfsmex)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -79,6 +87,8 @@ jobs:
           URL_GTFS_TRENI: ${{ inputs.url_gtfs_treni }}
           URL_PDF_TRENI: ${{ inputs.url_pdf_treni }}
           URL_PDF_S1: ${{ inputs.url_pdf_s1 }}
+          VERSIONE_GTFS_MEX: ${{ inputs.versione_gtfs_mex }}
+          URL_GTFS_MEX: ${{ inputs.url_gtfs_mex }}
         run: node scripts/aggiorna-dati.js
 
       - name: Test dei dati

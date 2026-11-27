@@ -40,6 +40,8 @@
  *   URL_GTFS_TRENI    zip GTFS nazionale Trenitalia
  *   URL_PDF_TRENI     PDF degli orari ferroviari locali S2A
  *   URL_PDF_S1        PDF degli orari ferroviari locali S1 Porretta
+ *   URL_GTFS_MEX      zip GTFS Marconi Express (people mover aeroporto)
+ *   VERSIONE_GTFS_MEX versione GTFS MEX nel formato YYYYMMDD
  */
 'use strict';
 
@@ -59,6 +61,7 @@ const ODS_FERMATE = 'https://opendata.comune.bologna.it/api/explore/v2.1/catalog
 const ODS_FERMATE_V2 = 'https://opendata.comune.bologna.it/api/v2/catalog/datasets/tper-fermate-autobus/exports/json';
 const FERMATE_TPER = 'https://solwsweb.tper.it/web-services/open-data.asmx/OpenDataLineeFermate';
 const DETTAGLIO_GTFS = 'https://solweb.tper.it/web/tools/open-data/open-data-detail.aspx?filename=gommagtfsbo';
+const DETTAGLIO_GTFS_MEX = 'https://solweb.tper.it/web/tools/open-data/open-data-detail.aspx?filename=gtfsmex';
 const BASE_DOWNLOAD_GTFS = 'https://solweb.tper.it/web/tools/open-data/open-data-download.aspx';
 const GTFS_TRENI_PREDEFINITO = 'https://github.com/deryclem/trenitalia-gtfs/raw/main/gtfs-trenitalia.zip';
 const PDF_TRENI_PREDEFINITO = 'https://s3.eu-south-1.amazonaws.com/static.tper.it/orari/20251213treni/tper_trbovi.pdf';
@@ -94,6 +97,12 @@ function versioneDaDettaglio(html) {
 function urlGtfs(versione) {
   return BASE_DOWNLOAD_GTFS +
     '?source=solweb.tper.it&filename=gommagtfsbo&version=' + versione + '&format=zip';
+}
+
+/** URL del GTFS Marconi Express per una versione YYYYMMDD. */
+function urlGtfsMex(versione) {
+  return BASE_DOWNLOAD_GTFS +
+    '?source=solweb.tper.it&filename=gtfsmex&version=' + versione + '&format=zip';
 }
 
 /**
@@ -188,7 +197,7 @@ function stessoContenuto(vecchio, nuovo) {
 }
 
 const API = {
-  versioneDaDettaglio, urlGtfs, risorsaJsonCkan, sembraDatasetFermate,
+  versioneDaDettaglio, urlGtfs, urlGtfsMex, risorsaJsonCkan, sembraDatasetFermate,
   riduzioneAccettabile, senzaData, stessoContenuto, recordFermateDaXml,
   fondiFermatePrecedenti
 };
@@ -516,6 +525,23 @@ async function faseTreni() {
     '--scrivi'
   ]);
 
+  // Marconi Express: GTFS ufficiale TPER separato (filename=gtfsmex).
+  const versioneMex = process.env.VERSIONE_GTFS_MEX ||
+    versioneDaDettaglio(await scaricaTesto(DETTAGLIO_GTFS_MEX, 60000));
+  if (!versioneMex) throw new Error('versione GTFS Marconi Express non trovata');
+  const zipMex = path.join(TMP, 'gtfs-mex.zip');
+  await scaricaConTentativi(process.env.URL_GTFS_MEX || urlGtfsMex(versioneMex), zipMex, 10000);
+  const cartellaMex = path.join(TMP, 'gtfs-mex');
+  fs.rmSync(cartellaMex, { recursive: true, force: true });
+  scompatta(zipMex, cartellaMex);
+  esegui('node', [
+    path.join('scripts', 'aggiungi-mex.js'),
+    path.relative(RADICE, cartellaMex),
+    path.join('data', 'orari.json'),
+    path.join('data', 'tracciati.json'),
+    path.join('data', 'fermate.json')
+  ]);
+
   esegui('node', [path.join('scripts', 'ricostruisci-tracciati.js'), '--scrivi']);
 }
 
@@ -556,6 +582,10 @@ function controlla(vecchieMisure) {
   }
   if (!fermate.fermate.some((f) => f.id === 'TRN001')) problemi.push('manca la stazione TRN001 (treni non unite?)');
   if (!orari.fermate.includes('TRN037')) problemi.push('manca Porretta Terme (S1 non unita?)');
+  if (!orari.fermate.includes('TRN043') || !orari.fermate.includes('TRN044')) {
+    problemi.push('mancano le fermate del Marconi Express (MEX non unito?)');
+  }
+  if (!orari.linee.some((linea) => linea[0] === 'MEX')) problemi.push('manca la linea MEX');
   if (!fermate.fermate.some((f) => f.id && f.id.startsWith('TRN'))) problemi.push('nessuna stazione ferroviaria nel dataset');
 
   console.log('  fermate ' + fermate.fermate.length + ' · corse ' + orari.corse.length +

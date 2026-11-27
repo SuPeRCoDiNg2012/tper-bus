@@ -178,17 +178,17 @@ test('treni: stazioni, linee e corse con geometria', () => {
     'TRN021', 'TRN022', 'TRN023', 'TRN024', 'TRN025', 'TRN026', 'TRN027',
     'TRN028', 'TRN029', 'TRN030', 'TRN031', 'TRN032', 'TRN033', 'TRN034',
     'TRN035', 'TRN036', 'TRN037', 'TRN038', 'TRN039', 'TRN040', 'TRN041',
-    'TRN042'
+    'TRN042', 'TRN043', 'TRN044'
   ]);
   const lineeTreno = orari.linee.filter((linea) => linea[1] === 2);
-  assert.deepEqual(lineeTreno.map((linea) => linea[0]).sort(), ['REG', 'RV', 'S2A']);
+  assert.deepEqual(lineeTreno.map((linea) => linea[0]).sort(), ['MEX', 'REG', 'RV', 'S2A']);
 
   const corseTreno = [];
   orari.corse.forEach((corsa, indice) => {
     if (orari.linee[corsa[0]][1] !== 2) return;
     corseTreno.push({ corsa, indice });
   });
-  assert.equal(corseTreno.length, 224);
+  assert.equal(corseTreno.length, 3815);
   corseTreno.forEach(({ corsa, indice }) => {
     const fermateCorsa = [];
     let fermata = corsa[2];
@@ -203,6 +203,41 @@ test('treni: stazioni, linee e corse con geometria', () => {
     });
     assert.notEqual(tracciati.corse[indice], -1, 'corsa treno senza geometria');
   });
+});
+
+test('Marconi Express: corse MEX, fermate e calendario ufficiale', () => {
+  const indiceLinea = orari.linee.findIndex((linea) => linea[0] === 'MEX');
+  assert.ok(indiceLinea >= 0, 'linea MEX assente');
+  const corse = [];
+  orari.corse.forEach((corsa, indice) => {
+    if (corsa[0] !== indiceLinea) return;
+    let fermata = corsa[2];
+    let tempo = corsa[3];
+    const fermateCorsa = [orari.fermate[fermata]];
+    const tempi = [tempo];
+    for (let k = 4; k < corsa.length; k += 2) {
+      fermata += corsa[k];
+      tempo += corsa[k + 1];
+      fermateCorsa.push(orari.fermate[fermata]);
+      tempi.push(tempo);
+    }
+    corse.push({ indice, fermate: fermateCorsa, tempi, servizio: corsa[1] });
+  });
+  assert.equal(corse.length, 3591);
+  const andata = ['TRN001', 'TRN043', 'TRN044'];
+  const ritorno = andata.slice().reverse();
+  corse.forEach(({ indice, fermate: f, tempi, servizio }) => {
+    assert.ok(f.join('|') === andata.join('|') || f.join('|') === ritorno.join('|'), 'sequenza MEX inattesa: ' + f.join('→'));
+    for (let i = 1; i < tempi.length; i += 1) {
+      assert.ok(tempi[i] > tempi[i - 1], 'orari MEX non crescenti alla corsa ' + indice);
+    }
+    assert.ok(servizio >= 0 && servizio < orari.servizi.length, 'servizio MEX fuori range');
+    assert.equal(orari.servizi[servizio][0], 0, 'MEX usa una maschera settimanale inventata');
+    assert.ok(tracciati.corse[indice] >= 0, 'corsa MEX senza geometria');
+  });
+  assert.ok(corse.some((c) => c.fermate[0] === 'TRN001'));
+  assert.ok(corse.some((c) => c.fermate[0] === 'TRN044'));
+  assert.ok(orari.eccezioni['20261123'].a.some((indice) => indice >= 0));
 });
 
 test('treni S2A: corse Vignola validate, servizi e geometria', () => {

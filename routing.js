@@ -224,8 +224,11 @@
 
   // I treni si chiamano per categoria, non per linea: RV per i regionali
   // veloci, REG per tutti gli altri (S1A/S2A compresi, che sono regionali).
+  // MEX è un people mover, non un regionale: il badge deve restare MEX.
   function etichettaTreno(nome) {
-    return /rv|veloce/i.test(String(nome == null ? '' : nome)) ? 'RV' : 'REG';
+    const testo = String(nome == null ? '' : nome);
+    if (/^mex$/i.test(testo.trim())) return 'MEX';
+    return /rv|veloce/i.test(testo) ? 'RV' : 'REG';
   }
 
   /**

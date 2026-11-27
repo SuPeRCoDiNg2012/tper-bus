@@ -65,6 +65,29 @@
   }
 
   /**
+   * Tariffa separata del people mover Marconi Express. Non è un titolo TPER:
+   * l'abbonamento urbano non la copre. Prezzi ufficiali al 2026:
+   * aeroporto–Bologna Centrale 12,80 €, Bologna Centrale–Lazzaretto 2,30 €.
+   */
+  function calcolaMex(partenza, destinazione) {
+    if (!partenza || !destinazione) return null;
+    const ids = [String(partenza.id || ''), String(destinazione.id || '')];
+    const aeroporto = ids.includes('TRN044');
+    const lazzaretto = ids.includes('TRN043');
+    const centrale = ids.includes('TRN001');
+    if (!aeroporto && !(lazzaretto && centrale)) return null;
+    return {
+      badge: 'arancio',
+      titolo: 'Biglietto Marconi Express',
+      prezzo: aeroporto ? 12.80 : 2.30,
+      prezzoNota: aeroporto
+        ? 'Aeroporto–Bologna Centrale · tariffa Marconi Express'
+        : 'Bologna Centrale–Lazzaretto · tariffa Marconi Express',
+      avviso: 'Il biglietto Marconi Express è separato dai titoli TPER: acquistalo sul sito o alle emettitrici. L\'abbonamento urbano non lo copre.'
+    };
+  }
+
+  /**
    * @param opzioni { treno } — true se l'itinerario scelto usa un treno.
    */
   function calcola(partenza, destinazione, conAbbonamento, opzioni) {
@@ -141,6 +164,7 @@
     distanzaKm: distanzaKm,
     prezzoTreno: prezzoTreno,
     avvisoConfine: avvisoConfine,
+    calcolaMex: calcolaMex,
     calcola: calcola
   };
 

@@ -84,6 +84,21 @@ test('rete reale: Bologna C.le → Musiano usa tutte le fermate del ramo Pianoro
   assert.ok(Array.isArray(punti) && punti.length >= 7, 'geometria del ramo Pianoro assente');
 });
 
+test('rete reale: Bologna C.le → Aeroporto con il people mover MEX', async () => {
+  const routing = await caricaRouting(orari, tracciati);
+  const esito = routing.calcola('TRN001', 'TRN044', new Date(2026, 10, 23, 8, 0, 0), { maxCambi: 0 });
+
+  assert.ok(esito, 'nessun percorso MEX per l’aeroporto');
+  assert.equal(esito.cambi, 0);
+  assert.equal(esito.tappe.length, 1);
+  assert.equal(esito.tappe[0].linea, 'MEX');
+  assert.deepEqual(esito.tappe[0].stops, ['TRN001', 'TRN043', 'TRN044']);
+  assert.equal(esito.tappe[0].partenza, 8 * 3600 + 1 * 60 + 30);
+  assert.equal(esito.tappe[0].arrivo, 8 * 3600 + 9 * 60);
+  const punti = routing.tratta(esito.tappe[0].forma, esito.tappe[0].da, esito.tappe[0].a, esito.tappe[0].sequenza);
+  assert.ok(Array.isArray(punti) && punti.length > 2, 'geometria MEX assente');
+});
+
 test('rete reale: Bologna C.le → Porretta Terme in treno S1', async () => {
   const routing = await caricaRouting(orari, tracciati);
   const esito = routing.calcola('TRN001', 'TRN037', new Date(2026, 10, 23, 8, 0, 0), { maxCambi: 0 });
