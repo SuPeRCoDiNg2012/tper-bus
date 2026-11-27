@@ -45,6 +45,51 @@ test('i caratteri speciali non rompono né l’URL né la tabella', () => {
   assert.match(parametri.get('body'), /Fermata & \/ strana \(palina 1\)/);
 });
 
+function fintoStorage(iniziale) {
+  const mappa = Object.assign({}, iniziale || {});
+  return {
+    get length() { return Object.keys(mappa).length; },
+    key: (indice) => Object.keys(mappa)[indice],
+    getItem: (chiave) => (Object.prototype.hasOwnProperty.call(mappa, chiave) ? mappa[chiave] : null),
+    setItem: (chiave, valore) => { mappa[chiave] = String(valore); },
+    removeItem: (chiave) => { delete mappa[chiave]; }
+  };
+}
+
+test('il backup prende i dati dell’utente e lascia fuori le cache', () => {
+  const storage = fintoStorage({
+    tperzc_preferiti_v1: '[{"slot":"casa"}]',
+    tperzc_storico_ritardi_v2: '{"20":[2]}',
+    tperzc_fermate_v2: 'pesante',
+    tperzc_errori_v1: 'log',
+    chiave_estranea: 'x'
+  });
+  const pacchetto = Utilita.esportaDati(storage, { adesso: '2026-01-01T00:00:00.000Z' });
+  assert.deepEqual(Object.keys(pacchetto.dati).sort(), ['tperzc_preferiti_v1', 'tperzc_storico_ritardi_v2']);
+  assert.equal(pacchetto.chiavi, 2);
+  assert.equal(pacchetto.esportato, '2026-01-01T00:00:00.000Z');
+});
+
+test('il ripristino sovrascrive solo quello che il pacchetto contiene', () => {
+  const storage = fintoStorage({ tperzc_tema_v1: 'chiaro', tperzc_recenti_v2: 'vecchio' });
+  const esito = Utilita.applicaDati(storage, {
+    dati: { tperzc_tema_v1: 'scuro', chiave_estranea: 'x', tperzc_fermate_v2: 'no' }
+  });
+  assert.equal(esito.scritte, 1);
+  assert.equal(storage.getItem('tperzc_tema_v1'), 'scuro');
+  // Quello che non era nel file resta: un backup vecchio non deve svuotare.
+  assert.equal(storage.getItem('tperzc_recenti_v2'), 'vecchio');
+  assert.equal(storage.getItem('tperzc_fermate_v2'), null);
+});
+
+test('un file che non è un backup viene rifiutato', () => {
+  const storage = fintoStorage({});
+  assert.equal(Utilita.applicaDati(storage, null).errore, 'formato');
+  assert.equal(Utilita.applicaDati(storage, { dati: [] }).errore, 'formato');
+  assert.equal(Utilita.applicaDati(storage, { dati: {} }).errore, 'formato');
+  assert.equal(Utilita.applicaDati(storage, { dati: { tperzc_tema_v1: 'scuro' } }).scritte, 1);
+});
+
 test('le durate sopra l\'ora passano a ore e minuti', () => {
   assert.equal(Utilita.durata(0), '0 min');
   assert.equal(Utilita.durata(59), '59 min');

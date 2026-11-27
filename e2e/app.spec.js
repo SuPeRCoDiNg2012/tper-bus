@@ -121,6 +121,51 @@ test('il tema scuro resta dopo il ricaricamento', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('data-tema', 'scuro');
 });
 
+test('esporta e reimporta i dati locali', async ({ page }) => {
+  await senzaRete(page);
+  await page.goto('/');
+  await chiudiOnboarding(page);
+  await page.locator('#btn-menu').click();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('#menu-esporta').click()
+  ]);
+  expect(download.suggestedFilename()).toMatch(/^muovi-bologna-\d{4}-\d{2}-\d{2}\.json$/);
+
+  page.on('dialog', (finestra) => finestra.accept());
+  await page.setInputFiles('#menu-importa', {
+    name: 'backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({
+      app: 'Muovi Bologna',
+      versione: 1,
+      dati: { tperzc_tema_v1: 'scuro', tperzc_storico_ritardi_v2: '{"20":[3]}' }
+    }))
+  });
+  // Dopo il ripristino l'app si ricarica da sola.
+  await expect(page.locator('html')).toHaveAttribute('data-tema', 'scuro', { timeout: 8000 });
+});
+
+test('il testo grande ingrandisce il pannello', async ({ page }) => {
+  await senzaRete(page, { hellobus: true });
+  await page.goto('/?fermata=100');
+  const riga = page.locator('#vista-orari .arrivo-item').first();
+  await expect(riga).toBeVisible();
+  const altezzaPrima = (await riga.boundingBox()).height;
+  // Sugli orari il pulsante in alto torna indietro invece di aprire il menu:
+  // l'interruttore si tocca dalla home, poi si torna agli orari.
+  await page.goto('/');
+  await chiudiOnboarding(page);
+  await page.locator('#btn-menu').click();
+  await page.locator('label[for="menu-testo"]').click();
+  await expect(page.locator('html')).toHaveAttribute('data-testo', 'grande');
+  await page.goto('/?fermata=100');
+  await expect(page.locator('html')).toHaveAttribute('data-testo', 'grande');
+  await expect(riga).toBeVisible();
+  const altezzaDopo = (await riga.boundingBox()).height;
+  expect(altezzaDopo).toBeGreaterThan(altezzaPrima * 1.05);
+});
+
 test('con la lingua inglese il menu è tradotto', async ({ page }) => {
   await senzaRete(page, { inglese: true });
   await page.addInitScript(() => {

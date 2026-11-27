@@ -40,6 +40,7 @@
   const K_VIAGGI = 'tperzc_viaggi_salvati_v1';
   const K_ERRORI = 'tperzc_errori_v1';
   const K_TEMA = 'tperzc_tema_v1';
+  const K_TESTO = 'tperzc_testo_v1';
   // Preferenze dei vecchi criteri di percorso, non più lette dall'app. Le
   // versioni con e senza prefisso coprono anche installazioni molto vecchie.
   const CHIAVI_CRITERI_OBSOLETI = [
@@ -3939,6 +3940,71 @@
     if (salva) scrivi(K_TEMA, scuro ? 'scuro' : 'chiaro');
   }
 
+  /* ------------------------------------------------------------------ *
+   * Testo grande
+   * ------------------------------------------------------------------ */
+  // Sul bus, controsole e con le mani occupate, il testo da 12 px non si legge.
+  // Si ingrandisce il contenuto del pannello e del menu, non la mappa.
+  function testoGrande() {
+    return leggi(K_TESTO) === 'grande';
+  }
+
+  function applicaTesto(grande, salva) {
+    document.documentElement.setAttribute('data-testo', grande ? 'grande' : 'normale');
+    const check = $('menu-testo');
+    if (check) check.checked = !!grande;
+    if (salva) scrivi(K_TESTO, grande ? 'grande' : 'normale');
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Backup dei dati locali
+   * ------------------------------------------------------------------ */
+  // Preferiti, viaggi, storico ritardi e impostazioni vivono solo in questo
+  // telefono: cambiare dispositivo o svuotare i dati del sito li cancella.
+  function scaricaBackup() {
+    const pacchetto = Utilita.esportaDati(window.localStorage);
+    if (!pacchetto.chiavi) {
+      mostraToast('Nessun dato da esportare');
+      return;
+    }
+    const blob = new Blob([JSON.stringify(pacchetto, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'muovi-bologna-' + oggiISO() + '.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    mostraToast('Backup pronto: ' + pacchetto.chiavi + ' voci');
+  }
+
+  async function ripristinaBackup(file) {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      mostraToast('File troppo grande per un backup');
+      return;
+    }
+    let pacchetto = null;
+    try {
+      pacchetto = JSON.parse(await file.text());
+    } catch (errore) {
+      pacchetto = null;
+    }
+    if (!pacchetto || !pacchetto.dati) {
+      mostraToast('File non valido');
+      return;
+    }
+    if (!window.confirm('Importare il backup? I dati attuali con lo stesso nome vengono sostituiti.')) return;
+    const esito = Utilita.applicaDati(window.localStorage, pacchetto);
+    if (!esito.scritte) {
+      mostraToast('Nessun dato importato');
+      return;
+    }
+    mostraToast('Ripristinate ' + esito.scritte + ' voci: ricarico');
+    setTimeout(() => location.reload(), 900);
+  }
+
   // La corsa avvisata può essere in anticipo o in ritardo: se il tempo reale
   // della stessa corsa è in memoria (da meno di tre minuti), l'avviso lo segue
   // invece di fidarsi dell'orario di tabella.
@@ -7755,6 +7821,11 @@
     if (!drawer) return;
     sincronizzaMenu();
     renderInfo();
+    const notaBackup = $('menu-esporta-nota');
+    if (notaBackup) {
+      const pacchetto = Utilita.esportaDati(window.localStorage);
+      notaBackup.textContent = pacchetto.chiavi ? pacchetto.chiavi + ' voci' : 'vuoto';
+    }
     drawer.classList.add('aperto');
     animaIngresso(drawer, 'menu');
     drawer.setAttribute('aria-hidden', 'false');
@@ -8052,6 +8123,17 @@
     });
     $('menu-posizione').addEventListener('click', () => { chiudiMenu(); posizioneComePartenza(); });
     $('menu-notifiche').addEventListener('click', () => { attivaNotificheMenu(); });
+    $('menu-esporta').addEventListener('click', scaricaBackup);
+    $('menu-importa').addEventListener('change', (evento) => {
+      const file = evento.target.files && evento.target.files[0];
+      // Svuotato subito: senza, riscegliere lo stesso file non scatenerebbe
+      // nessun evento e il ripristino sembrerebbe non funzionare.
+      evento.target.value = '';
+      ripristinaBackup(file);
+    });
+    $('menu-testo').addEventListener('change', (evento) => {
+      applicaTesto(evento.target.checked, true);
+    });
     $('menu-tema').addEventListener('change', (evento) => {
       applicaTema(evento.target.checked, true);
     });
@@ -8621,6 +8703,7 @@
   async function avvia() {
     // Tema prima della mappa: così all'apertura non si vede un lampo bianco.
     applicaTema(temaPreferito(), false);
+    applicaTesto(testoGrande(), false);
     // Spazio, errori e conteggio degli usi vanno sistemati prima di tutto:
     // la pulizia deve avvenire quando le cache sono ancora scrivibili.
     pulisciCriteriObsoleti();

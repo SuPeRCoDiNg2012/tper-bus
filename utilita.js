@@ -482,8 +482,71 @@
       '&body=' + encodeURIComponent(corpo) + '&labels=' + encodeURIComponent('segnalazione');
   }
 
+  // Chiavi che si ricostruiscono da sole (o che sono un log): non entrano nel
+  // backup, altrimenti il file diventa di megabyte per niente.
+  const NON_DA_BACKUP = [
+    'tperzc_fermate_v2', 'tperzc_linee_v2', 'tperzc_colori_v1',
+    'tperzc_snap_v4', 'tperzc_piedi_v4', 'tperzc_errori_v1'
+  ];
+
+  /**
+   * Fotografia dei dati dell'utente: preferiti, viaggi, storico ritardi, tema,
+   * lingua, promemoria. Sta in un JSON leggibile, così si può anche guardare.
+   */
+  function esportaDati(storage, opzioni) {
+    const o = opzioni || {};
+    const dati = {};
+    let chiavi = 0;
+    if (!storage) return { app: 'Muovi Bologna', versione: 1, esportato: null, chiavi: 0, dati: dati };
+    for (let i = 0; i < storage.length; i += 1) {
+      const chiave = storage.key(i);
+      if (!chiave || chiave.indexOf('tperzc_') !== 0) continue;
+      if (NON_DA_BACKUP.indexOf(chiave) >= 0) continue;
+      const valore = storage.getItem(chiave);
+      if (typeof valore !== 'string' || valore.length > 20000) continue;
+      dati[chiave] = valore;
+      chiavi += 1;
+    }
+    return {
+      app: 'Muovi Bologna',
+      versione: 1,
+      esportato: o.adesso || new Date().toISOString(),
+      chiavi: chiavi,
+      dati: dati
+    };
+  }
+
+  /**
+   * Ripristina un pacchetto esportato. Aggiunge e sovrascrive, non cancella:
+   * un file vecchio non deve portarsi via quello che nel frattempo è nuovo.
+   */
+  function applicaDati(storage, pacchetto) {
+    if (!storage || !pacchetto || typeof pacchetto !== 'object') return { scritte: 0, errore: 'formato' };
+    const dati = pacchetto.dati && typeof pacchetto.dati === 'object' ? pacchetto.dati : null;
+    if (!dati) return { scritte: 0, errore: 'formato' };
+    const chiavi = Object.keys(dati);
+    if (!chiavi.length || chiavi.length > 200) return { scritte: 0, errore: 'formato' };
+    let scritte = 0;
+    chiavi.forEach((chiave) => {
+      if (chiave.indexOf('tperzc_') !== 0) return;
+      if (NON_DA_BACKUP.indexOf(chiave) >= 0) return;
+      const valore = dati[chiave];
+      if (typeof valore !== 'string' || valore.length > 20000) return;
+      try {
+        storage.setItem(chiave, valore);
+        scritte += 1;
+      } catch (errore) {
+        // Spazio pieno o storage negato: le altre chiavi si provano lo stesso.
+      }
+    });
+    return { scritte: scritte, errore: scritte ? null : 'vuoto' };
+  }
+
   const API = {
     TIMEOUT: TIMEOUT,
+    esportaDati: esportaDati,
+    applicaDati: applicaDati,
+    NON_DA_BACKUP: NON_DA_BACKUP,
     urlSegnalazione: urlSegnalazione,
     espandi: espandi,
     distanzaEdit: distanzaEdit,
