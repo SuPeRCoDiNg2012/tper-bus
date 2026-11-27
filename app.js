@@ -3731,58 +3731,6 @@
     }
   }
 
-  // Prova sul telefono: verifica subito che il permesso e il service worker
-  // arrivino a mostrare una notifica vera, riportando quale dei due ha risposto.
-  async function inviaNotificaProva() {
-    const permesso = await permessoNotifiche();
-    renderNotificheMenu();
-    if (permesso === 'unsupported') {
-      mostraToast('Questo browser non supporta le notifiche');
-      return;
-    }
-    if (permesso === 'denied') {
-      mostraToast('Notifiche bloccate: riattivale dalle impostazioni del sito');
-      return;
-    }
-    if (permesso !== 'granted') {
-      mostraToast('Permesso non concesso: la notifica di prova non è partita');
-      return;
-    }
-    const ora = new Date().toLocaleTimeString('it-IT');
-    const titolo = 'Muovi Bologna · prova';
-    const corpo = 'Notifica di prova delle ' + ora + ': permesso e service worker funzionano.';
-    let registrazione = null;
-    if ('serviceWorker' in navigator) {
-      try {
-        // Se il service worker non è ancora attivo non si resta in attesa per sempre.
-        registrazione = await Promise.race([
-          navigator.serviceWorker.ready,
-          new Promise((risolvi) => setTimeout(() => risolvi(null), 5000))
-        ]);
-      } catch (errore) {
-        registrazione = null;
-      }
-    }
-    try {
-      if (registrazione && registrazione.showNotification) {
-        await registrazione.showNotification(titolo, {
-          body: corpo,
-          icon: './icons/icon-192.png',
-          badge: './icons/icon-192.png',
-          tag: 'muovi-bologna-prova',
-          renotify: true,
-          data: { fermata: '' }
-        });
-        mostraToast('Prova inviata dal service worker: controlla le notifiche del telefono');
-        return;
-      }
-    } catch (errore) { /* si prova con la notifica diretta */ }
-    const inviata = await mostraNotifica(titolo, corpo, '', 'muovi-bologna-prova');
-    mostraToast(inviata
-      ? 'Prova inviata senza service worker: permesso sì, service worker no'
-      : 'Prova non riuscita: il browser non ha mostrato la notifica');
-  }
-
   // Avviso a 2 minuti della corsa scelta negli orari: una sola notifica per
   // fermata, linea, ora e giorno, anche se il controllo gira ogni 15 secondi.
   function controllaAvvisoArrivo() {
@@ -7661,7 +7609,6 @@
     });
     $('menu-posizione').addEventListener('click', () => { chiudiMenu(); posizioneComePartenza(); });
     $('menu-notifiche').addEventListener('click', () => { attivaNotificheMenu(); });
-    $('menu-notifiche-prova').addEventListener('click', () => { inviaNotificaProva(); });
     $('menu-linee').addEventListener('change', (evento) => {
       mostraLineeTutte(evento.target.checked);
     });
