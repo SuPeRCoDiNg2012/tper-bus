@@ -435,8 +435,56 @@
       .slice(0, 200);
   }
 
+  /**
+   * URL di una issue GitHub già compilata per una segnalazione.
+   *
+   * Una segnalazione «l'orario è sbagliato» senza fermata, linea, ora e
+   * giorno costa a chi indaga più tempo di quanto ne faccia risparmiare:
+   * quindi i campi viaggiano nel corpo, già in tabella.
+   */
+  function urlSegnalazione(opzioni) {
+    const o = opzioni || {};
+    const base = (o.repo || 'https://github.com/SuPeRCoDiNg2012/tper-bus').replace(/\/+$/, '');
+    const cella = (testo) => String(testo == null ? '' : testo).replace(/\|/g, '/').replace(/\s+/g, ' ').trim();
+    const fermata = o.fermata || null;
+    const righe = [];
+    if (fermata) {
+      righe.push(['Fermata', cella(fermata.nome) + (fermata.id ? ' (palina ' + cella(fermata.id) + ')' : '')]);
+      if (fermata.indirizzo) righe.push(['Indirizzo', cella(fermata.indirizzo)]);
+      if (fermata.zona) righe.push(['Zona', cella(fermata.zona)]);
+    }
+    if (o.linea) righe.push(['Linea', cella(o.linea)]);
+    if (o.linee) righe.push(['Linee', cella(o.linee)]);
+    if (o.ora) righe.push(['Ora', cella(o.ora)]);
+    righe.push(['Giorno', cella(o.giorno) || 'non indicato']);
+    righe.push(['Dati aggiornati al', cella(o.dati) || 'non disponibile']);
+
+    const dove = o.linea && o.ora
+      ? 'linea ' + cella(o.linea) + ' alle ' + cella(o.ora)
+      : o.linea ? 'linea ' + cella(o.linea) : '';
+    const titolo = (o.tipo === 'corsa' ? 'Corsa' : 'Fermata') + (dove ? ' ' + dove : '') +
+      (fermata && fermata.id ? ' · palina ' + cella(fermata.id) : '');
+
+    const corpo = [
+      '**Cosa non torna**',
+      '',
+      '<!-- orario sbagliato, percorso che non esiste, fermata nel posto sbagliato: scrivi qui sotto -->',
+      '',
+      '---',
+      '',
+      '| Campo | Valore |',
+      '| --- | --- |'
+    ].concat(righe.map((riga) => '| ' + riga[0] + ' | ' + riga[1] + ' |'))
+      .concat(['', '_Segnalazione aperta dall\'app Muovi Bologna._'])
+      .join('\n');
+
+    return base + '/issues/new?title=' + encodeURIComponent(titolo) +
+      '&body=' + encodeURIComponent(corpo) + '&labels=' + encodeURIComponent('segnalazione');
+  }
+
   const API = {
     TIMEOUT: TIMEOUT,
+    urlSegnalazione: urlSegnalazione,
     espandi: espandi,
     distanzaEdit: distanzaEdit,
     vicina: vicina,

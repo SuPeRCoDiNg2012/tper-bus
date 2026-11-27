@@ -90,6 +90,9 @@
     'Inquadra il percorso': 'Fit the route',
     'Chiudi': 'Close',
     'Fermata selezionata': 'Selected stop',
+    'Segnala un errore': 'Report an issue',
+    'Segnala': 'Report',
+    'Errore di orario o percorso': 'Wrong time or route',
     'Chiudi': 'Close',
     'Espandi o riduci il pannello': 'Expand or collapse the panel',
 

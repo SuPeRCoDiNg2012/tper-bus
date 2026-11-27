@@ -1,6 +1,49 @@
 const test = require('node:test');
-const assert = require('node:assert');
+const assert = require('node:assert/strict');
 const Utilita = require('../utilita');
+
+test('la segnalazione porta con sé fermata, linea, ora, giorno e dati', () => {
+  const url = Utilita.urlSegnalazione({
+    tipo: 'corsa',
+    fermata: { id: '100', nome: 'Piazza Maggiore', indirizzo: 'Piazza Re Enzo 1/3/B', zona: '500' },
+    linea: '20',
+    ora: '08:12',
+    giorno: '27/11/2026',
+    dati: '27/11/2026'
+  });
+  assert.match(url, /^https:\/\/github\.com\/SuPeRCoDiNg2012\/tper-bus\/issues\/new\?/);
+  const parametri = new URL(url).searchParams;
+  assert.equal(parametri.get('labels'), 'segnalazione');
+  assert.equal(parametri.get('title'), 'Corsa linea 20 alle 08:12 · palina 100');
+  const corpo = parametri.get('body');
+  assert.match(corpo, /\| Fermata \| Piazza Maggiore \(palina 100\) \|/);
+  assert.match(corpo, /\| Linea \| 20 \|/);
+  assert.match(corpo, /\| Ora \| 08:12 \|/);
+  assert.match(corpo, /\| Giorno \| 27\/11\/2026 \|/);
+  assert.match(corpo, /\| Dati aggiornati al \| 27\/11\/2026 \|/);
+});
+
+test('senza corsa la segnalazione riguarda la fermata e resta valida', () => {
+  const url = Utilita.urlSegnalazione({
+    fermata: { id: '75253', nome: 'Abetaia' },
+    linee: '20 · 21',
+    giorno: '27/11/2026'
+  });
+  const parametri = new URL(url).searchParams;
+  assert.equal(parametri.get('title'), 'Fermata · palina 75253');
+  assert.match(parametri.get('body'), /\| Linee \| 20 · 21 \|/);
+  assert.match(parametri.get('body'), /\| Dati aggiornati al \| non disponibile \|/);
+});
+
+test('i caratteri speciali non rompono né l’URL né la tabella', () => {
+  const url = Utilita.urlSegnalazione({
+    fermata: { id: '1', nome: 'Fermata & | strana' },
+    linea: 'A/1',
+    giorno: '27/11/2026'
+  });
+  const parametri = new URL(url).searchParams;
+  assert.match(parametri.get('body'), /Fermata & \/ strana \(palina 1\)/);
+});
 
 test('le durate sopra l\'ora passano a ore e minuti', () => {
   assert.equal(Utilita.durata(0), '0 min');

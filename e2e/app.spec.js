@@ -88,6 +88,25 @@ test('gli orari di una fermata mostrano le corse, senza etichette ripetute', asy
   await expect(vista).not.toContainText('Direzione non disponibile');
 });
 
+test('fermata e corsa hanno la segnalazione già compilata', async ({ page }) => {
+  await senzaRete(page, { hellobus: true });
+  await page.goto('/?fermata=100');
+  const linkFermata = page.locator('#vista-orari a.link-segnala');
+  await expect(linkFermata).toBeVisible();
+  const hrefFermata = decodeURIComponent(await linkFermata.getAttribute('href'));
+  expect(hrefFermata).toContain('github.com/SuPeRCoDiNg2012/tper-bus/issues/new');
+  expect(hrefFermata).toContain('palina 100');
+  expect(hrefFermata).toContain('| Giorno |');
+
+  await page.locator('#vista-orari .arrivo-chevron').first().click();
+  const linkCorsa = page.locator('#vista-orari .arrivo-dettaglio a.link-mini');
+  await expect(linkCorsa).toBeVisible();
+  const hrefCorsa = decodeURIComponent(await linkCorsa.getAttribute('href'));
+  expect(hrefCorsa).toContain('| Linea |');
+  expect(hrefCorsa).toContain('| Ora |');
+  expect(hrefCorsa).toContain('| Dati aggiornati al |');
+});
+
 test('il tema scuro resta dopo il ricaricamento', async ({ page }) => {
   await senzaRete(page);
   await page.goto('/');

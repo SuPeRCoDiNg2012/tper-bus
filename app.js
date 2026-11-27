@@ -6678,6 +6678,43 @@
   // Elenco unico della fermata: tutte le corse che restano nella giornata,
   // tempo reale e orari programmati insieme, ordinati per quanto manca. Righe
   // compatte: ora, badge della linea, destinazione.
+  /* ------------------------------------------------------------------ *
+   * Segnala un errore
+   * ------------------------------------------------------------------ */
+  // Due tocchi: fermata, linea, ora, giorno e versione dei dati finiscono già
+  // nel corpo della issue GitHub. Senza quei campi chi indaga deve
+  // ricostruire il contesto, e la segnalazione spesso non si fa.
+  const SEGNALA_REPO = 'https://github.com/SuPeRCoDiNg2012/tper-bus';
+
+  function dataEstesa(iso) {
+    const parti = String(iso || '').split('-');
+    if (parti.length !== 3 || !parti[0]) return '';
+    return parti[2] + '/' + parti[1] + '/' + parti[0];
+  }
+
+  function urlSegnalazioneCorsa(opzioni) {
+    const o = opzioni || {};
+    const fermata = o.fermata || null;
+    // Una copia vecchia di utilita.js in cache non deve svuotare la schermata:
+    // senza il costruttore semplicemente non c'è il collegamento.
+    if (typeof Utilita === 'undefined' || typeof Utilita.urlSegnalazione !== 'function') return '';
+    return Utilita.urlSegnalazione({
+      repo: SEGNALA_REPO,
+      tipo: o.tipo,
+      fermata: fermata ? {
+        id: fermata.id,
+        nome: nomeLuogo(fermata),
+        indirizzo: dettaglioFermata(fermata),
+        zona: fermata.zona
+      } : null,
+      linea: o.linea,
+      linee: o.linee,
+      ora: o.ora,
+      giorno: dataEstesa(routing.giorno),
+      dati: aggiornato ? dataEstesa(aggiornato) : ''
+    });
+  }
+
   function arriviHTML() {
     const fermata = fermataLive();
     let uniti = arriviUniti(fermata);
@@ -6717,11 +6754,16 @@
       // in riga si mostra il capolinea o, se il GTFS non lo sa, uno stato
       // onesto invece di «Bus 5554».
       const meta = arrivo.destinazione || '';
+      const segnala = urlSegnalazioneCorsa({ fermata: fermata, linea: arrivo.linea, ora: arrivo.ora, tipo: 'corsa' });
       const dettaglio = aperto
         ? '<div class="arrivo-dettaglio">' +
           '<div class="riga"><span>' + (arrivo.tipo === 'live' ? 'Bus ' + esc(arrivo.bus || '') : 'Orario programmato') + '</span>' +
           '<span>ore ' + esc(arrivo.ora) + '</span></div>' +
           (arrivo.destinazione ? '<div class="riga"><span>Direzione</span><span>' + esc(arrivo.destinazione) + '</span></div>' : '') +
+          (segnala
+            ? '<div class="riga"><span>Segnala</span>' +
+              '<a class="link-mini" href="' + esc(segnala) + '" target="_blank" rel="noopener">Errore di orario o percorso</a></div>'
+            : '') +
           '<div class="riga"><span>Avviso</span>' +
           '<button type="button" class="link-mini" data-azione="avvisa" data-avvisa-linea="' + esc(arrivo.linea) +
           '" data-avvisa-ora="' + esc(arrivo.ora) + '">' + (attivo ? 'Togli l\'avviso' : 'Avvisami') + '</button></div>' +
@@ -6868,6 +6910,18 @@
         '<button type="button" class="btn btn-tenue" data-azione="orari-partenza">Parti da qui</button>' +
         '<button type="button" class="btn btn-tenue" data-azione="orari-destinazione">Vai qui</button>' +
         '</div>';
+    }
+    // Segnalazione pronta: la fermata è già nel corpo della issue, con le
+    // linee che la servono e la versione dei dati usata.
+    if (fermata) {
+      const segnala = urlSegnalazioneCorsa({
+        fermata: fermata,
+        linee: lineaDi(fermata).slice(0, 4).join(' · ')
+      });
+      if (segnala) {
+        html += '<a class="link-segnala" href="' + esc(segnala) + '" target="_blank" rel="noopener">' +
+          Icone.svg('flag', 14) + '<span>Segnala un errore</span></a>';
+      }
     }
     // Palina sempre accesa: il telefono appoggiato alla fermata non deve
     // spegnersi proprio mentre guardi quanto manca.

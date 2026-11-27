@@ -386,6 +386,12 @@
   .conviene-esito{margin:0;font-size:12px;line-height:1.45;color:var(--testo);}
   /* Palina: schermo tenuto acceso mentre si guardano gli arrivi. */
   .btn-schermo{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:40px;margin:2px 0 4px;border:1px solid var(--bordo);border-radius:999px;background:transparent;color:var(--testo-2);font:inherit;font-size:12px;font-weight:600;cursor:pointer;}
+  /* Segnalazione pronta: sta sotto le azioni della fermata, non nel menu,
+     perché il momento in cui noti l'errore è quello in cui la apri. */
+  .link-segnala{display:inline-flex;align-items:center;gap:5px;margin:0 0 6px;min-height:28px;font-size:12px;font-weight:500;color:var(--testo-2);text-decoration:none;}
+  .link-segnala .lucide{flex:0 0 auto;}
+  .link-segnala:hover{color:var(--testo);}
+  .link-segnala:active{opacity:.6;}
   .btn-schermo.acceso{border-color:var(--rosso);color:var(--rosso-testo);}
   .interruttore{position:relative;width:44px;height:26px;flex:0 0 auto;}
   .interruttore input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;}
