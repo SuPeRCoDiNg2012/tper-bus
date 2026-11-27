@@ -3721,7 +3721,7 @@
     renderNotificheMenu();
     if (permesso === 'granted') {
       avviaAvvisi();
-      mostraToast("Notifiche attive: tocca la campanella di un preferito o l'avviso a 2 minuti di una corsa");
+      mostraToast("Notifiche attive: tocca la campanella di un preferito o l'avviso a 2 minuti di una corsa (con l'app aperta o in background)");
     } else if (permesso === 'denied') {
       mostraToast('Notifiche bloccate: riattivale dalle impostazioni del sito');
     } else if (permesso === 'unsupported') {
