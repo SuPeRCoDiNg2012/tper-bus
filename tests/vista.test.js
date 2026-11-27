@@ -200,16 +200,61 @@ test('gli arrivi uniscono tempo reale e orari programmati in un solo elenco', ()
 });
 
 test('una corsa live in anticipo prende il capolinea dalla corsa programmata vicina', () => {
-  // HelloBus dice 13 min, il GTFS ha la stessa linea a 20 min: la riga live
-  // deve mostrare «Pilastro», non il numero del bus.
+  // HelloBus dice 13 min, il GTFS ha la stessa linea a 20 min: è lo stesso bus
+  // in anticipo, quindi resta una riga sola con il capolinea «Pilastro».
   const uniti = Vista.arriviUniti(
     [{ linea: '20', ora: '08:13', tipo: 'live', bus: '5554' }],
     [{ linea: '20', ora: '08:20', destinazione: 'Pilastro' }],
     8 * 60
   );
+  assert.equal(uniti.length, 1);
+  assert.equal(uniti[0].tipo, 'live');
+  assert.equal(uniti[0].ora, '08:13');
+  assert.equal(uniti[0].destinazione, 'Pilastro');
+});
+
+test('il bus successivo resta anche se quello prima è in ritardo', () => {
+  // Live alle 08:17: è la corsa delle 08:10 in ritardo, non quella delle 08:22.
+  const uniti = Vista.arriviUniti(
+    [{ linea: '20', ora: '08:17', tipo: 'live', bus: '4412' }],
+    [
+      { linea: '20', ora: '08:10', destinazione: 'Normandia' },
+      { linea: '20', ora: '08:22', destinazione: 'Normandia' }
+    ],
+    8 * 60
+  );
+  assert.deepEqual(uniti.map((v) => v.ora), ['08:17', '08:22']);
+  assert.equal(uniti[0].tipo, 'live');
+  assert.equal(uniti[1].tipo, 'orario');
+});
+
+test('«Previsto» e «DaSatellite» dello stesso passaggio danno una riga sola', () => {
+  const uniti = Vista.arriviUniti(
+    [
+      { linea: '20', ora: '08:10', tipo: 'orario' },
+      { linea: '20', ora: '08:12', tipo: 'live', bus: '4412' }
+    ],
+    [{ linea: '20', ora: '08:10', destinazione: 'Normandia' }],
+    8 * 60
+  );
+  assert.equal(uniti.length, 1);
+  assert.equal(uniti[0].tipo, 'live');
+  assert.equal(uniti[0].destinazione, 'Normandia');
+});
+
+test('un live non nasconde due corse della stessa linea', () => {
+  // Due bus programmati a un minuto l'uno dall'altro: il live copre solo il più
+  // vicino, l'altro resta in elenco.
+  const uniti = Vista.arriviUniti(
+    [{ linea: '20', ora: '08:10', tipo: 'live', bus: '4412' }],
+    [
+      { linea: '20', ora: '08:11', destinazione: 'Normandia' },
+      { linea: '20', ora: '08:12', destinazione: 'Normandia' }
+    ],
+    8 * 60
+  );
   assert.equal(uniti.length, 2);
   assert.equal(uniti[0].tipo, 'live');
-  assert.equal(uniti[0].destinazione, 'Pilastro');
 });
 
 test('la variante della linea non duplica la corsa programmata', () => {

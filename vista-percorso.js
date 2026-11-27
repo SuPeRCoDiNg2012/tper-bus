@@ -93,11 +93,58 @@
    * entrambe le fonti vince quella con la posizione reale.
    * `realtime`: [{ linea, ora, tipo, bus }], `programmati`: [{ linea, ora, destinazione }].
    */
+  // Quanto può sbagliare HelloBus rispetto all'orario di tabella: oltre questa
+  // distanza è un'altra corsa della stessa linea, non la stessa in ritardo.
+  const SOGLIA_STESSA_CORSA = 8;
+
   function arriviUniti(realtime, programmati, adessoMinuti, opzioni) {
     const minimo = opzioni && opzioni.minimo != null ? opzioni.minimo : -1;
     // Nessun tetto di default: l'elenco della fermata è tutto quello che resta
     // nella giornata. Il limite si può passare quando serve (test).
     const massimo = opzioni && opzioni.massimo != null ? opzioni.massimo : Infinity;
+    const soglia = opzioni && opzioni.soglia != null ? opzioni.soglia : SOGLIA_STESSA_CORSA;
+    // Corse viste dal satellite e corse programmate (HelloBus «Previsto» e GTFS),
+    // ridotte a una voce per linea e orario: le due fonti dicono la stessa cosa.
+    const vivi = (realtime || [])
+      .filter((arrivo) => arrivo.tipo === 'live')
+      .map((arrivo) => ({
+        base: chiaveLinea(arrivo.linea),
+        minuti: minutiVerso(arrivo.ora, adessoMinuti),
+        preso: false
+      }));
+    const candidate = [];
+    const chiaviCandidate = new Set();
+    const aggiungiCandidata = (linea, ora) => {
+      const base = chiaveLinea(linea);
+      const chiave = base + '|' + ora;
+      if (chiaviCandidate.has(chiave)) return;
+      chiaviCandidate.add(chiave);
+      candidate.push({ chiave: chiave, base: base, minuti: minutiVerso(ora, adessoMinuti) });
+    };
+    (realtime || []).forEach((arrivo) => {
+      if (arrivo.tipo === 'live') return;
+      aggiungiCandidata(arrivo.linea, arrivo.ora);
+    });
+    (programmati || []).forEach((p) => aggiungiCandidata(p.linea, p.ora));
+    // Associazione una a una, dalla coppia più vicina: un bus reale non può
+    // nascondere due corse. Una corsa che viene dopo il passaggio reale è più
+    // probabilmente quella successiva, quindi costa qualche punto in più.
+    const coppie = [];
+    candidate.forEach((c) => {
+      vivi.forEach((vivo, indice) => {
+        if (vivo.base !== c.base) return;
+        const scarto = vivo.minuti - c.minuti;
+        if (Math.abs(scarto) > soglia) return;
+        coppie.push({ chiave: c.chiave, indice: indice, peso: Math.abs(scarto) + (scarto < 0 ? 4 : 0) });
+      });
+    });
+    coppie.sort((a, b) => a.peso - b.peso);
+    const nascoste = new Set();
+    coppie.forEach((coppia) => {
+      if (nascoste.has(coppia.chiave) || vivi[coppia.indice].preso) return;
+      nascoste.add(coppia.chiave);
+      vivi[coppia.indice].preso = true;
+    });
     const visti = new Set();
     const elenco = [];
     const aggiungi = (voce) => {
@@ -106,13 +153,19 @@
       visti.add(chiave);
       elenco.push(voce);
     };
-    (realtime || []).forEach((arrivo) => aggiungi({
-      linea: String(arrivo.linea),
-      ora: arrivo.ora,
-      tipo: arrivo.tipo === 'live' ? 'live' : 'orario',
-      bus: arrivo.bus || null,
-      destinazione: arrivo.destinazione || ''
-    }));
+    (realtime || []).forEach((arrivo) => {
+      // HelloBus elenca anche i passaggi «Previsto» accanto a quelli reali:
+      // quando il bus è localizzato resta solo la riga con il GPS.
+      if (arrivo.tipo !== 'live' &&
+        nascoste.has(chiaveLinea(arrivo.linea) + '|' + arrivo.ora)) return;
+      aggiungi({
+        linea: String(arrivo.linea),
+        ora: arrivo.ora,
+        tipo: arrivo.tipo === 'live' ? 'live' : 'orario',
+        bus: arrivo.bus || null,
+        destinazione: arrivo.destinazione || ''
+      });
+    });
     // Il capolinea si prende dal GTFS anche per le corse che restano fuori
     // dalla finestra: una riga live senza direzione non dice dove va il bus.
     const destinazioni = new Map();
@@ -131,6 +184,9 @@
       }
       const minuti = minutiVerso(p.ora, adessoMinuti);
       if (minuti < minimo || minuti > massimo) return;
+      // Stessa corsa già mostrata dal tempo reale: l'orario di tabella sparisce
+      // invece di comparire come un secondo bus a pochi minuti di distanza.
+      if (nascoste.has(base + '|' + p.ora)) return;
       aggiungi({ linea: String(p.linea), ora: p.ora, tipo: 'orario', bus: null, destinazione: p.destinazione || '' });
     });
     elenco.forEach((voce) => {
