@@ -263,7 +263,7 @@ function inserisciProiezioni(punti, ids, posizioni, coordinate) {
 async function scaricaOsm() {
   if (fs.existsSync(osmPath)) return leggiJSON(osmPath);
   fs.mkdirSync(path.dirname(osmPath), { recursive: true });
-  const query = '[out:json][timeout:180];way["railway"="rail"](44.28,10.95,44.56,11.82);out geom;';
+  const query = '[out:json][timeout:180];way["railway"="rail"](44.13,10.95,44.56,11.82);out geom;';
   console.log('Scarico la rete ferroviaria da OpenStreetMap…');
   let ultimo = null;
   for (let giro = 0; giro < SERVER_OVERPASS.length; giro += 1) {

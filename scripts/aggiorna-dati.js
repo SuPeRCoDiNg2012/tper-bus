@@ -12,7 +12,7 @@
  *   2. conversione     scripts/converti-fermate-autobus.py
  *   3. GTFS TPER       versione corrente letta da SolWeb, oppure VERSIONE_GTFS
  *   4. orari e colori  scripts/preprocess-orari.js + estrai-colori-linee.py
- *   5. treni           GTFS nazionale (URL_GTFS_TRENI) e PDF S2A (URL_PDF_TRENI)
+ *   5. treni           GTFS nazionale (URL_GTFS_TRENI) e PDF S2A/S1 (URL_PDF_TRENI, URL_PDF_S1)
  *   6. geometrie       scripts/ricostruisci-tracciati.js --scrivi (Overpass)
  *   7. gzip, controlli di sanità, confronto con i dati precedenti
  *
@@ -37,7 +37,8 @@
  *   URL_GTFS_TPER     zip GTFS TPER (salta la lettura della versione)
  *   VERSIONE_GTFS     versione GTFS TPER nel formato YYYYMMDD
  *   URL_GTFS_TRENI    zip GTFS nazionale Trenitalia
- *   URL_PDF_TRENI     PDF degli orari ferroviari locali (S2A)
+ *   URL_PDF_TRENI     PDF degli orari ferroviari locali S2A
+ *   URL_PDF_S1        PDF degli orari ferroviari locali S1 Porretta
  */
 'use strict';
 
@@ -58,6 +59,7 @@ const DETTAGLIO_GTFS = 'https://solweb.tper.it/web/tools/open-data/open-data-det
 const BASE_DOWNLOAD_GTFS = 'https://solweb.tper.it/web/tools/open-data/open-data-download.aspx';
 const GTFS_TRENI_PREDEFINITO = 'https://github.com/deryclem/trenitalia-gtfs/raw/main/gtfs-trenitalia.zip';
 const PDF_TRENI_PREDEFINITO = 'https://s3.eu-south-1.amazonaws.com/static.tper.it/orari/20251213treni/tper_trbovi.pdf';
+const PDF_S1_PREDEFINITO = 'https://www.sfmbo.it/Engine/RAServeFile.php/f/Orari/Orario_linea_S1_Porretta-Bologna-Pianoro.pdf';
 
 // File che compongono il dataset pubblicato: sono quelli salvati e ripristinati.
 const FILE_DATI = [
@@ -340,6 +342,14 @@ async function faseTreni() {
     '--scrivi'
   ]);
 
+  const pdfS1 = path.join(TMP, 'treni-s1.pdf');
+  await scarica(process.env.URL_PDF_S1 || PDF_S1_PREDEFINITO, pdfS1, 10000);
+  esegui('node', [
+    path.join('scripts', 'aggiungi-s1.js'),
+    '--pdf', path.relative(RADICE, pdfS1),
+    '--scrivi'
+  ]);
+
   esegui('node', [path.join('scripts', 'ricostruisci-tracciati.js'), '--scrivi']);
 }
 
@@ -379,6 +389,7 @@ function controlla(vecchieMisure) {
     problemi.push('tracciati: ' + vecchieMisure.forme + ' → ' + tracciati.forme.length);
   }
   if (!fermate.fermate.some((f) => f.id === 'TRN001')) problemi.push('manca la stazione TRN001 (treni non unite?)');
+  if (!orari.fermate.includes('TRN037')) problemi.push('manca Porretta Terme (S1 non unita?)');
   if (!fermate.fermate.some((f) => f.id && f.id.startsWith('TRN'))) problemi.push('nessuna stazione ferroviaria nel dataset');
 
   console.log('  fermate ' + fermate.fermate.length + ' · corse ' + orari.corse.length +

@@ -173,10 +173,12 @@ test('tracciati: fermate vicine alla linea e treni sulla rete ferroviaria', () =
 test('treni: stazioni, linee e corse con geometria', () => {
   const stazioni = orari.fermate.filter((id) => id.startsWith('TRN'));
   assert.deepEqual(stazioni.sort(), [
-    'TRN001', 'TRN004', 'TRN009', 'TRN010', 'TRN011', 'TRN012', 'TRN013',
+    'TRN001', 'TRN004', 'TRN007', 'TRN008', 'TRN009', 'TRN010', 'TRN011', 'TRN012', 'TRN013',
     'TRN014', 'TRN015', 'TRN016', 'TRN017', 'TRN018', 'TRN019', 'TRN020',
-    'TRN021', 'TRN022', 'TRN023', 'TRN024', 'TRN025', 'TRN026', 'TRN038',
-    'TRN039', 'TRN040', 'TRN041', 'TRN042'
+    'TRN021', 'TRN022', 'TRN023', 'TRN024', 'TRN025', 'TRN026', 'TRN027',
+    'TRN028', 'TRN029', 'TRN030', 'TRN031', 'TRN032', 'TRN033', 'TRN034',
+    'TRN035', 'TRN036', 'TRN037', 'TRN038', 'TRN039', 'TRN040', 'TRN041',
+    'TRN042'
   ]);
   const lineeTreno = orari.linee.filter((linea) => linea[1] === 2);
   assert.deepEqual(lineeTreno.map((linea) => linea[0]).sort(), ['REG', 'RV', 'S2A']);
@@ -186,7 +188,7 @@ test('treni: stazioni, linee e corse con geometria', () => {
     if (orari.linee[corsa[0]][1] !== 2) return;
     corseTreno.push({ corsa, indice });
   });
-  assert.equal(corseTreno.length, 168);
+  assert.equal(corseTreno.length, 224);
   corseTreno.forEach(({ corsa, indice }) => {
     const fermateCorsa = [];
     let fermata = corsa[2];
@@ -248,6 +250,52 @@ test('treni S2A: corse Vignola validate, servizi e geometria', () => {
   const maschere = new Set(corse.map((c) => orari.servizi[c.servizio][0]));
   assert.ok(maschere.has(63), 'mancano corse S2A feriali');
   assert.ok(maschere.has(96), 'mancano corse S2A festive');
+});
+
+test('treni S1: corse Bologna–Porretta validate, servizio e geometria', () => {
+  const andata = [
+    'TRN001', 'TRN012', 'TRN013', 'TRN004', 'TRN027', 'TRN028', 'TRN029',
+    'TRN007', 'TRN030', 'TRN008', 'TRN031', 'TRN032', 'TRN033', 'TRN034',
+    'TRN035', 'TRN036', 'TRN037'
+  ];
+  const ritorno = andata.slice().reverse();
+  const corse = [];
+  orari.corse.forEach((corsa, indice) => {
+    let fermata = corsa[2];
+    let tempo = corsa[3];
+    const fermateCorsa = [orari.fermate[fermata]];
+    const tempi = [tempo];
+    for (let k = 4; k < corsa.length; k += 2) {
+      fermata += corsa[k];
+      tempo += corsa[k + 1];
+      fermateCorsa.push(orari.fermate[fermata]);
+      tempi.push(tempo);
+    }
+    if (!fermateCorsa.includes('TRN037')) return;
+    corse.push({ indice, fermate: fermateCorsa, tempi, servizio: corsa[1] });
+  });
+  assert.equal(corse.length, 56);
+  assert.equal(corse.filter((c) => c.fermate[0] === 'TRN001').length, 23);
+  assert.equal(corse.filter((c) => c.fermate[c.fermate.length - 1] === 'TRN001').length, 33);
+  corse.forEach(({ indice, fermate: f, tempi, servizio }) => {
+    assert.ok(f.length >= 2, 'corsa S1 con meno di due fermate');
+    assert.ok(f[0] === 'TRN001' || f[f.length - 1] === 'TRN001', 'corsa S1 senza capolinea Bologna');
+    assert.ok(f.includes('TRN037'), 'corsa S1 senza Porretta Terme');
+    f.forEach((id) => assert.ok(id.startsWith('TRN'), 'corsa S1 su fermata non ferroviaria: ' + id));
+    for (let i = 1; i < tempi.length; i += 1) {
+      assert.ok(tempi[i] > tempi[i - 1], 'orari S1 non crescenti alla corsa ' + indice);
+    }
+    const canonica = f[0] === 'TRN001' ? andata : ritorno;
+    let j = 0;
+    f.forEach((id) => {
+      while (j < canonica.length && canonica[j] !== id) j += 1;
+      assert.ok(j < canonica.length, 'fermata S1 fuori sequenza: ' + id);
+    });
+    assert.ok(servizio >= 0 && servizio < orari.servizi.length, 'servizio S1 fuori range');
+    assert.deepEqual(orari.servizi[servizio], [127, 20260614, 20261212]);
+    assert.notEqual(tracciati.corse[indice], -1, 'corsa S1 senza geometria');
+    assert.ok(tracciati.forme[tracciati.corse[indice]].length > 0, 'geometria S1 vuota');
+  });
 });
 
 test('treni: tutte le fermate delle linee Bologna–Vignola, Bologna–Porretta e Bologna–Pianoro', () => {

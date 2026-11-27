@@ -15,9 +15,8 @@
  * Senza --scrivi non tocca i dati: stampa il riepilogo e le validazioni.
  * Con --scrivi aggiorna data/orari.json(.gz) e data/tracciati.json(.gz).
  *
- * Il PDF Porretta/S1 non viene importato: l'orario nazionale S1 usa colonne
- * con periodicità e note grafiche non interpretabili con sufficiente
- * affidabilità. Lo script lo dichiara e non inventa corse.
+ * La S1 Bologna–Porretta è gestita da scripts/aggiungi-s1.js, che legge il
+ * PDF ufficiale con un parser dedicato; questo script resta solo sulla S2A.
  */
 'use strict';
 

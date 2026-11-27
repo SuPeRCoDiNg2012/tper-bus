@@ -83,3 +83,26 @@ test('rete reale: Bologna C.le → Musiano usa tutte le fermate del ramo Pianoro
   const punti = routing.tratta(esito.tappe[0].forma, esito.tappe[0].da, esito.tappe[0].a, esito.tappe[0].sequenza);
   assert.ok(Array.isArray(punti) && punti.length >= 7, 'geometria del ramo Pianoro assente');
 });
+
+test('rete reale: Bologna C.le → Porretta Terme in treno S1', async () => {
+  const routing = await caricaRouting(orari, tracciati);
+  const esito = routing.calcola('TRN001', 'TRN037', new Date(2026, 10, 23, 8, 0, 0), { maxCambi: 0 });
+
+  assert.ok(esito, 'nessun percorso S1 per Porretta');
+  assert.equal(esito.cambi, 0);
+  assert.equal(esito.tappe.length, 1);
+  const tappa = esito.tappe[0];
+  assert.equal(tappa.linea, 'REG');
+  assert.equal(tappa.da, 'TRN001');
+  assert.equal(tappa.a, 'TRN037');
+  assert.equal(tappa.partenza, 8 * 3600 + 17 * 60);
+  assert.equal(tappa.arrivo, 9 * 3600 + 30 * 60);
+  assert.equal(tappa.stops.length, 15);
+  ['TRN001', 'TRN027', 'TRN033', 'TRN037'].forEach((id) => {
+    assert.ok(tappa.stops.includes(id), 'fermata S1 mancante: ' + id);
+  });
+
+  const punti = routing.tratta(tappa.forma, tappa.da, tappa.a, tappa.sequenza);
+  assert.ok(Array.isArray(punti) && punti.length > 2, 'geometria S1 assente');
+  assert.ok(punti.every((p) => Array.isArray(p) && p.length === 2 && p[0] > 9 && p[0] < 13));
+});

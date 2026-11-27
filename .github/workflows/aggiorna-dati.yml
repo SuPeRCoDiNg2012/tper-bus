@@ -20,7 +20,11 @@ on:
         required: false
         default: ''
       url_pdf_treni:
-        description: 'URL alternativo del PDF orari ferroviari locali'
+        description: 'URL alternativo del PDF orari ferroviari locali S2A'
+        required: false
+        default: ''
+      url_pdf_s1:
+        description: 'URL alternativo del PDF orari S1 Porretta'
         required: false
         default: ''
 
@@ -63,7 +67,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .tmp-binari/binari.json
-          key: binari-osm-v1
+          key: binari-osm-v2
 
       # Fermate, GTFS, orari, treni e geometrie. Se una fonte non risponde il
       # passo fallisce e i dati precedenti vengono ripristinati: non si pubblica
@@ -74,6 +78,7 @@ jobs:
           URL_FERMATE: ${{ inputs.url_fermate }}
           URL_GTFS_TRENI: ${{ inputs.url_gtfs_treni }}
           URL_PDF_TRENI: ${{ inputs.url_pdf_treni }}
+          URL_PDF_S1: ${{ inputs.url_pdf_s1 }}
         run: node scripts/aggiorna-dati.js
 
       - name: Test dei dati

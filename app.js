@@ -6736,7 +6736,7 @@
     box.innerHTML =
       '<div><h3>Tempo reale</h3><p>Gli arrivi arrivano da HelloBus, il servizio TPER. LIVE = posizione reale del bus. ORARIO = orario programmato. Per i treni esiste solo l\'orario programmato.</p></div>' +
       '<div><h3>Dati</h3><p>Fermate, zone e linee: open data TPER / Regione Emilia-Romagna (CC BY 3.0 IT). Orari bus: GTFS TPER. Orari treni: GTFS Trenitalia (CC BY 4.0), conversione deryclem/trenitalia-gtfs. Percorsi a piedi: OSRM / OpenStreetMap.</p>' +
-      '<p>Treni coperti: Bologna C.le, Imola, Bologna–Pianoro e la linea S2A Bologna–Vignola. La S1 Porretta non è inclusa.</p>' +
+      '<p>Treni coperti: Bologna C.le, Imola, Bologna–Pianoro, la S1 Bologna–Porretta e la S2A Bologna–Vignola.</p>' +
       '<p>Fermate aggiornate al ' + esc(aggiornato || 'non disponibile') + '. Prezzi indicativi: verifica su tper.it.</p>' +
       '<a href="https://www.tper.it" target="_blank" rel="noopener">Apri tper.it</a></div>' +
       '<div><h3>Privacy</h3><p>Nessun dato personale lascia il telefono: preferenze e percorsi recenti restano in localStorage, la posizione serve solo a trovare le fermate vicine e non viene salvata. Nessun tracciamento, nessuno cookie, nessuna statistica.</p>' +

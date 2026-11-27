@@ -4,6 +4,7 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- **S1 Porretta**: 56 corse (23 andata, 33 ritorno) da Bologna C.le a Porretta Terme, importate dal PDF ufficiale TPER valido dal 14 giugno al 12 dicembre 2026. La corsa con nota 7 (sospesa nei festivi e prefestivi) resta fuori; le geometrie seguono i binari OpenStreetMap.
 - **Un solo percorso consigliato**: niente più tasti «Veloce»/«Ottimizzato» né righe che spiegano il confronto. L'algoritmo sceglie da sé, entro il 15% del tempo minimo, la soluzione con meno cambi, cammino e attese; le altre restano sotto «Altre soluzioni».
 - **Meteo silenzioso**: pioggia, neve e vento forte continuano a far pesare di più i tratti a piedi, ma la scheda non lo scrive più.
 - **Ricerca per linea**: scrivendo «20» nella ricerca compaiono le linee oltre alle fermate; la scheda della linea mostra il tracciato sulla mappa, le direzioni, l'elenco delle fermate, l'ultima corsa e il ritardo tipico osservato.
@@ -35,7 +36,7 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 - **Tabellone della fermata**: le corse live che HelloBus anticipa o posticipa rispetto al GTFS prendono il capolinea dalla corsa programmata più vicina della stessa linea, invece di mostrare «Bus 5554». Tolto il pulsante «Fissa» dall'intestazione degli orari.
 - **Avviso «scendi alla prossima»** azzerato a ogni nuova navigazione: la vibrazione si ripete anche se la fermata di discesa è la stessa del viaggio precedente.
 - **Scorciatoie nel manifest** per Casa e Lavoro.
-- Non implementati e dichiarati come limiti: notifiche push (servono chiavi VAPID, un deploy del Worker e la crittografia Web Push), S1 Porretta (nessun GTFS verificabile con le fermate intermedie) e filtro «fermate accessibili» (il dataset non espone `wheelchair_boarding`).
+- Non implementati e dichiarati come limiti: notifiche push (servono chiavi VAPID, un deploy del Worker e la crittografia Web Push) e filtro «fermate accessibili» (il dataset non espone `wheelchair_boarding`).
 
 - Zone tariffarie ridisegnate: le fermate di una zona si dividono prima nei gruppi che stanno davvero vicini, quindi una zona sparsa non diventa più un triangolo lungo mezza provincia che si sovrappone alle altre. Ogni zona ha il suo numero sulla mappa (toccabile anche dove non c'è un'area) e solo quella scelta si riempie e si evidenzia; aree, confini ed etichette compaiono con lo zoom invece di 157 poligoni sovrapposti tutti insieme. Le aree non sono più una coperta di colore: sotto la barra una pillola dice la zona del punto che stai guardando («Zona 500 · urbana») e al tocco apre la sua scheda.
 
