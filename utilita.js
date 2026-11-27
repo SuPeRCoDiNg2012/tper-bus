@@ -250,6 +250,37 @@
     return Array.from(gruppi.values());
   }
 
+  /**
+   * Anello di un cerchio geografico di `raggio` metri attorno a [lon, lat].
+   * Serve alle aree delle zone: un cerchio non lascia buchi interni e resta
+   * della stessa dimensione a ogni zoom. Restituisce i punti senza ripetere
+   * il primo; con coordinate non valide restituisce un elenco vuoto.
+   */
+  function cerchio(centro, raggio, passi) {
+    if (!Array.isArray(centro) || !isFinite(centro[0]) || !isFinite(centro[1])) return [];
+    const metri = Number(raggio);
+    if (!isFinite(metri) || metri <= 0) return [];
+    const R = 6371000;
+    const lat1 = (Number(centro[1]) * Math.PI) / 180;
+    const lon1 = (Number(centro[0]) * Math.PI) / 180;
+    const angolo = metri / R;
+    const quanti = Math.max(12, Math.round(Number(passi) || 48));
+    const anello = [];
+    for (let i = 0; i < quanti; i += 1) {
+      const direzione = (i * 2 * Math.PI) / quanti;
+      const lat2 = Math.asin(
+        Math.sin(lat1) * Math.cos(angolo) +
+        Math.cos(lat1) * Math.sin(angolo) * Math.cos(direzione)
+      );
+      const lon2 = lon1 + Math.atan2(
+        Math.sin(direzione) * Math.sin(angolo) * Math.cos(lat1),
+        Math.cos(angolo) - Math.sin(lat1) * Math.sin(lat2)
+      );
+      anello.push([(lon2 * 180) / Math.PI, (lat2 * 180) / Math.PI]);
+    }
+    return anello;
+  }
+
   /** Punto medio di coordinate [lon, lat]; null se non ce ne sono di valide. */
   function centroide(punti) {
     const elenco = (punti || [])
@@ -425,7 +456,8 @@
     scegliOrigineRitardo: scegliOrigineRitardo,
     involucro: involucro,
     raggruppa: raggruppa,
-    centroide: centroide
+    centroide: centroide,
+    cerchio: cerchio
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

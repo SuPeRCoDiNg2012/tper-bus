@@ -787,8 +787,16 @@
     if (!mappa) return;
     const visibili = !navigazione.attiva && !(sel.partenza && sel.destinazione);
     const valore = visibili ? 'visible' : 'none';
-    ['fermate-punti', 'fermate-nomi', 'fermate-cluster', 'fermate-cluster-numero'].forEach((id) => {
+    ['fermate-punti', 'fermate-nomi'].forEach((id) => {
       if (mappa.getLayer(id)) mappa.setLayoutProperty(id, 'visibility', valore);
+    });
+    // Con l'overlay delle zone acceso i cerchi dei raggruppamenti coprono
+    // proprio le aree che si vogliono leggere: restano le fermate singole,
+    // non i gruppi.
+    const voceZone = $('menu-zone');
+    const cluster = visibili && !(voceZone && voceZone.checked) ? 'visible' : 'none';
+    ['fermate-cluster', 'fermate-cluster-numero'].forEach((id) => {
+      if (mappa.getLayer(id)) mappa.setLayoutProperty(id, 'visibility', cluster);
     });
   }
 
@@ -1029,18 +1037,71 @@
   }
 
   /* --- Zone tariffarie ----------------------------------------------------
-   * I confini ufficiali TPER non sono pubblicati: l'area di ogni zona è
-   * l'involucro delle fermate che le appartengono, calcolato dai dati reali.
-   * Una zona però può avere fermate lontane tra loro (una valle, un comune
-   * sparso): l'involucro unico diventava un triangolo che copriva mezza
-   * provincia e si sovrapponeva a tutte le altre. Qui le fermate si dividono
-   * prima nei gruppi che stanno davvero vicini, così ogni area resta locale.
+   * I confini ufficiali TPER non sono pubblicati. L'Area Urbana di Bologna
+   * (500 + zone neutre 501–509) viene disegnata come un bersaglio: disco
+   * centrale per la 500 e una corona divisa in spicchi nella direzione delle
+   * fermate per le neutre. Così non restano buchi tra una zona e l'altra e
+   * la successione si legge a colpo d'occhio. Le zone extraurbane, che non
+   * formano un anello attorno alla città, restano cerchi locali attorno alle
+   * loro fermate. Tutto è una stima, non un confine ufficiale.
    */
 
-  const RAGGIO_ZONA = 3500;        // metri: oltre, sono due aree della stessa zona
+  const MARGINE_ZONA = 1200;       // metri oltre la fermata "tipica"
+  const RAGGIO_ZONA_MIN = 1600;    // una zona con poche fermate resta visibile
+  const RAGGIO_ZONA_MAX = 12000;
   let popupZona = null;
   let zonaScelta = null;           // zona evidenziata, se c'è
-  let zonePerZona = new Map();     // zona → feature delle sue aree
+  let zonePerZona = new Map();     // zona → feature della sua area
+
+  function raggioZona(punti, centro, quantile) {
+    const c = { lat: centro[1], lon: centro[0] };
+    const distanze = punti
+      .map((p) => distanzaMetri(c, { lat: p[1], lon: p[0] }))
+      .sort((a, b) => a - b);
+    if (!distanze.length) return RAGGIO_ZONA_MIN;
+    const q = quantile == null ? 0.9 : quantile;
+    const indice = Math.floor((distanze.length - 1) * q);
+    return Math.max(RAGGIO_ZONA_MIN, Math.min(RAGGIO_ZONA_MAX, distanze[indice] + MARGINE_ZONA));
+  }
+
+  // Punto a `raggio` metri e `angolo` radianti (0 = nord, senso orario).
+  function puntoPolare(centro, raggio, angolo) {
+    const R = 6371000;
+    const lat1 = (centro[1] * Math.PI) / 180;
+    const lon1 = (centro[0] * Math.PI) / 180;
+    const d = raggio / R;
+    const lat2 = Math.asin(
+      Math.sin(lat1) * Math.cos(d) +
+      Math.cos(lat1) * Math.sin(d) * Math.cos(angolo)
+    );
+    const lon2 = lon1 + Math.atan2(
+      Math.sin(angolo) * Math.sin(d) * Math.cos(lat1),
+      Math.cos(d) - Math.sin(lat1) * Math.sin(lat2)
+    );
+    return [(lon2 * 180) / Math.PI, (lat2 * 180) / Math.PI];
+  }
+
+  function settoreAnulare(centro, interno, esterno, da, a, passi) {
+    const n = Math.max(6, Math.round(passi || 24));
+    const anello = [];
+    for (let i = 0; i <= n; i += 1) {
+      anello.push(puntoPolare(centro, esterno, da + ((a - da) * i) / n));
+    }
+    for (let i = n; i >= 0; i -= 1) {
+      anello.push(puntoPolare(centro, interno, da + ((a - da) * i) / n));
+    }
+    return anello;
+  }
+
+  // Direzione in radianti del punto rispetto al centro (0 = nord).
+  function angoloVento(centro, punto) {
+    const lat1 = (centro[1] * Math.PI) / 180;
+    const lat2 = (punto[1] * Math.PI) / 180;
+    const dLon = ((punto[0] - centro[0]) * Math.PI) / 180;
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    return (Math.atan2(y, x) + 2 * Math.PI) % (2 * Math.PI);
+  }
 
   function datiZone() {
     const perZona = new Map();
@@ -1050,51 +1111,105 @@
       if (!perZona.has(zona)) perZona.set(zona, []);
       perZona.get(zona).push([f.lon, f.lat]);
     });
+    const voci = [];
+    perZona.forEach((punti, zona) => {
+      const centro = Utilita.centroide(punti);
+      if (!centro) return;
+      voci.push({
+        zona: zona,
+        punti: punti,
+        centro: centro,
+        etichetta: Tariffe.etichettaZona(zona),
+        famiglia: zona === '500' ? 'urbana' : (Tariffe.isZonaUrbana(zona) ? 'neutra' : 'extraurbana')
+      });
+    });
     const aree = [];
+    const areeUrbane = [];
     const etichette = [];
     zonePerZona = new Map();
-    perZona.forEach((punti, zona) => {
-      const etichetta = Tariffe.etichettaZona(zona);
-      const famiglia = zona === '500' ? 'urbana' : (Tariffe.isZonaUrbana(zona) ? 'neutra' : 'extraurbana');
-      const gruppi = Utilita.raggruppa(punti, RAGGIO_ZONA)
-        .filter((gruppo) => gruppo.length >= 3)   // due fermate non fanno un'area
-        .sort((a, b) => b.length - a.length);
-      const forme = [];
-      gruppi.forEach((gruppo, indice) => {
-        const anello = Utilita.involucro(gruppo);
-        if (anello.length < 3) return;
-        const forma = {
-          type: 'Feature',
-          id: 'zona-' + zona + '-' + indice,
-          properties: {
-            zona: zona,
-            famiglia: famiglia,
-            titolo: etichetta.titolo,
-            nota: etichetta.nota
-          },
-          geometry: { type: 'Polygon', coordinates: [anello.concat([anello[0]])] }
-        };
-        forme.push(forma);
-        aree.push(forma);
-      });
-      zonePerZona.set(zona, forme);
-      // Il numero della zona sta sull'area più grande; se la zona è troppo
-      // sparsa per avere un'area, resta comunque il numero sulle sue fermate.
-      const centro = Utilita.centroide(gruppi.length ? gruppi[0] : punti);
-      if (!centro) return;
+    const registra = (voce, anello, centroEtichetta, extra) => {
+      if (!anello || anello.length < 3) return;
+      const forma = {
+        type: 'Feature',
+        id: 'zona-' + voce.zona,
+        properties: Object.assign({
+          zona: voce.zona,
+          famiglia: voce.famiglia,
+          titolo: voce.etichetta.titolo,
+          nota: voce.etichetta.nota
+        }, extra || {}),
+        geometry: { type: 'Polygon', coordinates: [anello.concat([anello[0]])] }
+      };
+      (voce.famiglia === 'extraurbana' ? aree : areeUrbane).push(forma);
+      zonePerZona.set(voce.zona, [forma]);
       etichette.push({
         type: 'Feature',
         properties: {
-          zona: zona,
-          famiglia: famiglia,
-          titolo: etichetta.titolo,
-          nota: etichetta.nota
+          zona: voce.zona,
+          famiglia: voce.famiglia,
+          titolo: voce.etichetta.titolo,
+          nota: voce.etichetta.nota
         },
-        geometry: { type: 'Point', coordinates: centro }
+        geometry: { type: 'Point', coordinates: centroEtichetta }
       });
+    };
+
+    const urbana = voci.find((v) => v.zona === '500');
+    const neutre = voci.filter((v) => v.famiglia === 'neutra');
+    const extraurbane = voci.filter((v) => v.famiglia === 'extraurbana');
+
+    // Le zone fuori dall'area urbana restano cerchi locali, disegnati sotto
+    // il bersaglio di Bologna.
+    extraurbane.forEach((voce) => {
+      const raggio = raggioZona(voce.punti, voce.centro, 0.9);
+      registra(voce, Utilita.cerchio(voce.centro, raggio, 64), voce.centro, { raggio: Math.round(raggio) });
     });
+
+    if (urbana) {
+      const centro = urbana.centro;
+      const r500 = raggioZona(urbana.punti, centro, 0.5);
+      registra(urbana, Utilita.cerchio(centro, r500, 64), centro, { raggio: Math.round(r500) });
+      if (neutre.length) {
+        const distanze = neutre.map((v) => distanzaMetri(
+          { lat: centro[1], lon: centro[0] },
+          { lat: v.centro[1], lon: v.centro[0] }
+        ));
+        const r1 = Math.max(r500 + 2600, Math.max.apply(null, distanze) + 1400);
+        const ordinate = neutre.map((v) => ({
+          voce: v,
+          angolo: angoloVento(centro, v.centro)
+        })).sort((a, b) => a.angolo - b.angolo);
+        ordinate.forEach((voce, i) => {
+          const n = ordinate.length;
+          const precedente = i === 0 ? ordinate[n - 1].angolo - 2 * Math.PI : ordinate[i - 1].angolo;
+          const successivo = i === n - 1 ? ordinate[0].angolo + 2 * Math.PI : ordinate[i + 1].angolo;
+          const da = (precedente + voce.angolo) / 2;
+          const a = (voce.angolo + successivo) / 2;
+          const etichetta = puntoPolare(centro, (r500 + r1) / 2, (da + a) / 2);
+          registra(
+            voce.voce,
+            settoreAnulare(centro, r500, r1, da, a, 28),
+            etichetta,
+            { raggio: Math.round(r1) }
+          );
+        });
+      }
+    } else {
+      // Dati senza la 500: le neutre restano cerchi, invece di sparire.
+      neutre.forEach((voce) => {
+        const raggio = raggioZona(voce.punti, voce.centro, 0.9);
+        registra(voce, Utilita.cerchio(voce.centro, raggio, 64), voce.centro, { raggio: Math.round(raggio) });
+      });
+    }
+
+    // Nel gruppo urbano la corona neutra sta sotto il disco 500; le aree
+    // extraurbane hanno un livello tutto loro, così non attraversano il
+    // bersaglio di Bologna con i loro bordi.
+    const priorita = (f) => (f.properties.zona === '500' ? 2 : (f.properties.famiglia === 'neutra' ? 1 : 0));
+    areeUrbane.sort((a, b) => (priorita(a) - priorita(b)) || (b.properties.raggio - a.properties.raggio));
     return {
       aree: { type: 'FeatureCollection', features: aree },
+      areeUrbane: { type: 'FeatureCollection', features: areeUrbane },
       etichette: { type: 'FeatureCollection', features: etichette }
     };
   }
@@ -1149,23 +1264,29 @@
 
   function mostraZone(attivo) {
     if (!mappa) return;
-    // Interruttore premuto prima che la mappa fosse pronta: si riprova al
-    // primo disegno invece di perdere il tocco.
-    if (!mappa.isStyleLoaded()) {
+    // Il controllo su isStyleLoaded() da solo è troppo severo: con una tile
+    // lenta la mappa è già disegnata ma l'evento load non arriva mai. Se lo
+    // stile ha i suoi livelli si può aggiungere l'overlay; altrimenti si
+    // riprova sia su load sia su idle, invece di perdere il tocco.
+    const stile = mappa.getStyle && mappa.getStyle();
+    if (!stile || !stile.layers || !stile.layers.length) {
       if (attivo) {
-        mappa.once('load', () => {
+        const riprova = () => {
           const voce = $('menu-zone');
-          if (voce && voce.checked) mostraZone(true);
-        });
+          if (voce && voce.checked && !mappa.getLayer('zone-fill')) mostraZone(true);
+        };
+        mappa.once('load', riprova);
+        mappa.once('idle', riprova);
       }
       return;
     }
     if (mappa.getLayer('zone-fill')) {
-      ['zone-fill', 'zone-bordo', 'zone-fill-scelta', 'zone-bordo-scelta', 'zone-etichette'].forEach((id) => {
+      ['zone-fill', 'zone-bordo', 'zone-urbana-fill', 'zone-urbana-bordo', 'zone-fill-scelta', 'zone-bordo-scelta', 'zone-etichette', 'zone-etichette-extra'].forEach((id) => {
         if (mappa.getLayer(id)) mappa.setLayoutProperty(id, 'visibility', attivo ? 'visible' : 'none');
       });
       if (!attivo) spegniZonaScelta();
       aggiornaZonaIndicatore();
+      aggiornaVisibilitaFermate();
       return;
     }
     if (!attivo) return;
@@ -1175,31 +1296,53 @@
       const sotto = mappa.getLayer('utente-precisione') ? 'utente-precisione' : undefined;
       const dati = datiZone();
       mappa.addSource('zone', { type: 'geojson', data: dati.aree });
+      mappa.addSource('zone-urbana', { type: 'geojson', data: dati.areeUrbane });
       mappa.addSource('zone-etichette', { type: 'geojson', data: dati.etichette });
+      // Extraurbane: un velo e un confine leggero, senza invadere il
+      // bersaglio di Bologna con cento cerchi in primo piano.
       mappa.addLayer({
         id: 'zone-fill',
         type: 'fill',
         source: 'zone',
-        // A scala regionale l'area diventa un colore solo: si parte dal
-        // confine, e il riempimento arriva quando si vede il quartiere.
         minzoom: 9.5,
         paint: {
-          'fill-color': ['match', ['get', 'famiglia'], 'urbana', '#C1121F', '#6B6B6B'],
-          // Quasi niente: l'area si riconosce dal confine e dal numero, non
-          // da un velo che copre il quartiere.
-          'fill-opacity': ['match', ['get', 'famiglia'], 'urbana', 0.05, 'neutra', 0.03, 0.03]
+          'fill-color': '#6B6B6B',
+          'fill-opacity': 0.025
         }
       }, sotto);
       mappa.addLayer({
         id: 'zone-bordo',
         type: 'line',
         source: 'zone',
-        minzoom: 8.5,
+        minzoom: 10.5,
+        layout: { 'line-join': 'round' },
+        paint: {
+          'line-color': '#6B6B6B',
+          'line-width': 0.8,
+          'line-opacity': 0.22
+        }
+      }, sotto);
+      // Area urbana: disco 500 e corona delle neutre, sopra le extraurbane.
+      mappa.addLayer({
+        id: 'zone-urbana-fill',
+        type: 'fill',
+        source: 'zone-urbana',
+        minzoom: 9.5,
+        paint: {
+          'fill-color': ['match', ['get', 'famiglia'], 'urbana', '#C1121F', '#6B6B6B'],
+          'fill-opacity': ['match', ['get', 'famiglia'], 'urbana', 0.14, 0.06]
+        }
+      }, sotto);
+      mappa.addLayer({
+        id: 'zone-urbana-bordo',
+        type: 'line',
+        source: 'zone-urbana',
+        minzoom: 9.5,
         layout: { 'line-join': 'round' },
         paint: {
           'line-color': ['match', ['get', 'famiglia'], 'urbana', '#C1121F', '#6B6B6B'],
-          'line-width': 1,
-          'line-opacity': ['match', ['get', 'famiglia'], 'urbana', 0.55, 'neutra', 0.40, 0.35]
+          'line-width': ['match', ['get', 'famiglia'], 'urbana', 2, 1.2],
+          'line-opacity': ['match', ['get', 'famiglia'], 'urbana', 0.9, 0.65]
         }
       }, sotto);
       // La zona toccata, sopra le altre e sotto le etichette.
@@ -1231,22 +1374,44 @@
         id: 'zone-etichette',
         type: 'symbol',
         source: 'zone-etichette',
-        minzoom: 9,
+        minzoom: 9.5,
+        filter: ['!=', ['get', 'famiglia'], 'extraurbana'],
         layout: {
           'text-field': ['get', 'zona'],
           'text-font': ['Noto Sans Regular'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 9, 10, 14, 12],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 9.5, 11, 11, 13, 14, 14],
           'text-allow-overlap': false,
-          'text-padding': 6
+          'text-padding': 3
         },
         paint: {
           'text-color': ['match', ['get', 'famiglia'], 'urbana', '#C1121F', '#6B6B6B'],
           'text-halo-color': '#FFFFFF',
-          'text-halo-width': 1.4,
-          'text-halo-blur': 0.4
+          'text-halo-width': 1.8,
+          'text-halo-blur': 0.3
         }
-      }, sotto);
+      });
+      mappa.addLayer({
+        id: 'zone-etichette-extra',
+        type: 'symbol',
+        source: 'zone-etichette',
+        minzoom: 11,
+        filter: ['==', ['get', 'famiglia'], 'extraurbana'],
+        layout: {
+          'text-field': ['get', 'zona'],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 11, 10, 14, 12],
+          'text-allow-overlap': false,
+          'text-padding': 4
+        },
+        paint: {
+          'text-color': '#6B6B6B',
+          'text-halo-color': '#FFFFFF',
+          'text-halo-width': 1.4,
+          'text-halo-blur': 0.3
+        }
+      });
       aggiornaZonaIndicatore();
+      aggiornaVisibilitaFermate();
     } catch (errore) {
       mostraToast('Zone non disponibili con questi dati');
       const voce = $('menu-zone');
@@ -7753,7 +7918,7 @@
         }
         // Zone tariffarie: un tocco sull'area o sul numero dice che zona è.
         // Le fermate hanno la precedenza, quindi si arriva qui solo sul vuoto.
-        const livelliZone = ['zone-etichette', 'zone-fill'].filter((id) => mappa.getLayer(id));
+        const livelliZone = ['zone-etichette', 'zone-etichette-extra', 'zone-urbana-fill', 'zone-fill'].filter((id) => mappa.getLayer(id));
         const zone = livelliZone.length
           ? mappa.queryRenderedFeatures(evento.point, { layers: livelliZone })
           : null;

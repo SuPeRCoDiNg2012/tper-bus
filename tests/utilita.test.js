@@ -161,6 +161,22 @@ test('il centroide è la media dei punti validi', () => {
   assert.equal(Utilita.centroide([]), null);
 });
 
+test('il cerchio geografico resta a circa il raggio richiesto', () => {
+  const centro = [11.34, 44.5];
+  const anello = Utilita.cerchio(centro, 1000, 32);
+  assert.equal(anello.length, 32);
+  // Il primo punto è a nord del centro; il raggio si misura in metri, non in
+  // gradi, quindi a questa latitudine la longitudine è compressa da cos(lat).
+  const punto = anello[0];
+  assert.ok(punto[1] > centro[1]);
+  const dx = (punto[0] - centro[0]) * Math.cos((centro[1] * Math.PI) / 180) * 111320;
+  const dy = (punto[1] - centro[1]) * 111320;
+  assert.ok(Math.abs(Math.hypot(dx, dy) - 1000) < 5);
+  assert.deepEqual(Utilita.cerchio(centro, 0, 32), []);
+  assert.deepEqual(Utilita.cerchio(null, 1000, 32), []);
+  assert.deepEqual(Utilita.cerchio(['x', 44.5], 1000, 32), []);
+});
+
 test('l\'involucro tiene solo i vertici esterni e scarta quelli interni', () => {
   const anello = Utilita.involucro([[0, 0], [1, 0], [1, 1], [0, 1], [0.5, 0.5], [0.2, 0.8]]);
   assert.equal(anello.length, 4);

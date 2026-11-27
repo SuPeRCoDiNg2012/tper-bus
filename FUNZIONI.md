@@ -241,12 +241,12 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `caricaFormeLinee()` | Carica i tracciati delle linee quando servono. |
 | `decodificaPolilinea(testo)` | Polilinea `[lat, lon]` come vuole GeoJSON. |
 | `mostraLineeTutte(attivo)` | Mostra tutte le linee sulla mappa. |
-| `datiZone()` | Aree locali delle zone, dai gruppi di fermate vicine, più le etichette. |
+| `datiZone()` | Aree delle zone: disco 500, corona delle neutre a spicchi e cerchi extraurbani. |
 | `evidenziaZona(zona)` | Riempie la sorgente con le aree della zona scelta. |
 | `spegniZonaScelta()` | Toglie l'evidenziazione e la scheda della zona. |
 | `zonaAlCentro()` | Zona della fermata più vicina al centro della mappa. |
 | `aggiornaZonaIndicatore()` | Pillola sotto la barra con la zona che si sta guardando. |
-| `mostraZone(attivo)` | Accende o spegne aree, confini ed etichette delle zone. |
+| `mostraZone(attivo)` | Accende o spegne aree, confini ed etichette, nascondendo i raggruppamenti. |
 | `mostraZonaToccata(feature, punto)` | Evidenzia la zona toccata e ne mostra la scheda. |
 | `immaginePinFermata(treno)` | Pin della fermata, variante scura per i treni. |
 | `creaLivelliPercorso()` | Livelli e sorgenti del percorso. |
