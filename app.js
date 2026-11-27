@@ -2581,6 +2581,12 @@
     }
     const sotto = $('nav-sotto');
     if (sotto) sotto.textContent = 'Scendi alla prossima: ' + nomeFermataBreve(passo.nome, passo.modo);
+    // A schermo spento o app in background la vibrazione da sola non basta.
+    if (document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      void mostraNotifica('Scendi alla prossima',
+        nomeFermataBreve(passo.nome, passo.modo) + ' · ' + (passo.modo === 'treno' ? 'treno ' : 'bus ') + passo.linea,
+        '', 'discesa-' + chiave);
+    }
   }
 
   function erroreNavigazione(errore) {
@@ -3592,8 +3598,12 @@
   // push con un backend, che qui non esiste.
   const AVVISO_MINUTI = 5;
   const AVVISO_INTERVALLO = 60000;
+  const AVVISO_ARRIVO_MINUTI = 2;
+  const AVVISO_ARRIVO_INTERVALLO = 15000;
   let avvisiTimer = null;
+  let avvisiArrivoTimer = null;
   const avvisiInviati = new Set();
+  const avvisiArrivoInviati = new Set();
 
   function avvisiSalvati() {
     const salvati = leggiJSON(K_AVVISI);
@@ -3612,12 +3622,12 @@
     scrivi(K_AVVISI, JSON.stringify(salvati));
   }
 
-  async function mostraNotifica(titolo, corpo, fermataId) {
+  async function mostraNotifica(titolo, corpo, fermataId, tag) {
     const opzioni = {
       body: corpo,
       icon: './icons/icon-192.png',
       badge: './icons/icon-192.png',
-      tag: 'muovi-bologna-avviso',
+      tag: tag || 'muovi-bologna-avviso',
       renotify: true,
       data: { fermata: fermataId || '' }
     };
@@ -3679,8 +3689,92 @@
     avvisiTimer = setInterval(() => { controllaAvvisi(); }, AVVISO_INTERVALLO);
     controllaAvvisi();
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) controllaAvvisi();
+      if (!document.hidden) {
+        controllaAvvisi();
+        controllaAvvisoArrivo();
+      }
     });
+  }
+
+  async function permessoNotifiche() {
+    if (typeof Notification === 'undefined') return 'unsupported';
+    if (Notification.permission === 'granted') return 'granted';
+    if (Notification.permission === 'denied') return 'denied';
+    try {
+      return await Notification.requestPermission();
+    } catch (errore) {
+      return 'denied';
+    }
+  }
+
+  function renderNotificheMenu() {
+    const stato = $('menu-notifiche-stato');
+    if (!stato) return;
+    if (typeof Notification === 'undefined') stato.textContent = 'Non supportate';
+    else if (Notification.permission === 'granted') stato.textContent = 'Attive';
+    else if (Notification.permission === 'denied') stato.textContent = 'Bloccate';
+    else stato.textContent = 'Attiva';
+  }
+
+  async function attivaNotificheMenu() {
+    const permesso = await permessoNotifiche();
+    renderNotificheMenu();
+    if (permesso === 'granted') {
+      avviaAvvisi();
+      mostraToast("Notifiche attive: tocca la campanella di un preferito o l'avviso a 2 minuti di una corsa");
+    } else if (permesso === 'denied') {
+      mostraToast('Notifiche bloccate: riattivale dalle impostazioni del sito');
+    } else if (permesso === 'unsupported') {
+      mostraToast('Questo browser non supporta le notifiche');
+    } else {
+      mostraToast('Notifiche non attivate');
+    }
+  }
+
+  // Avviso a 2 minuti della corsa scelta negli orari: una sola notifica per
+  // fermata, linea, ora e giorno, anche se il controllo gira ogni 15 secondi.
+  function controllaAvvisoArrivo() {
+    if (!live.avvisa || !live.fermata) return;
+    if (routing.giorno && routing.giorno !== oggiISO()) return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const minuti = minutiA(live.avvisa.ora);
+    if (minuti == null || minuti < 0 || minuti > AVVISO_ARRIVO_MINUTI) return;
+    const chiave = [oggiISO(), live.fermata.id, live.avvisa.linea, live.avvisa.ora].join('|');
+    if (avvisiArrivoInviati.has(chiave)) return;
+    avvisiArrivoInviati.add(chiave);
+    const titolo = 'Bus ' + live.avvisa.linea + ' tra ' + Math.max(0, minuti) + ' min';
+    const corpo = nomeLuogo(live.fermata) + ' · ore ' + live.avvisa.ora;
+    void mostraNotifica(titolo, corpo, live.fermata.id, 'arrivo-' + chiave);
+  }
+
+  function avviaAvvisiArrivo() {
+    if (avvisiArrivoTimer) return;
+    avvisiArrivoTimer = setInterval(() => { controllaAvvisoArrivo(); }, AVVISO_ARRIVO_INTERVALLO);
+    controllaAvvisoArrivo();
+  }
+
+  async function alternaAvvisoArrivo(linea, ora) {
+    if (live.avvisa && live.avvisa.linea === linea && live.avvisa.ora === ora) {
+      live.avvisa = null;
+      renderLive();
+      mostraToast('Avviso rimosso');
+      return;
+    }
+    live.avvisa = { linea: linea, ora: ora };
+    renderLive();
+    const permesso = await permessoNotifiche();
+    renderNotificheMenu();
+    if (permesso === 'granted') {
+      avviaAvvisiArrivo();
+      controllaAvvisoArrivo();
+      mostraToast('Ti avviso 2 minuti prima con una notifica (con app aperta o in background)');
+    } else if (permesso === 'denied') {
+      mostraToast("Avviso solo nell'app: notifiche bloccate dalle impostazioni del sito");
+    } else if (permesso === 'unsupported') {
+      mostraToast("Avviso solo nell'app: questo browser non supporta le notifiche");
+    } else {
+      mostraToast("Avviso solo nell'app: notifiche non attivate");
+    }
   }
 
   async function alternaAvviso(slot) {
@@ -3692,16 +3786,16 @@
       mostraToast('Avvisi spenti per ' + voce.etichetta);
       return;
     }
-    if (typeof Notification === 'undefined') {
+    const permesso = await permessoNotifiche();
+    renderNotificheMenu();
+    if (permesso === 'unsupported') {
       mostraToast('Questo browser non supporta le notifiche');
       return;
     }
-    if (Notification.permission === 'denied') {
+    if (permesso === 'denied') {
       mostraToast('Notifiche bloccate: riattivale dalle impostazioni del sito');
       return;
     }
-    const permesso = Notification.permission === 'granted'
-      ? 'granted' : await Notification.requestPermission();
     if (permesso !== 'granted') {
       mostraToast('Notifiche non attivate');
       return;
@@ -7237,6 +7331,7 @@
     }
     const statoPosizione = $('menu-posizione-stato');
     if (statoPosizione) statoPosizione.textContent = posizioneUtente ? 'Attiva' : 'Trova';
+    renderNotificheMenu();
   }
 
   function apriMenu() {
@@ -7513,6 +7608,7 @@
       renderPercorso();
     });
     $('menu-posizione').addEventListener('click', () => { chiudiMenu(); posizioneComePartenza(); });
+    $('menu-notifiche').addEventListener('click', () => { attivaNotificheMenu(); });
     $('menu-linee').addEventListener('change', (evento) => {
       mostraLineeTutte(evento.target.checked);
     });
@@ -7812,9 +7908,8 @@
         if (azione === 'avvisa') {
           const linea = pulsante.getAttribute('data-avvisa-linea');
           const ora = pulsante.getAttribute('data-avvisa-ora');
-          live.avvisa = (live.avvisa && live.avvisa.linea === linea && live.avvisa.ora === ora)
-            ? null : { linea: linea, ora: ora };
-          renderLive();
+          alternaAvvisoArrivo(linea, ora);
+          return;
         }
         if (azione === 'spiega-abbonamento') {
           const testo = $('spiega-abbonamento');

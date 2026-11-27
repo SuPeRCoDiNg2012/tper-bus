@@ -246,6 +246,9 @@ test('di default l’elenco tiene tutta la giornata, non solo le prossime ore', 
 test('i minuti degli arrivi reggono la mezzanotte', () => {
   assert.equal(Vista.minutiA('00:10', 23 * 60 + 50), 20);
   assert.equal(Vista.minutiA('23:50', 10), -20);
+  // Soglia dell'avviso a 2 minuti, anche a cavallo della mezzanotte.
+  assert.equal(Vista.minutiA('08:02', 8 * 60), 2);
+  assert.equal(Vista.minutiA('00:01', 23 * 60 + 59), 2);
 });
 
 test('la scheda espone quanto si è disposti a camminare, da 3 a 25 minuti', () => {

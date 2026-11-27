@@ -4,6 +4,7 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- **Notifiche locali**: l'avviso a 2 minuti di una corsa negli orari ora invia davvero una notifica di sistema, una sola volta per fermata, linea, ora e giorno; la voce **Notifiche** nel menu chiede il permesso e mostra se sono attive o bloccate. In navigazione, a schermo spento, arriva anche l'avviso «scendi alla prossima». Restano locali: con l'app completamente chiusa non arrivano, perché manca un server push.
 - **Linee SFM**: aggiunte S1A (Porretta–Bologna–Pianoro), S1B (Bologna–San Benedetto), S2B (Bologna–Portomaggiore), S3 (Bologna–Poggio Rusco), S4A (Bologna–Ferrara), S4B (Bologna–Imola) e S5 (Bologna–Modena) dagli orari ufficiali SFMBO, con 534 corse, 36 nuove stazioni e geometrie dedicate. Le corse sono validate su sequenza e orari monotoni; la S2B, oggi servita da bus sostitutivi, resta una linea bus e non viene spacciata per treno. Il badge del percorso mantiene la sigla SFM invece di ridurla a REG.
 - **Marconi Express (MEX)**: aggiunto il people mover Bologna Centrale FS–Lazzaretto–Aeroporto con 3.591 corse dal GTFS ufficiale TPER `gtfsmex`, 3 fermate (`TRN001`, `TRN043`, `TRN044`) e geometria ufficiale. Il badge resta **MEX** (non REG), la tariffa è separata (12,80 € aeroporto–centrale, 2,30 € centrale–Lazzaretto) e non viene coperta dall'abbonamento TPER.
 - **Nuovo marchio e icone animate**: logo a “M” di transito con una fermata centrale, al posto del bus nei cerchi. Le icone hanno micro-animazioni ispirate ad animate-ui (menu che diventa X, frecce, scambio, campanella, refresh), disattivate con `prefers-reduced-motion`.
@@ -42,7 +43,7 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 - **Tabellone della fermata**: le corse live che HelloBus anticipa o posticipa rispetto al GTFS prendono il capolinea dalla corsa programmata più vicina della stessa linea, invece di mostrare «Bus 5554». Tolto il pulsante «Fissa» dall'intestazione degli orari.
 - **Avviso «scendi alla prossima»** azzerato a ogni nuova navigazione: la vibrazione si ripete anche se la fermata di discesa è la stessa del viaggio precedente.
 - **Scorciatoie nel manifest** per Casa e Lavoro.
-- Non implementati e dichiarati come limiti: notifiche push (servono chiavi VAPID, un deploy del Worker e la crittografia Web Push) e filtro «fermate accessibili» (il dataset non espone `wheelchair_boarding`).
+- Non implementati e dichiarati come limiti: notifiche push ad app completamente chiusa (servono chiavi VAPID, un deploy del Worker e la crittografia Web Push) e filtro «fermate accessibili» (il dataset non espone `wheelchair_boarding`).
 
 - Zone tariffarie ridisegnate: le fermate di una zona si dividono prima nei gruppi che stanno davvero vicini, quindi una zona sparsa non diventa più un triangolo lungo mezza provincia che si sovrappone alle altre. Ogni zona ha il suo numero sulla mappa (toccabile anche dove non c'è un'area) e solo quella scelta si riempie e si evidenzia; aree, confini ed etichette compaiono con lo zoom invece di 157 poligoni sovrapposti tutti insieme. Le aree non sono più una coperta di colore: sotto la barra una pillola dice la zona del punto che stai guardando («Zona 500 · urbana») e al tocco apre la sua scheda.
 
