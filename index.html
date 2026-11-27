@@ -125,10 +125,12 @@
   .barra .icona{background:var(--vetro);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:var(--ombra);}
   .icona:active{background:var(--campo);}
 
-  /* ---------- Icone animate (microinterazioni) ---------- */
-  /*animate-ui: scatto morbido su hover e pressione, mai un loop. Le regole
-     sono per nome Lucide, così non serve cambiare il generatore delle icone. */
-  .lucide,.icona > svg,.mappa-btn > svg,.ico-menu path,.ico-indietro path{transition:transform .26s cubic-bezier(.34,1.56,.64,1),opacity .18s ease;}
+  /* ---------- Movimento (gesti di animate-ui.com) ---------- */
+  /*animate-ui anima le icone Lucide con Motion: qui gli stessi gesti sono
+     keyframes CSS, così restano zero dipendenze e zero bundler. Il trigger è
+     l'hover o la pressione del comando che contiene l'icona; il JS aggiunge
+     `.ingresso` quando una schermata va composta a cascata. */
+  .lucide,.icona > svg,.mappa-btn > svg,.ico-menu path,.ico-indietro path{transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .18s ease;}
   .ico-menu path{transform-box:fill-box;transform-origin:center;}
   #btn-menu[aria-expanded="true"] .ico-menu path:nth-child(1){transform:translateY(6px) rotate(45deg);}
   #btn-menu[aria-expanded="true"] .ico-menu path:nth-child(2){opacity:0;transform:scaleX(.2);}
@@ -138,22 +140,58 @@
     button:hover > .ico-indietro{transform:translateX(-2px);}
     button:hover .lucide-arrow-up-down{transform:rotate(180deg) scale(1.04);}
     button:hover .lucide-chevron-down{transform:translateY(2px);}
-    button:hover .lucide-chevron-right{transform:translateX(2px);}
+    button:hover .lucide-chevron-right,button:hover .lucide-arrow-right{transform:translateX(3px);}
     button:hover .lucide-plus{transform:rotate(90deg);}
-    button:hover .lucide-pencil{transform:rotate(-8deg);}
-    button:hover .lucide-refresh-cw{transform:rotate(90deg);}
     button:hover .lucide-x{transform:rotate(90deg);}
-    button:hover .lucide-navigation{transform:translate(1px,-1px) rotate(-8deg);}
-    button:hover .lucide-bell,button:hover .lucide-bell-off{animation:icona-suona .55s ease;}
-    #btn-geo:hover > svg{animation:icona-punto .7s ease;}
+    button:hover .lucide-pencil{animation:ic-balla .5s ease;}
+    button:hover .lucide-bell,button:hover .lucide-bell-off{animation:ic-suona .8s cubic-bezier(.34,1.56,.64,1);}
+    button:hover .lucide-refresh-cw:not(.gira){animation:ic-ruota .7s cubic-bezier(.34,1.56,.64,1);}
+    button:hover .lucide-bus-front,button:hover .lucide-train-front{animation:ic-balla .55s ease;}
+    button:hover .lucide-map-pin,button:hover .lucide-map-pin-pieno{animation:ic-salta .55s cubic-bezier(.34,1.56,.64,1);}
+    button:hover .lucide-triangle-alert{animation:ic-balla .5s ease;}
+    button:hover .lucide-clock{animation:ic-batti .55s ease;}
+    button:hover .lucide-crosshair,button:hover .lucide-locate-fixed{animation:ic-batti .65s ease;}
+    button:hover .lucide-navigation{animation:ic-scatta .5s cubic-bezier(.34,1.56,.64,1);}
+    button:hover .lucide-house,button:hover .lucide-briefcase,button:hover .lucide-credit-card{animation:ic-entra .4s cubic-bezier(.34,1.56,.64,1);}
+    /* pattern «path»: il tratto si ridisegna da capo. */
+    button:hover .lucide-info path,button:hover .lucide-triangle-alert path{stroke-dasharray:1;animation:ic-disegna .8s ease-in-out;}
+    .voce:hover .lucide-plus{transform:rotate(90deg);}
+    .voce:hover .lucide-chevron-right,.arrivo-item:hover .lucide-chevron-right{transform:translateX(3px);}
+    .avviso:hover .lucide-triangle-alert,.box:hover .lucide-info{animation:ic-balla .5s ease;}
+    #btn-geo:hover > svg{animation:ic-batti .7s ease;}
   }
-  button:active > svg,button:active > .lucide{transform:scale(.9);}
-  @keyframes icona-suona{0%,100%{transform:rotate(0);}20%{transform:rotate(12deg);}45%{transform:rotate(-9deg);}70%{transform:rotate(4deg);}}
+  button:active > svg,button:active > .lucide{transform:scale(.88);}
+  /* Pressione dei comandi: stessa molla delle icone, non un ease. */
+  .btn,.voce,.arrivo-item,.opzione,.b-conviene{transition:transform .18s cubic-bezier(.34,1.56,.64,1),background-color .18s ease,border-color .18s ease,box-shadow .18s ease;}
+  .btn:active,.voce:active,.opzione:active{transform:scale(.98);}
+
+  @keyframes ic-suona{0%{transform:rotate(0);}14%{transform:rotate(13deg);}32%{transform:rotate(-10deg);}50%{transform:rotate(7deg);}70%{transform:rotate(-4deg);}86%{transform:rotate(2deg);}100%{transform:rotate(0);}}
+  @keyframes ic-ruota{from{transform:rotate(0);}to{transform:rotate(360deg);}}
+  @keyframes ic-balla{0%,100%{transform:rotate(0);}25%{transform:rotate(-7deg) translateY(-1px);}60%{transform:rotate(6deg);}}
+  @keyframes ic-salta{0%{transform:translateY(0);}35%{transform:translateY(-3.5px);}65%{transform:translateY(1px);}100%{transform:translateY(0);}}
+  @keyframes ic-scatta{0%{transform:translate(0,0) rotate(0);}45%{transform:translate(2px,-2px) rotate(-6deg);}100%{transform:translate(0,0) rotate(0);}}
+  @keyframes ic-batti{0%,100%{transform:scale(1);}42%{transform:scale(1.18);}}
+  @keyframes ic-disegna{from{stroke-dashoffset:1;}to{stroke-dashoffset:0;}}
+  @keyframes ic-entra{from{opacity:0;transform:scale(.8);}to{opacity:1;transform:scale(1);}}
   @keyframes icona-punto{0%,100%{transform:scale(1);}45%{transform:scale(1.18);}}
+
+  /* Comparsa delle schermate e delle liste: una riga alla volta, 40 ms di
+     scarto. Solo quando il JS mette `.ingresso`: il polling live non la ripete. */
+  @keyframes riga-entra{from{opacity:0;transform:translateY(7px);}to{opacity:1;transform:none;}}
+  .ingresso > *{animation:riga-entra .4s cubic-bezier(.22,1,.36,1) both;}
+  .ingresso > *:nth-child(2){animation-delay:.04s;}
+  .ingresso > *:nth-child(3){animation-delay:.08s;}
+  .ingresso > *:nth-child(4){animation-delay:.12s;}
+  .ingresso > *:nth-child(5){animation-delay:.16s;}
+  .ingresso > *:nth-child(6){animation-delay:.2s;}
+  .ingresso > *:nth-child(n+7){animation-delay:.24s;}
+
   @media (prefers-reduced-motion: reduce){
     .lucide,.icona > svg,.mappa-btn > svg,.ico-menu path,.ico-indietro path{transition:none !important;animation:none !important;}
     #btn-menu[aria-expanded="true"] .ico-menu path{transform:none !important;opacity:1 !important;}
     button:hover > svg,button:hover > .lucide,button:active > svg,button:active > .lucide{transform:none !important;}
+    .ingresso > *{animation:none !important;}
+    .btn,.voce,.arrivo-item,.opzione{transition:none !important;}
   }
   .barra .spazio{flex:1;}
   .pill-offline{font-size:11px;font-weight:600;color:var(--testo-2);background:var(--campo);border-radius:999px;padding:4px 10px;}
@@ -404,7 +442,7 @@
 
   /* ---------- Drawer menu ---------- */
   .velo{position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:1200;}
-  .drawer{position:fixed;top:0;bottom:0;left:0;width:280px;max-width:82vw;background:var(--sup);z-index:1210;box-shadow:2px 0 4px rgba(0,0,0,.10);transform:translateX(-100%);transition:transform .24s ease;display:flex;flex-direction:column;}
+  .drawer{position:fixed;top:0;bottom:0;left:0;width:280px;max-width:82vw;background:var(--sup);z-index:1210;box-shadow:2px 0 4px rgba(0,0,0,.10);transform:translateX(-100%);transition:transform .28s cubic-bezier(.22,1,.36,1);display:flex;flex-direction:column;}
   .drawer.aperto{transform:translateX(0);}
   .drawer-testa{display:flex;align-items:center;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top,0px)) 8px 8px 16px;}
   .drawer-testa h2{font-size:18px;font-weight:700;letter-spacing:-.3px;margin:0;}

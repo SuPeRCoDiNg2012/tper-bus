@@ -6985,11 +6985,27 @@
     }
   }
 
+  // Comparsa a cascata dei contenuti: il contenitore riceve `.ingresso`, il CSS
+  // sfalsa le righe di 40 ms. La chiave evita che una vista già composta
+  // (o un aggiornamento del live) rifaccia l'animazione da capo.
+  function animaIngresso(el, chiave) {
+    if (!el || !chiave || el.dataset.ingresso === chiave) return;
+    el.dataset.ingresso = chiave;
+    el.classList.remove('ingresso');
+    void el.offsetWidth;
+    el.classList.add('ingresso');
+    setTimeout(() => el.classList.remove('ingresso'), 900);
+  }
+
   function mostraVista(nome) {
     vistaAttiva = nome;
     $('vista-percorso').hidden = nome !== 'percorso';
     $('vista-orari').hidden = nome !== 'orari';
     $('vista-linea').hidden = nome !== 'linea';
+    // La chiave è il nome della vista: tornare su una schermata la ricompone,
+    // un aggiornamento della stessa no (altrimenti il live la farebbe sfarfallare).
+    const attiva = $('vista-' + nome);
+    if (attiva) animaIngresso(attiva, nome);
     const corpo = $('sheet-corpo');
     if (corpo) corpo.scrollTop = 0;
     if (nome === 'linea') renderLinea();
@@ -7546,6 +7562,7 @@
     sincronizzaMenu();
     renderInfo();
     drawer.classList.add('aperto');
+    animaIngresso(drawer, 'menu');
     drawer.setAttribute('aria-hidden', 'false');
     $('drawer-velo').hidden = false;
     $('btn-menu').setAttribute('aria-expanded', 'true');

@@ -39,11 +39,15 @@
     if (!PERCORSI[nome]) throw new Error('Icona Lucide sconosciuta: ' + nome);
     const o = opzioni || {};
     const misura = Number(dimensione) > 0 ? Number(dimensione) : 24;
+    // `pathLength="1"` normalizza la lunghezza dei tratti: il pattern «path»
+    // di animate-ui (stroke-dashoffset da 1 a 0) vale per ogni icona senza
+    // dover misurare le curve una per una.
+    const forme = PERCORSI[nome].replace(/<path /g, '<path pathLength="1" ');
     const classi = 'lucide lucide-' + nome + (classe ? ' ' + classe : '');
     return '<svg class="' + classi + '" width="' + misura + '" height="' + misura +
       '" viewBox="0 0 24 24" fill="' + (o.fill || 'none') + '" stroke="' + (o.stroke || 'currentColor') +
       '" stroke-width="' + (o.strokeWidth || 2) + '" stroke-linecap="round" stroke-linejoin="round"' +
-      ' aria-hidden="true">' + PERCORSI[nome] + '</svg>';
+      ' aria-hidden="true">' + forme + '</svg>';
   }
 
   const API = {

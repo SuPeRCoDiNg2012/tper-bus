@@ -37,6 +37,14 @@ test('dimensioni e classi aggiuntive vengono rispettate', () => {
   assert.throws(() => Icone.svg('icona-inesistente'), /sconosciuta/);
 });
 
+test('i tratti sono normalizzati per l’animazione «path»', () => {
+  // animate-ui disegna i tratti con pathLength+stroke-dashoffset: pathLength="1"
+  // rende la stessa animazione valida per ogni icona, corta o lunga che sia.
+  const html = Icone.svg('refresh-cw', 20);
+  assert.equal((html.match(/pathLength="1"/g) || []).length, 4);
+  assert.doesNotMatch(Icone.svg('chevron-down', 20), /path pathLength="1" pathLength/);
+});
+
 test('il pin della mappa usa la variante piena Lucide', () => {
   const html = Icone.svg('map-pin-pieno', 34, '', { fill: '#C1121F', stroke: '#fff', strokeWidth: 1.3 });
   assert.match(html, /width="34"/);
