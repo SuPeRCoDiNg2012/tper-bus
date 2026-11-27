@@ -1,6 +1,6 @@
 {
   "aggiornato": "2026-11-27",
-  "fonte": "Dataset ufficiale TPER (open data) convertito con converti-fermate-autobus.py; stazioni ferroviarie integrate manualmente",
+  "fonte": "Dataset ufficiale TPER (open data) convertito con converti-fermate-autobus.py; stazioni ferroviarie integrate manualmente; orari SFMBO (PDF ufficiali); orari SFMBO (PDF ufficiali)",
   "fermate": [
     {
       "id": "75253",
@@ -77912,8 +77912,8 @@
       "nome": "San Lazzaro - Stazione",
       "tipo": "treno",
       "zona": "501",
-      "lat": 44.478,
-      "lon": 11.39
+      "lat": 44.478956,
+      "lon": 11.416153
     },
     {
       "id": "9233",
@@ -86883,6 +86883,294 @@
       "zona": "500",
       "lat": 44.52876,
       "lon": 11.2944
+    },
+    {
+      "id": "TRN062",
+      "nome": "Monzuno - Vado",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.3221925,
+      "lon": 11.2623979
+    },
+    {
+      "id": "TRN063",
+      "nome": "Grizzana - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.2582781,
+      "lon": 11.1812461
+    },
+    {
+      "id": "TRN064",
+      "nome": "San Benedetto Val di Sambro - Castiglione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.2162142,
+      "lon": 11.1896065
+    },
+    {
+      "id": "TRN050",
+      "nome": "Calderara - Bargellino",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.5442561,
+      "lon": 11.2673575
+    },
+    {
+      "id": "TRN051",
+      "nome": "Osteria Nuova - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.5849298,
+      "lon": 11.2351638
+    },
+    {
+      "id": "TRN052",
+      "nome": "San Giovanni in Persiceto - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.6431931,
+      "lon": 11.1894015
+    },
+    {
+      "id": "TRN053",
+      "nome": "Crevalcore - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.7191154,
+      "lon": 11.1525029
+    },
+    {
+      "id": "TRN054",
+      "nome": "Camposanto - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.7883675,
+      "lon": 11.1431024
+    },
+    {
+      "id": "TRN055",
+      "nome": "San Felice sul Panaro - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.8345844,
+      "lon": 11.1404244
+    },
+    {
+      "id": "TRN056",
+      "nome": "Mirandola - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.8916681,
+      "lon": 11.1118719
+    },
+    {
+      "id": "TRN057",
+      "nome": "Poggio Rusco - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.9818151,
+      "lon": 11.1244434
+    },
+    {
+      "id": "TRN045",
+      "nome": "San Pietro in Casale - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.6979493,
+      "lon": 11.4047318
+    },
+    {
+      "id": "TRN046",
+      "nome": "Ferrara - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.8428777,
+      "lon": 11.6039031
+    },
+    {
+      "id": "TRN047",
+      "nome": "Ozzano dell'Emilia - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.4507733,
+      "lon": 11.4875419
+    },
+    {
+      "id": "TRN048",
+      "nome": "Varignana - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.4369684,
+      "lon": 11.5225689
+    },
+    {
+      "id": "TRN049",
+      "nome": "Castel San Pietro Terme - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.407365,
+      "lon": 11.5977165
+    },
+    {
+      "id": "TRN058",
+      "nome": "Anzola dell'Emilia - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.5509657,
+      "lon": 11.1966226
+    },
+    {
+      "id": "TRN059",
+      "nome": "Samoggia - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.5673223,
+      "lon": 11.1462846
+    },
+    {
+      "id": "TRN060",
+      "nome": "Castelfranco Emilia - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.5974173,
+      "lon": 11.0565579
+    },
+    {
+      "id": "TRN061",
+      "nome": "Modena - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.6543308,
+      "lon": 10.9305293
+    },
+    {
+      "id": "TRN065",
+      "nome": "Bologna - Autostazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.5043,
+      "lon": 11.3412
+    },
+    {
+      "id": "TRN066",
+      "nome": "Bologna - Zanolini",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.4972,
+      "lon": 11.359371
+    },
+    {
+      "id": "TRN067",
+      "nome": "Bologna - Rimesse",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.493416,
+      "lon": 11.373431
+    },
+    {
+      "id": "TRN068",
+      "nome": "Bologna - Santa Rita",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.493502,
+      "lon": 11.383132
+    },
+    {
+      "id": "TRN069",
+      "nome": "Bologna - Via Larga",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.4970758,
+      "lon": 11.3932474
+    },
+    {
+      "id": "TRN070",
+      "nome": "Bologna - Roveri",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.497562,
+      "lon": 11.410567
+    },
+    {
+      "id": "TRN071",
+      "nome": "Cà dell'Orbo - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.500714,
+      "lon": 11.433867
+    },
+    {
+      "id": "TRN072",
+      "nome": "Castenaso - Stellina",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.504963,
+      "lon": 11.457392
+    },
+    {
+      "id": "TRN073",
+      "nome": "Castenaso - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.5034266,
+      "lon": 11.4721437
+    },
+    {
+      "id": "TRN074",
+      "nome": "Budrio - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.5330286,
+      "lon": 11.5286135
+    },
+    {
+      "id": "TRN075",
+      "nome": "Budrio - Centro",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.540968,
+      "lon": 11.527321
+    },
+    {
+      "id": "TRN076",
+      "nome": "Mezzolara - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.587687,
+      "lon": 11.565022
+    },
+    {
+      "id": "TRN077",
+      "nome": "Guarda - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.6105736,
+      "lon": 11.6220614
+    },
+    {
+      "id": "TRN078",
+      "nome": "Molinella - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.6273007,
+      "lon": 11.6683575
+    },
+    {
+      "id": "TRN079",
+      "nome": "Consandolo - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.6638662,
+      "lon": 11.7768558
+    },
+    {
+      "id": "TRN080",
+      "nome": "Portomaggiore - Stazione",
+      "tipo": "treno",
+      "zona": "500",
+      "lat": 44.6968307,
+      "lon": 11.799931
     }
   ]
 }

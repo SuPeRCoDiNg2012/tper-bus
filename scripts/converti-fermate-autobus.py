@@ -50,7 +50,7 @@ PREPOSIZIONI_MINUSCOLE = {
 STAZIONI_TRENO = [
     {"id": "TRN001", "nome": "Bologna - Stazione Centrale", "tipo": "entrambi", "zona": "500", "lat": 44.506234, "lon": 11.342267},
     {"id": "TRN002", "nome": "Corticella - Stazione", "tipo": "treno", "zona": "504", "lat": 44.5390, "lon": 11.3330},
-    {"id": "TRN003", "nome": "San Lazzaro - Stazione", "tipo": "treno", "zona": "501", "lat": 44.4780, "lon": 11.3900},
+    {"id": "TRN003", "nome": "San Lazzaro - Stazione", "tipo": "treno", "zona": "501", "lat": 44.478956, "lon": 11.416153},
     {"id": "TRN004", "nome": "Casalecchio di Reno - Garibaldi", "tipo": "treno", "zona": "507", "lat": 44.4827287, "lon": 11.2727053},
     {"id": "TRN005", "nome": "Castel Maggiore - Stazione", "tipo": "treno", "zona": "531", "lat": 44.5660, "lon": 11.3600},
     {"id": "TRN006", "nome": "Bentivoglio - Stazione", "tipo": "treno", "zona": "561", "lat": 44.6150, "lon": 11.4260},

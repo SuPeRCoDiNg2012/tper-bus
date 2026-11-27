@@ -1,6 +1,6 @@
 {
-  "aggiornato": "2026-11-25",
-  "fonte": "Generato dal dataset ufficiale TPER fermate-autobus (campo codice_linea)",
+  "aggiornato": "2026-11-27",
+  "fonte": "Generato dal dataset ufficiale TPER fermate-autobus (campo codice_linea); linee SFM aggiunte dai PDF SFMBO; linee SFM aggiunte dai PDF SFMBO",
   "linee": {
     "2": [
       "21",
@@ -38602,6 +38602,201 @@
     ],
     "659001": [
       "551"
+    ],
+    "TRN037": [
+      "S1A"
+    ],
+    "TRN036": [
+      "S1A"
+    ],
+    "TRN035": [
+      "S1A"
+    ],
+    "TRN033": [
+      "S1A"
+    ],
+    "TRN032": [
+      "S1A"
+    ],
+    "TRN031": [
+      "S1A"
+    ],
+    "TRN008": [
+      "S1A"
+    ],
+    "TRN030": [
+      "S1A"
+    ],
+    "TRN007": [
+      "S1A"
+    ],
+    "TRN028": [
+      "S1A"
+    ],
+    "TRN027": [
+      "S1A"
+    ],
+    "TRN004": [
+      "S1A"
+    ],
+    "TRN013": [
+      "S1A"
+    ],
+    "TRN012": [
+      "S1A"
+    ],
+    "TRN001": [
+      "S1A",
+      "S1B",
+      "S3",
+      "S4A",
+      "S4B",
+      "S5"
+    ],
+    "TRN029": [
+      "S1A"
+    ],
+    "TRN034": [
+      "S1A"
+    ],
+    "TRN064": [
+      "S1B"
+    ],
+    "TRN063": [
+      "S1B"
+    ],
+    "TRN062": [
+      "S1B"
+    ],
+    "TRN011": [
+      "S1A",
+      "S1B"
+    ],
+    "TRN042": [
+      "S1A",
+      "S1B"
+    ],
+    "TRN041": [
+      "S1A",
+      "S1B"
+    ],
+    "TRN040": [
+      "S1A",
+      "S1B"
+    ],
+    "TRN039": [
+      "S1A",
+      "S1B"
+    ],
+    "TRN038": [
+      "S1A",
+      "S1B",
+      "S4B"
+    ],
+    "TRN074": [
+      "S2B"
+    ],
+    "TRN075": [
+      "S2B"
+    ],
+    "TRN076": [
+      "S2B"
+    ],
+    "TRN077": [
+      "S2B"
+    ],
+    "TRN078": [
+      "S2B"
+    ],
+    "TRN079": [
+      "S2B"
+    ],
+    "TRN080": [
+      "S2B"
+    ],
+    "TRN065": [
+      "S2B"
+    ],
+    "TRN066": [
+      "S2B"
+    ],
+    "TRN067": [
+      "S2B"
+    ],
+    "TRN068": [
+      "S2B"
+    ],
+    "TRN069": [
+      "S2B"
+    ],
+    "TRN070": [
+      "S2B"
+    ],
+    "TRN071": [
+      "S2B"
+    ],
+    "TRN072": [
+      "S2B"
+    ],
+    "TRN073": [
+      "S2B"
+    ],
+    "TRN057": [
+      "S3"
+    ],
+    "TRN056": [
+      "S3"
+    ],
+    "TRN055": [
+      "S3"
+    ],
+    "TRN054": [
+      "S3"
+    ],
+    "TRN053": [
+      "S3"
+    ],
+    "TRN052": [
+      "S3"
+    ],
+    "TRN051": [
+      "S3"
+    ],
+    "TRN050": [
+      "S3"
+    ],
+    "TRN045": [
+      "S4A"
+    ],
+    "TRN046": [
+      "S4A"
+    ],
+    "TRN003": [
+      "S4B"
+    ],
+    "TRN047": [
+      "S4B"
+    ],
+    "TRN049": [
+      "S4B"
+    ],
+    "TRN010": [
+      "S4B"
+    ],
+    "TRN048": [
+      "S4B"
+    ],
+    "TRN058": [
+      "S5"
+    ],
+    "TRN059": [
+      "S5"
+    ],
+    "TRN060": [
+      "S5"
+    ],
+    "TRN061": [
+      "S5"
     ]
   }
 }

@@ -87,7 +87,7 @@ Il motore: orari GTFS, rete, cambi, scelta del percorso migliore, tracciati dell
 | `costruisciRete(chiave)` | Costruisce la rete di un giorno: corse, fermate, indici. |
 | `secondiDa(data)` | Secondi dalla mezzanotte di un orario GTFS. |
 | `nomeLinea(indiceLinea)` | Nome commerciale della linea da indice. |
-| `etichettaTreno(nome)` | `FR`/`IC`/`RV` per i treni veloci, `REG` per gli altri. |
+| `etichettaTreno(nome)` | `FR`/`IC`/`RV` per i treni veloci, `REG` per gli altri; le sigle SFM (`S1A`, `S2A`, `S5`…) restano invariate e `MEX` resta il people mover. |
 | `pianifica(chiave, origini, destinazioni, oraPartenza, maxCambi, vietate, camminoMax)` | Cuore del calcolo: cammino + corse, fino a N cambi. |
 | `tempoDiCambio(fermata, corsa)` | Minuti necessari per cambiare a una fermata. |
 | `normalizzaElenco(valore)` | Lista di linee da stringa o array, senza doppioni. |

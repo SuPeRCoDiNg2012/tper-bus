@@ -479,7 +479,14 @@ async function main() {
       continue;
     }
 
-    if (treno && ids.length >= 2) {
+    // Il file OSM scaricato copre la rete attorno a Bologna; le linee che
+    // escono dal riquadro (Ferrara, Modena, Poggio Rusco) mantengono la forma
+    // interpolata delle stazioni invece di far fallire tutta la pipeline.
+    const nellAreaOsm = ids.every((id) => {
+      const c = coordinate.get(id);
+      return c && c[1] >= 44.13 && c[1] <= 44.56 && c[0] >= 10.95 && c[0] <= 11.82;
+    });
+    if (treno && ids.length >= 2 && nellAreaOsm) {
       const esito = percorsoStazioni(rete, ids, coordinate);
       if (!esito || esito.punti.length < 2) {
         errori.push('forma treno ' + k + ': nessun percorso ferroviario per ' + ids.join('→'));

@@ -13,7 +13,8 @@
  *   2. conversione     scripts/converti-fermate-autobus.py
  *   3. GTFS TPER       versione corrente letta da SolWeb, oppure VERSIONE_GTFS
  *   4. orari e colori  scripts/preprocess-orari.js + estrai-colori-linee.py
- *   5. treni           GTFS nazionale (URL_GTFS_TRENI) e PDF S2A/S1 (URL_PDF_TRENI, URL_PDF_S1)
+ *   5. treni           GTFS nazionale (URL_GTFS_TRENI), PDF S2A/S1 (URL_PDF_TRENI,
+ *                      URL_PDF_S1) e linee SFM dai PDF ufficiali SFMBO
  *   6. geometrie       scripts/ricostruisci-tracciati.js --scrivi (Overpass)
  *   7. gzip, controlli di sanità, confronto con i dati precedenti
  *
@@ -26,8 +27,9 @@
  * cresce a vuoto.
  *
  * REQUISITI
- *   Node.js 18+, Python 3, `unzip`, `pdftotext` (pacchetto poppler-utils) e
- *   rete. Su Ubuntu: `sudo apt-get install -y poppler-utils unzip`.
+ *   Node.js 18+, Python 3, PyMuPDF, `unzip`, `pdftotext` (pacchetto
+ *   poppler-utils) e rete. Su Ubuntu:
+ *   `sudo apt-get install -y poppler-utils unzip && python3 -m pip install pymupdf`.
  *
  * USO
  *   node scripts/aggiorna-dati.js
@@ -524,6 +526,11 @@ async function faseTreni() {
     '--pdf', path.relative(RADICE, pdfS1),
     '--scrivi'
   ]);
+
+  // Linee SFM S1A, S1B, S2B, S3, S4A, S4B e S5: gli orari sono nei PDF
+  // ufficiali SFMBO, non in un GTFS ferroviario completo. Lo script scarica i
+  // PDF, estrae le tabelle con PyMuPDF e aggiunge fermate, corse e geometrie.
+  esegui('python3', [path.join('scripts', 'aggiungi-sfm.py')]);
 
   // Marconi Express: GTFS ufficiale TPER separato (filename=gtfsmex).
   const versioneMex = process.env.VERSIONE_GTFS_MEX ||

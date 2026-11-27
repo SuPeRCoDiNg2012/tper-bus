@@ -110,12 +110,15 @@ test('il cambio vuole margine: 3 min tra bus, 4 con il treno, 30 s stessa linea'
   assert.deepEqual(attesa.tappe.map((t) => t.linea), ['L1', 'L1']);
 });
 
-test('i treni si chiamano REG o RV, mai con il nome GTFS', () => {
+test('i treni si chiamano REG, RV o con la sigla SFM', () => {
   assert.equal(TPERRouting.etichettaTreno('RV'), 'RV');
   assert.equal(TPERRouting.etichettaTreno('Regionale Veloce'), 'RV');
   assert.equal(TPERRouting.etichettaTreno('REG'), 'REG');
-  // I suburbani S1A/S2A sono regionali a tutti gli effetti.
-  assert.equal(TPERRouting.etichettaTreno('S2A'), 'REG');
+  // Le linee SFM mantengono la sigla: S1A e S2A non sono la stessa linea.
+  assert.equal(TPERRouting.etichettaTreno('S2A'), 'S2A');
+  assert.equal(TPERRouting.etichettaTreno('s1a'), 'S1A');
+  assert.equal(TPERRouting.etichettaTreno('S4B'), 'S4B');
+  assert.equal(TPERRouting.etichettaTreno('S5'), 'S5');
   // Il people mover non è un regionale: sulla scheda deve restare MEX.
   assert.equal(TPERRouting.etichettaTreno('MEX'), 'MEX');
   assert.equal(TPERRouting.etichettaTreno(null), 'REG');
