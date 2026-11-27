@@ -3,8 +3,8 @@
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'muovi-bologna-static-v200';
-const CACHE_DATI = 'muovi-bologna-data-v200';
+const CACHE_STATICA = 'muovi-bologna-static-v201';
+const CACHE_DATI = 'muovi-bologna-data-v201';
 
 const ASSET_STATICI = [
   './',
@@ -14,6 +14,8 @@ const ASSET_STATICI = [
   './routing.js',
   './linee.js',
   './icone.js',
+  './push.js',
+  './lingua.js',
   './vista-percorso.js',
   './tariffe.js',
   './piedi.js',
@@ -131,10 +133,14 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('push', (event) => {
   let dati = {};
   try { dati = event.data ? event.data.json() : {}; } catch (errore) { dati = {}; }
+  // Spedita dal Worker (push/worker.js) quando l'app è chiusa: stessa forma
+  // delle notifiche locali, così il tocco apre gli orari della fermata.
   event.waitUntil(self.registration.showNotification(dati.titolo || 'Muovi Bologna', {
     body: dati.corpo || '',
     icon: './icons/icon-192.png',
     badge: './icons/icon-192.png',
+    tag: 'muovi-bologna-push',
+    renotify: true,
     data: { fermata: dati.fermata || '' }
   }));
 });
@@ -174,7 +180,8 @@ self.addEventListener('fetch', (event) => {
   const isApp = url.pathname.endsWith('/') || url.pathname.endsWith('/index.html') ||
     url.pathname.endsWith('/app.js') || url.pathname.endsWith('/routing.js') ||
     url.pathname.endsWith('/utilita.js') || url.pathname.endsWith('/vista-percorso.js') ||
-    url.pathname.endsWith('/icone.js') || url.pathname.endsWith('/tariffe.js') ||
+    url.pathname.endsWith('/icone.js') || url.pathname.endsWith('/push.js') ||
+    url.pathname.endsWith('/lingua.js') || url.pathname.endsWith('/tariffe.js') ||
     url.pathname.endsWith('/piedi.js') || url.pathname.endsWith('/manifest.json') ||
     url.pathname.endsWith('/privacy.html');
   if (isApp) {

@@ -6,6 +6,11 @@
   "scripts": {
     "bump": "node scripts/bump-cache.js",
     "dati": "node scripts/aggiorna-dati.js",
-    "test": "node --test tests"
+    "test": "node --test tests",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1"
   }
 }

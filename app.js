@@ -651,6 +651,36 @@
     return elemento;
   }
 
+  /* ------------------------------------------------------------------ *
+   * Stile della mappa
+   * ------------------------------------------------------------------ */
+  // «liberty» è lo stile chiaro di OpenFreeMap; «dark» è il corrispettivo
+  // scuro, stesso fornitore e stesse attribuzioni. Cambiare stile butta via
+  // sorgenti e livelli aggiunti a mano: si ricostruiscono su `style.load`.
+  const STILE_MAPPA_CHIARO = 'https://tiles.openfreemap.org/styles/liberty';
+  const STILE_MAPPA_SCURO = 'https://tiles.openfreemap.org/styles/dark';
+  let stileAttuale = '';
+
+  function stileMappa() {
+    return document.documentElement.getAttribute('data-tema') === 'scuro' ? STILE_MAPPA_SCURO : STILE_MAPPA_CHIARO;
+  }
+
+  function cambiaStileMappa() {
+    const nuovo = stileMappa();
+    if (!mappa || nuovo === stileAttuale) return;
+    stileAttuale = nuovo;
+    mappa.once('style.load', () => {
+      aggiungiLivelliPercorso();
+      disegnaPercorso();
+      disegnaTracciato();
+      const zone = $('menu-zone');
+      if (zone && zone.checked) mostraZone(true);
+      aggiornaMarker();
+      aggiornaVisibilitaFermate();
+    });
+    mappa.setStyle(nuovo, { diff: false });
+  }
+
   function initMappa() {
     const elemento = $('mappa');
     if (!window.maplibregl) {
@@ -661,13 +691,14 @@
     }
     mappa = new maplibregl.Map({
       container: elemento,
-      style: 'https://tiles.openfreemap.org/styles/liberty',
+      style: stileMappa(),
       center: [11.3426, 44.4949],
       zoom: 13,
       attributionControl: false,
       dragRotate: false,
       pitchWithRotate: false
     });
+    stileAttuale = stileMappa();
     if (mappa.touchZoomRotate) mappa.touchZoomRotate.disableRotation();
     // Le attribuzioni (OpenFreeMap / OpenMapTiles / OpenStreetMap) arrivano già dallo stile.
     mappa.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
@@ -3711,7 +3742,100 @@
           ' · bus alle ' + prossimo.ora
         : voce.etichetta + ' · ' + nomeBreve(voce.luogo.nome) + ' · ' + prossimo.ora;
       await mostraNotifica(titolo, corpo, fermata.id, esci ? 'esci-' + chiave : undefined);
+      await avvisaUltimaCorsa(voce, fermata, giorno);
     }
+    // I promemoria del Worker seguono quello che l'app ha appena calcolato.
+    sincronizzaPush();
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Ultima corsa
+   * ------------------------------------------------------------------ */
+  // La sera l'errore che costa non è perdere un bus, è perdere l'ultimo. Una
+  // notifica sola per fermata e per giorno, un quarto d'ora prima.
+  const ULTIMA_SOGLIA = 15;
+  const K_ULTIME = 'tperzc_ultime_v1';
+
+  function ultimaCorsaDaFermata(fermata) {
+    const indice = lineeIndice();
+    if (!indice || !fermata) return null;
+    const attive = serviziDelGiorno();
+    let migliore = null;
+    lineaDi(fermata).forEach((nome) => {
+      const linea = Linee.lineaDi(indice, nome);
+      if (!linea) return;
+      // Senza capolinea si guardano tutte le direzioni: la domanda è «l'ultimo
+      // bus che passa di qui stasera», non «l'ultimo verso una direzione».
+      const ultima = Linee.ultimaAllaFermata(linea, null, fermata.id, attive);
+      if (ultima && (!migliore || ultima.secondi > migliore.secondi)) {
+        migliore = { secondi: ultima.secondi, corsa: ultima.corsa, linea: linea.nome };
+      }
+    });
+    return migliore;
+  }
+
+  // La guardia è su disco: senza, ogni ricarica nella mezz'ora finale avrebbe
+  // ripetuto la stessa notifica.
+  function ultimaGiaAvvisata(chiave) {
+    const salvate = leggiJSON(K_ULTIME) || {};
+    return !!salvate[chiave];
+  }
+
+  function segnaUltimaAvvisata(chiave) {
+    const salvate = leggiJSON(K_ULTIME) || {};
+    salvate[chiave] = Date.now();
+    // Bastano gli ultimi giorni: la chiave contiene già la data.
+    Object.keys(salvate).forEach((voce) => {
+      if (Date.now() - Number(salvate[voce]) > 8 * 24 * 3600 * 1000) delete salvate[voce];
+    });
+    scrivi(K_ULTIME, JSON.stringify(salvate));
+  }
+
+  // Con il push attivo il promemoria lo tiene il Worker: così l'ultima corsa
+  // arriva anche se l'app è chiusa da ore. Venti minuti prima, una volta al
+  // giorno, solo per le fermate con gli avvisi accesi.
+  function promemoriaPush() {
+    const elenco = [];
+    const inizio = new Date();
+    inizio.setHours(0, 0, 0, 0);
+    preferitiValidi().filter((voce) => avvisoAttivo(voce.slot)).forEach((voce) => {
+      const fermata = fermataPerAvviso(voce.luogo);
+      if (!fermata) return;
+      const ultima = ultimaCorsaDaFermata(fermata);
+      if (!ultima) return;
+      const quando = inizio.getTime() + (ultima.secondi - 20 * 60) * 1000;
+      if (quando <= Date.now()) return;
+      elenco.push({
+        id: 'ultima-' + voce.slot + '-' + oggiISO(),
+        quando: quando,
+        titolo: 'Ultima corsa alle ' + hhmm(ultima.secondi),
+        corpo: 'Linea ' + ultima.linea + ' da ' + nomeBreve(fermata.nome) + ': dopo non passa più',
+        fermata: fermata.id
+      });
+    });
+    return elenco;
+  }
+
+  function sincronizzaPush() {
+    if (!window.Push || !Push.attivo()) return;
+    Push.sincronizza(promemoriaPush());
+  }
+
+  async function avvisaUltimaCorsa(voce, fermata, giorno) {
+    const ultima = ultimaCorsaDaFermata(fermata);
+    if (!ultima) return;
+    const mancano = Math.round((ultima.secondi - secondiAdesso()) / 60);
+    if (mancano < 0 || mancano > ULTIMA_SOGLIA) return;
+    const chiave = ['ultima', voce.slot, giorno, ultima.linea, ultima.secondi].join('|');
+    if (ultimaGiaAvvisata(chiave)) return;
+    segnaUltimaAvvisata(chiave);
+    const quando = mancano <= 0 ? 'adesso' : 'tra ' + mancano + ' min';
+    await mostraNotifica(
+      'Ultima corsa ' + quando,
+      'Linea ' + ultima.linea + ' alle ' + hhmm(ultima.secondi) + ' da ' + nomeBreve(fermata.nome) + ': dopo non passa più',
+      fermata.id,
+      'ultima-' + voce.slot
+    );
   }
 
   function avviaAvvisi() {
@@ -3747,6 +3871,19 @@
     // Su iPhone il permesso esiste solo con l'app nella schermata Home.
     const soloHome = $('menu-notifiche-ios');
     if (soloHome) soloHome.hidden = !notificheSoloDaHome();
+    // Con il push attivo la nota «solo ad app aperta» non è più vera.
+    const nota = $('menu-notifiche-nota');
+    const pushAttivo = !!(window.Push && Push.attivo());
+    if (nota) nota.hidden = pushAttivo;
+    const riga = $('menu-push');
+    const notaPush = $('menu-push-nota');
+    const pronto = !!(window.Push && Push.configurato() && Push.supportato());
+    if (riga) {
+      riga.checked = !!(pronto && Push.attivo());
+      const etichetta = riga.closest('.voce-menu');
+      if (etichetta) etichetta.hidden = !pronto;
+    }
+    if (notaPush) notaPush.hidden = !(pronto && pushAttivo);
   }
 
   async function attivaNotificheMenu() {
@@ -3796,6 +3933,9 @@
     if (meta) meta.setAttribute('content', scuro ? '#121212' : '#FFFFFF');
     const check = $('menu-tema');
     if (check) check.checked = scuro;
+    // La mappa segue il tema: senza questo la scheda resta scura e la mappa
+    // bianca, che è il punto in cui il tema sembrava rotto.
+    cambiaStileMappa();
     if (salva) scrivi(K_TEMA, scuro ? 'scuro' : 'chiaro');
   }
 
@@ -7805,6 +7945,33 @@
       else inquadra();
     });
     $('btn-menu-destra').addEventListener('click', apriMenu);
+    // Notifiche ad app chiusa: la riga compare solo con il Worker configurato.
+    const pushMenu = $('menu-push');
+    if (pushMenu) {
+      pushMenu.addEventListener('change', async (evento) => {
+        if (!window.Push) return;
+        if (evento.target.checked) {
+          const esito = await Push.attiva();
+          if (esito.esito !== 'ok') {
+            evento.target.checked = false;
+            const messaggi = {
+              'non-configurato': 'Funzione non configurata',
+              'non-supportato': 'Questo browser non supporta il push',
+              denied: 'Notifiche bloccate dalle impostazioni del sito',
+              errore: 'Iscrizione non riuscita, riprova'
+            };
+            mostraToast(messaggi[esito.esito] || 'Notifiche non attivate');
+          } else {
+            sincronizzaPush();
+            mostraToast('Notifiche attive anche ad app chiusa');
+          }
+        } else {
+          await Push.spegni();
+          mostraToast('Notifiche ad app chiusa disattivate');
+        }
+        renderNotificheMenu();
+      });
+    }
     // Un tasto, due mestieri: torna indietro oppure apre il menu.
     $('btn-menu').addEventListener('click', () => {
       const barra = $('barra');

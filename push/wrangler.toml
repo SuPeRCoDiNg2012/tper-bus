@@ -1,0 +1,26 @@
+# Worker delle notifiche push di Muovi Bologna.
+# Deploy:  npx wrangler deploy --config push/wrangler.toml
+# La chiave privata VAPID e il soggetto sono segreti:
+#   npx wrangler secret put VAPID_PRIVATE_JWK --config push/wrangler.toml
+#   npx wrangler secret put VAPID_SUBJECT     --config push/wrangler.toml
+
+name = "muovi-bologna-push"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+[observability]
+enabled = true
+
+[vars]
+# Origine dell'app: accetta solo richieste da qui (elenco separato da virgole).
+ORIGIN = "https://supercoding2012.github.io"
+# Sostituisci con l'output di `node push/genera-chiavi.js`.
+VAPID_PUBLIC = "INCOLLA_QUI_LA_CHIAVE_PUBBLICA"
+
+[[kv_namespaces]]
+binding = "PUSH_KV"
+id = "SOSTITUISCI_CON_L_ID_DEL_NAMESPACE"
+
+[triggers]
+# Ogni minuto: i promemoria sono al minuto, non al quarto d'ora.
+crons = ["* * * * *"]

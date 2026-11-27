@@ -797,6 +797,12 @@
     </button>
     <p class="menu-nota-notifiche" id="menu-notifiche-nota">Arrivano solo con l'app aperta o in background recente: ad app chiusa del tutto non ne ricevi, perché non c'è un server push.</p>
     <p class="menu-nota-notifiche" id="menu-notifiche-ios" hidden>Su iPhone arrivano solo dopo «Aggiungi alla Home»: tocca Condividi in Safari e scegli quella voce, poi riapri l'app.</p>
+    <label class="voce-menu" for="menu-push" hidden>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg>
+      <span class="spazio">Notifiche ad app chiusa</span>
+      <span class="interruttore"><input type="checkbox" id="menu-push"><span class="binario"></span></span>
+    </label>
+    <p class="menu-nota-notifiche" id="menu-push-nota" hidden>Un promemoria solo per l'ultima corsa di oggi dalle fermate con gli avvisi accesi: lo spedisce un Worker, non il telefono.</p>
     <label class="voce-menu" for="menu-abbonamento">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
       <span class="spazio">Abbonamento urbano</span>
@@ -816,6 +822,11 @@
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
       <span class="spazio">Tema scuro</span>
       <span class="interruttore"><input type="checkbox" id="menu-tema"><span class="binario"></span></span>
+    </label>
+    <label class="voce-menu" id="menu-lingua-riga" for="menu-lingua">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+      <span class="spazio">English</span>
+      <span class="interruttore"><input type="checkbox" id="menu-lingua"><span class="binario"></span></span>
     </label>
     <div class="menu-sezione">Percorso attuale</div>
     <button class="menu-recente" id="menu-recente" hidden></button>
@@ -913,6 +924,8 @@
 <script src="./vista-percorso.js" defer></script>
 <script src="./tariffe.js" defer></script>
 <script src="./piedi.js" defer></script>
+<script src="./push.js" defer></script>
+<script src="./lingua.js" defer></script>
 <script src="./app.js" defer></script>
 </body>
 </html>
