@@ -39,6 +39,18 @@
   const K_FISSE = 'tperzc_fermate_fisse_v1';
   const K_VIAGGI = 'tperzc_viaggi_salvati_v1';
   const K_ERRORI = 'tperzc_errori_v1';
+  // Preferenze dei vecchi criteri di percorso, non più lette dall'app. Le
+  // versioni con e senza prefisso coprono anche installazioni molto vecchie.
+  const CHIAVI_CRITERI_OBSOLETI = [
+    'tperzc_criterio_v1',
+    'tperzc_criterio_default_v1',
+    'tperzc_criterio_scelte_v1',
+    'tperzc_criterio_proposto_v1',
+    'criterio_v1',
+    'criterio_default',
+    'criterio_scelte',
+    'criterio_proposto'
+  ];
   const URL_UFFICIALE = 'https://solweb.tper.it/web/tools/zone-calculator.aspx';
   const HELLOBUS = 'https://hellobuswsweb.tper.it/web-services/hellobus.asmx/QueryHellobus';
   const RELAY_PREDEFINITO = 'https://api.allorigins.win/raw?url=';
@@ -241,6 +253,14 @@
   }
   function leggiJSON(chiave) {
     try { return JSON.parse(localStorage.getItem(chiave) || 'null'); } catch (e) { return null; }
+  }
+  // Una passata sola all'avvio: dopo la prima esecuzione le chiavi non ci sono
+  // più, quindi le aperture successive non tolgono niente. Non serve un
+  // marcatore "già pulito", che sarebbe un'altra chiave da dichiarare.
+  function pulisciCriteriObsoleti() {
+    try {
+      CHIAVI_CRITERI_OBSOLETI.forEach((chiave) => localStorage.removeItem(chiave));
+    } catch (e) { /* storage non disponibile */ }
   }
   function normalizza(testo) {
     return (testo || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -8007,6 +8027,7 @@
   async function avvia() {
     // Spazio, errori e conteggio degli usi vanno sistemati prima di tutto:
     // la pulizia deve avvenire quando le cache sono ancora scrivibili.
+    pulisciCriteriObsoleti();
     pulisciCacheSeNecessario();
     collegaErrori();
     initMappa();

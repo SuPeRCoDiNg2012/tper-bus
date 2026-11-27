@@ -211,6 +211,7 @@ Solo HTML: riceve un esito e restituisce stringhe, nessun accesso al DOM.
 | `registraErrore(tipo, messaggio, stack)` | Salva un errore nel log in memoria. |
 | `collegaErrori()` | Aggancia `error` e `unhandledrejection`. |
 | `pulisciCacheSeNecessario()` | Svuota le cache del service worker se cresciute. |
+| `pulisciCriteriObsoleti()` | Rimuove una volta all'avvio le vecchie chiavi dei criteri. |
 
 ## Fermate e dati — 9
 
