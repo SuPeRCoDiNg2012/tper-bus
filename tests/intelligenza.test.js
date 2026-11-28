@@ -125,6 +125,7 @@ test('l\'affidabilità è completa solo se tutte le corse bus hanno un ritardo',
   ]);
   assert.equal(unaSola.corse, 2);
   assert.equal(unaSola.note, 1);
+  assert.equal(unaSola.treni, true);
   assert.equal(unaSola.completa, false);
   // Il treno non conta: non ha un feed live e renderebbe parziale ogni viaggio.
   const conTreno = I.coperturaRealtime([
@@ -132,8 +133,14 @@ test('l\'affidabilità è completa solo se tutte le corse bus hanno un ritardo',
     { tipo: 2, ritardoLive: null }
   ]);
   assert.equal(conTreno.corse, 1);
+  assert.equal(conTreno.treni, true);
   assert.equal(conTreno.completa, true);
-  assert.equal(I.coperturaRealtime([{ tipo: 1, ritardoLive: null }]).completa, false);
+  const soloTreno = I.coperturaRealtime([{ tipo: 1, ritardoLive: null }]);
+  assert.equal(soloTreno.completa, false);
+  assert.equal(soloTreno.treni, true);
+  const soloBus = I.coperturaRealtime([{ tipo: 3, ritardoLive: 60 }]);
+  assert.equal(soloBus.treni, false);
+  assert.equal(soloBus.completa, true);
 });
 
 test('una corsa troppo in ritardo si scarta, una in orario no', () => {

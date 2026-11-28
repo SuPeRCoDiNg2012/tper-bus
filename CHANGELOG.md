@@ -4,6 +4,8 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- **Revisione del collegamento del motore**: via lo stato `liveTappe.stato` (scritto in tre punti e mai letto) e il contatore `noti` rimasto senza uso; un unico `esito.coperturaLive` al posto del booleano e dell'oggetto separati. Se il viaggio contiene un treno, la parola sull'affidabilità ora è qualificata («bus in orario», «qualche ritardo sui bus», «ritardi sui bus») e il dato parziale dice «corse bus»: il treno non ha un feed live e non va dato per controllato. Le etichette dei cambi a rischio restano quelle già verificate.
+
 - **Le linee della fermata sulla mappa**: aprendo una fermata si disegnano tutti i tracciati che la servono, come nella vista di una singola linea, uno per linea e per capolinea con il colore ufficiale. Le sovrapposizioni sono accettate: l'ultima linea disegnata copre le precedenti. Si parte dal gruppo con più corse, non da una variante rara, e le forme identiche si disegnano una volta sola. La scelta dei tragitti è in `Linee.tragittiAllaFermata`, con test proprio.
 
 - **La riga arancione del cambio ora si vede davvero**: i ritardi live arrivavano dopo che la scheda era stata disegnata, e nessun ridisegno mostrava i cambi a rischio già calcolati. Quando i dati arrivano, il dettaglio viene ricomposto una volta sola (la cache dei ritardi evita il ciclo). Un test end-to-end con percorso fissato a due corse e HelloBus in ritardo verifica la riga `.cambio-rischio`, il testo «a rischio» e il motivo; un test unitario copre lo stesso rendering senza browser.

@@ -316,7 +316,7 @@
         const attesa = Math.round((tappa.attesa - (tappa.camminoPrima ? tappa.camminoPrima.secondi : 0)) / 60);
         // Un cambio che il ritardo della corsa precedente ha già mangiato non
         // va nascosto: è il motivo per cui il percorso potrebbe saltare.
-        const rischio = (e.rischi || []).filter((r) => r.indice === indice - 1)[0];
+        const rischio = (e.rischi || []).find((r) => r.indice === indice - 1);
         html += '<div class="cambio' + (rischio ? ' cambio-rischio' : '') + '">Cambio' +
           (attesa >= 1 ? ' · ' + attesa + ' min' : '') +
           (rischio ? ' · <b>a rischio</b>: ' + esc(rischio.motivo) : '') + '</div>';

@@ -398,6 +398,12 @@ test('un ritardo live rende arancione il cambio a rischio, con il motivo', async
   await expect(cambio).toContainText('ritardo di 3 min sulla corsa che arriva');
   // La riga è quella del cambio, non un avviso generico da un'altra parte.
   await expect(page.locator('.dettaglio .cambio')).toHaveCount(1);
+  // Una corsa su due ha un ritardo noto: niente verdetto, ma la copertura
+  // dichiarata, così «in orario» non viene promesso per tutto il viaggio.
+  const meta = page.locator('.riep-meta');
+  await expect(meta).toContainText('dato parziale: 1 di 2 corse');
+  await expect(meta).not.toContainText('in orario');
+  await expect(meta).not.toContainText('ritardi in corso');
 });
 
 test('nessun errore JavaScript sulle schermate principali', async ({ page }) => {

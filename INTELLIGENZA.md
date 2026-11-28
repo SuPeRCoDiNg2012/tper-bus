@@ -67,6 +67,8 @@ compare più: il limite è per tipo, non globale, così un utente che ignora
   cambi con «a rischio» e il motivo. La parola compare solo se `coperturaRealtime`
   dice che **tutte** le corse bus hanno un ritardo noto: con una risposta sola
   su tre il riepilogo scrive «dato parziale: 1 di 3 corse» e non un verdetto.
+  Se il viaggio include un treno la parola è qualificata — «bus in orario»,
+  «ritardi sui bus» — perché per i treni non esiste un feed live.
   `intelligenza.js` è nel precache del service worker.
 - **Non ancora collegato**: `punteggio` di `routing.js` non usa
   `punteggioCombinato`, quindi i pesi non cambiano ancora *quale* percorso

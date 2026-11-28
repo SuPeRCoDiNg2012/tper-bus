@@ -117,11 +117,18 @@
 
   // Quante corse bus hanno davvero un ritardo noto. Serve a non spacciare per
   // «in orario» un viaggio in cui HelloBus ha risposto solo per una tappa.
+  // `treni` dice se il viaggio contiene un treno: il verdetto vale solo per i
+  // bus, perché per i treni non esiste un feed in tempo reale.
   function coperturaRealtime(tappe) {
-    if (!Array.isArray(tappe)) return { corse: 0, note: 0, completa: false };
+    if (!Array.isArray(tappe)) return { corse: 0, note: 0, treni: false, completa: false };
     const bus = tappe.filter((t) => t && t.tipo !== 1 && t.tipo !== 2);
     const note = bus.filter(haRitardo).length;
-    return { corse: bus.length, note: note, completa: bus.length > 0 && note === bus.length };
+    return {
+      corse: bus.length,
+      note: note,
+      treni: bus.length < tappe.length,
+      completa: bus.length > 0 && note === bus.length
+    };
   }
 
   // Una corsa si scarta se è troppo in ritardo per essere ancora quella che

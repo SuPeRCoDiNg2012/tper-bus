@@ -2231,7 +2231,6 @@
     }
     // Anche i ritardi delle altre tappe sono del viaggio appena chiuso.
     liveTappe.chiave = null;
-    liveTappe.stato = 'idle';
     liveTappe.valori = [];
     liveTappe.esito = null;
     if (liveTappeAbort) {
@@ -5446,16 +5445,21 @@
     const piedi = Math.round(((e.camminoIniziale || 0) + (e.camminoFinale || 0)) / 60);
     if (piedi >= 1) meta += ' · a piedi ' + piedi + ' min';
     // Affidabilità: una parola, non un numero. Il numero vero non lo sappiamo
-    // abbastanza bene da scriverlo.
+    // abbastanza bene da scriverlo. Con un treno nel viaggio la parola riguarda
+    // solo i bus: per i treni non c'è un feed live da controllare.
+    const copertura = e.coperturaLive;
+    const conTreno = !!(copertura && copertura.treni);
     if (e.affidabilita != null) {
-      meta += ' · ' + (e.affidabilita >= 0.75 ? 'in orario'
-        : e.affidabilita >= 0.5 ? 'qualche ritardo' : 'ritardi in corso');
-    } else if (e.affidabilitaParziale && e.affidabilitaParziale.note > 0 &&
-        e.affidabilitaParziale.note < e.affidabilitaParziale.corse) {
+      meta += ' · ' + (e.affidabilita >= 0.75
+        ? (conTreno ? 'bus in orario' : 'in orario')
+        : e.affidabilita >= 0.5
+          ? (conTreno ? 'qualche ritardo sui bus' : 'qualche ritardo')
+          : (conTreno ? 'ritardi sui bus' : 'ritardi in corso'));
+    } else if (copertura && copertura.note > 0 && !copertura.completa) {
       // Un verdetto su una parte delle corse non è un verdetto: si dice
       // quante ne conosciamo, senza aggiungere «in orario» o «ritardi».
-      meta += ' · dato parziale: ' + e.affidabilitaParziale.note + ' di ' +
-        e.affidabilitaParziale.corse + ' corse';
+      meta += ' · dato parziale: ' + copertura.note + ' di ' + copertura.corse +
+        (conTreno ? ' corse bus' : ' corse');
     }
     // Abbonamento: una spunta accanto al prezzo, non un altro chip in alto.
     const spunta = prezzo === 'Incluso'
@@ -7100,7 +7104,7 @@
   // seconda gamba sposta l'arrivo o fa perdere il cambio, e la scheda deve
   // dirlo. `valori` è allineato a `routing.esito.tappe` (secondi, null = ignoto).
   const liveTappe = {
-    chiave: null, ts: 0, stato: 'idle', valori: [], caricamento: false, esito: null
+    chiave: null, ts: 0, valori: [], caricamento: false, esito: null
   };
   let liveTappeAbort = null;
 
@@ -7401,7 +7405,6 @@
     if (!tappe.length) {
       if (liveTappeAbort) liveTappeAbort.abort();
       liveTappe.chiave = null;
-      liveTappe.stato = 'idle';
       liveTappe.valori = [];
       return;
     }
@@ -7430,39 +7433,34 @@
     }));
     if (segnale.aborted || routing.esito !== esito) return;
 
-    let noti = 0;
     const valori = tappe.map((tappa) => {
       if (tappa.tipo === 1 || tappa.tipo === 2) return null;
       const testo = testi.get(tappa.da + '|' + tappa.linea);
       if (!testo || /NON GESTITA/i.test(testo)) return null;
       const trovato = arrivoDellaCorsa(parseHellobus(testo), tappa);
       if (!trovato) return null;
-      noti += 1;
       return Math.round(trovato.scarto);
     });
     liveTappe.valori = valori;
     liveTappe.esito = esito;
     liveTappe.ts = Date.now();
-    liveTappe.stato = noti ? 'ok' : 'nessuna-corsa';
     liveTappe.caricamento = false;
-    if (esito) {
-      esito.ritardi = valori;
-      // I conti dei cambi a rischio e dell'affidabilità li fa il motore:
-      // qui si passano solo i ritardi appena letti, allineati alle tappe.
-      const conRitardo = (esito.tappe || []).map((tappa, indice) => ({
-        tipo: tappa.tipo,
-        arrivo: tappa.arrivo,
-        partenza: tappa.partenza,
-        ritardoLive: valori[indice]
-      }));
-      esito.rischi = Intelligenza.rischioCambi(conRitardo);
-      // Una parola sull'affidabilità solo se HelloBus ha risposto per tutte le
-      // corse bus. Con un dato parziale la parola sarebbe una promessa che non
-      // possiamo mantenere: si dichiara la copertura, non il verdetto.
-      const copertura = Intelligenza.coperturaRealtime(conRitardo);
-      esito.affidabilitaParziale = copertura.completa ? null : copertura;
-      esito.affidabilita = copertura.completa ? Intelligenza.affidabilitaRealtime(conRitardo) : null;
-    }
+    esito.ritardi = valori;
+    // I conti dei cambi a rischio e dell'affidabilità li fa il motore:
+    // qui si passano solo i ritardi appena letti, allineati alle tappe.
+    const conRitardo = (esito.tappe || []).map((tappa, indice) => ({
+      tipo: tappa.tipo,
+      arrivo: tappa.arrivo,
+      partenza: tappa.partenza,
+      ritardoLive: valori[indice]
+    }));
+    esito.rischi = Intelligenza.rischioCambi(conRitardo);
+    // Una parola sull'affidabilità solo se HelloBus ha risposto per tutte le
+    // corse bus. Con un dato parziale la parola sarebbe una promessa che non
+    // possiamo mantenere: si dichiara la copertura, non il verdetto.
+    const copertura = Intelligenza.coperturaRealtime(conRitardo);
+    esito.coperturaLive = copertura;
+    esito.affidabilita = copertura.completa ? Intelligenza.affidabilitaRealtime(conRitardo) : null;
     if (scartaCorsaInRitardo()) return;
     // Il dettaglio è stato disegnato prima che i ritardi arrivassero: senza un
     // ridisegno la riga arancione del cambio resterebbe calcolata ma invisibile.
