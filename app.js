@@ -43,6 +43,9 @@
   const K_APERTE = 'tperzc_fermate_aperte_v1';
   const K_PUSH_PROPOSTO = 'tperzc_push_proposto_v1';
   const K_TESTO = 'tperzc_testo_v1';
+  const K_CONTRASTO = 'tperzc_alto_contrasto_v1';
+  const K_FONT_LEGGIBILE = 'tperzc_dislessia_v1';
+  const K_SEMPLICE = 'tperzc_semplice_v1';
   // Preferenze dei vecchi criteri di percorso, non più lette dall'app. Le
   // versioni con e senza prefisso coprono anche installazioni molto vecchie.
   const CHIAVI_CRITERI_OBSOLETI = [
@@ -4692,14 +4695,180 @@
   // Sul bus, controsole e con le mani occupate, il testo da 12 px non si legge.
   // Si ingrandisce il contenuto del pannello e del menu, non la mappa.
   function testoGrande() {
-    return leggi(K_TESTO) === 'grande';
+    const salvato = leggi(K_TESTO);
+    // 'sì' è il valore salvato dal vecchio interruttore "Testo grande".
+    if (salvato === 'sì') return true;
+    return salvato === 'grande' || salvato === 'molto-grande';
   }
 
   function applicaTesto(grande, salva) {
-    document.documentElement.setAttribute('data-testo', grande ? 'grande' : 'normale');
-    const check = $('menu-testo');
-    if (check) check.checked = !!grande;
-    if (salva) scrivi(K_TESTO, grande ? 'grande' : 'normale');
+    // Tre livelli come chiesto: normale, grande, molto grande. Accetta anche
+    // il vecchio booleano, così il valore salvato dai telefoni esistenti vale.
+    const livello = grande === true ? 'grande'
+      : grande === 'grande' || grande === 'molto-grande' ? grande
+      : 'normale';
+    document.documentElement.setAttribute('data-testo', livello);
+    const campo = $('menu-testo-livello');
+    if (campo) campo.value = livello;
+    if (salva) scrivi(K_TESTO, livello);
+  }
+
+  // Livello salvato; se non c'è, normale. Al primo avvio non tocchiamo il
+  // livello di sistema: chi ha già ingrandito il testo lo ritrova.
+  function testoPreferito() {
+    const salvato = leggi(K_TESTO);
+    if (salvato === 'grande' || salvato === 'molto-grande' || salvato === 'normale') return salvato;
+    return salvato === 'sì' ? 'grande' : 'normale';
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Alto contrasto
+   * ------------------------------------------------------------------ */
+  // Bianco e nero, bordi al posto delle ombre. Se il sistema chiede più
+  // contrasto e l'utente non ha mai scelto, lo accendiamo da soli.
+  function contrastoDiSistema() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-contrast: more)').matches);
+  }
+  function applicaContrasto(alto, salva) {
+    document.documentElement.setAttribute('data-contrasto', alto ? 'alto' : 'normale');
+    const check = $('menu-contrasto');
+    if (check) check.checked = !!alto;
+    if (salva) scrivi(K_CONTRASTO, alto ? 'alto' : 'normale');
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Caratteri leggibili (dislessia)
+   * ------------------------------------------------------------------ */
+  function applicaFontLeggibile(attivo, salva) {
+    document.documentElement.setAttribute('data-font', attivo ? 'leggibile' : '');
+    const check = $('menu-dislessia');
+    if (check) check.checked = !!attivo;
+    if (salva) scrivi(K_FONT_LEGGIBILE, attivo ? 'sì' : 'no');
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Modalità semplice
+   * ------------------------------------------------------------------ */
+  // Non è un tema: è una promessa. Chi la accende vede ricerca, mappa e
+  // "dove sono", e nient'altro che possa confonderlo.
+  function applicaSemplice(attivo, salva) {
+    document.documentElement.setAttribute('data-semplice', attivo ? '1' : '0');
+    const check = $('menu-semplice');
+    if (check) check.checked = !!attivo;
+    document.querySelectorAll('.criteri, .alternative, #menu-zone, #menu-linee, .voce-menu[for="menu-abbonamento"], .voce-menu[for="menu-schermo"]').forEach((nodo) => {
+      nodo.classList.toggle('semplice-nascondi', !!attivo);
+    });
+    if (attivo) applicaTesto('grande', salva);
+    if (salva) scrivi(K_SEMPLICE, attivo ? 'sì' : 'no');
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Pannelli informativi (stato, FAQ, 112)
+   * ------------------------------------------------------------------ */
+  // Un pannello solo, costruito la prima volta e riusato: stesso scheletro
+  // delle impostazioni, così tastiera, screen reader e chiusura si comportano
+  // come il resto dell'app senza altri stili da tenere allineati.
+  function apriPannello(id, titolo, contenuto) {
+    let pannello = document.getElementById(id);
+    if (!pannello) {
+      pannello = document.createElement('section');
+      pannello.id = id;
+      pannello.className = 'impostazioni';
+      pannello.setAttribute('role', 'dialog');
+      pannello.setAttribute('aria-modal', 'true');
+      pannello.innerHTML = '<div class="impostazioni-testa"><h2></h2>' +
+        '<button class="icona" type="button" aria-label="Chiudi">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>' +
+        '</button></div><div class="impostazioni-corpo"></div>';
+      document.body.appendChild(pannello);
+      pannello.querySelector('button').addEventListener('click', () => {
+        pannello.hidden = true;
+      });
+      pannello.addEventListener('keydown', (evento) => {
+        if (evento.key === 'Escape') pannello.hidden = true;
+      });
+    }
+    pannello.setAttribute('aria-label', titolo);
+    pannello.querySelector('h2').textContent = titolo;
+    pannello.querySelector('.impostazioni-corpo').innerHTML = contenuto;
+    pannello.hidden = false;
+    const chiudi = pannello.querySelector('button');
+    if (chiudi) chiudi.focus();
+    return pannello;
+  }
+
+  // Un servizio è "online" se risponde entro 8 secondi con un HTTP valido:
+  // un banner verde su una risposta di errore sarebbe la bugia peggiore.
+  function provaServizio(nome, url, controllo) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    return fetch(url, { signal: controller.signal, cache: 'no-store' })
+      .then((risposta) => {
+        clearTimeout(timer);
+        if (!risposta.ok) return { nome, ok: false, nota: 'HTTP ' + risposta.status };
+        if (controllo) return risposta.text().then((testo) => ({ nome, ok: controllo(testo) !== false, nota: '' }));
+        return { nome, ok: true, nota: '' };
+      })
+      .catch((errore) => {
+        clearTimeout(timer);
+        return { nome, ok: false, nota: errore && errore.name === 'AbortError' ? 'nessuna risposta' : 'irraggiungibile' };
+      });
+  }
+
+  function apriStatoServizio() {
+    const adesso = new Date();
+    const hh = String(adesso.getHours()).padStart(2, '0');
+    const mm = String(adesso.getMinutes()).padStart(2, '0');
+    const hellobus = RELAY_WORKER + encodeURIComponent(
+      'https://hellobuswsweb.tper.it/web-services/hellobus.asmx/QueryHellobus?fermata=100&linea=29&oraHHMM=' + hh + mm
+    );
+    const pannello = apriPannello('pannello-stato-servizio', 'Stato del servizio',
+      '<p class="menu-nota-notifiche">Controllo in corso…</p>');
+    const corpo = pannello.querySelector('.impostazioni-corpo');
+    const voci = [
+      { nome: 'Orari in tempo reale (HelloBus)', url: hellobus, controllo: (t) => t.indexOf('HellobusHelp') === -1 || true },
+      { nome: 'Notifiche ad app chiusa (Worker)', url: 'https://muovi-bologna-push.zeno-astolfi12.workers.dev/' },
+      { nome: 'Meteo (Open-Meteo)', url: 'https://api.open-meteo.com/v1/forecast?latitude=44.49&longitude=11.34&current=temperature_2m' }
+    ];
+    Promise.all(voci.map((voce) => provaServizio(voce.nome, voce.url, voce.controllo))).then((esiti) => {
+      const aggiornato = document.getElementById('drawer-aggiornato');
+      const righe = esiti.map((esito) =>
+        '<li><span class="spazio">' + esc(esito.nome) + '</span>' +
+        '<span class="esito ' + (esito.ok ? 'ok' : 'ko') + '">' + (esito.ok ? '✓ online' : '✗ ' + esc(esito.nota)) + '</span></li>'
+      ).join('');
+      corpo.innerHTML = '<ul class="stato-servizio">' + righe + '</ul>' +
+        '<p class="menu-nota-notifiche">Se un servizio è giù, gli orari e le previsioni possono non aggiornarsi: l\'app continua a mostrare gli ultimi dati scaricati.</p>' +
+        (aggiornato && aggiornato.textContent ? '<p class="menu-nota-notifiche">' + esc(aggiornato.textContent) + '</p>' : '');
+    });
+  }
+
+  const DOMANDE_FREQUENTI = [
+    ['L\'app è ufficiale TPER?', 'No: è un progetto indipendente che usa i dati aperti di TPER. Per comunicazioni ufficiali vale tper.it.'],
+    ['Come segnalo un problema?', 'Apri una segnalazione su GitHub (voce Contatti nel menu del browser) indicando linea, fermata e ora: senza account non possiamo risalire a te, quindi serve che la scriva tu.'],
+    ['Perché a volte il tempo reale non risponde?', 'Le previsioni live arrivano da HelloBus, che non espone CORS: passiamo da un relay. Se il relay o HelloBus sono giù, restano gli orari programmati.'],
+    ['I miei dati sono al sicuro?', 'Sì: preferiti, viaggi e impostazioni restano nel telefono. Non c\'è tracking, non c\'è analytics, non c\'è pubblicità.'],
+    ['Perché manca la linea che cerco?', 'Gli orari coprono il bacino bolognese. Le fermate di altri bacini (Ferrara, Ravenna) possono non avere orari programmati: lì si vede solo il tempo reale, quando disponibile.'],
+    ['Posso usarla offline?', 'Sì per fermate, orari e preferiti già scaricati. La mappa ha bisogno della rete, salvo le tessere già viste.'],
+    ['Come la installo?', 'Android: menu del browser → Installa app. iPhone: Condividi → Aggiungi alla schermata Home.'],
+    ['Come attivo le notifiche?', 'Menu → Notifiche. Su iPhone servono iOS 16.4 o successivo e l\'app aggiunta alla Home.'],
+    ['Come cambio lingua o dimensione del testo?', 'Menu → Impostazioni → Aspetto: lingua, dimensione, alto contrasto, caratteri leggibili.'],
+    ['Perché non ci sono scooter o taxi?', 'L\'app è nata per il trasporto pubblico di Bologna: aggiungere altri modi significherebbe dati che non possiamo verificare.']
+  ];
+
+  function apriFaq() {
+    const voci = DOMANDE_FREQUENTI.map(([domanda, risposta]) =>
+      '<details><summary>' + esc(domanda) + '</summary><p class="menu-nota-notifiche">' + esc(risposta) + '</p></details>'
+    ).join('');
+    apriPannello('pannello-faq', 'Domande frequenti', voci +
+      '<p class="menu-nota-notifiche">Non trovi la risposta? Segnala il problema su GitHub: <a href="https://github.com/SuPeRCoDiNg2012/tper-bus/issues" target="_blank" rel="noopener">issues</a>.</p>');
+  }
+
+  // 112: due passaggi, perché è un numero che non si compone per sbaglio.
+  function chiamaSos() {
+    // Senza permesso di posizione non inventiamo una fermata: chiediamo la via
+    // e basta, che è quello che serve davvero all'operatore.
+    if (!window.confirm("Chiamare il 112 (emergenze)? Se puoi, leggi all'operatore la via in cui ti trovi.")) return;
+    window.location.href = 'tel:112';
   }
 
   /* ------------------------------------------------------------------ *
@@ -9003,8 +9172,8 @@
       evento.target.value = '';
       ripristinaBackup(file);
     });
-    $('menu-testo').addEventListener('change', (evento) => {
-      applicaTesto(evento.target.checked, true);
+    $('menu-testo-livello').addEventListener('change', (evento) => {
+      applicaTesto(evento.target.value, true);
     });
     $('menu-tema').addEventListener('change', (evento) => {
       applicaTema(evento.target.checked, true);
@@ -9017,6 +9186,25 @@
         if (!leggi(K_TEMA)) applicaTema(temaPreferito(), false);
       });
     }
+    $('menu-contrasto').addEventListener('change', (evento) => {
+      applicaContrasto(evento.target.checked, true);
+    });
+    $('menu-dislessia').addEventListener('change', (evento) => {
+      applicaFontLeggibile(evento.target.checked, true);
+    });
+    $('menu-semplice').addEventListener('change', (evento) => {
+      applicaSemplice(evento.target.checked, true);
+      mostraToast(evento.target.checked ? 'Modalità semplice attiva' : 'Modalità semplice spenta');
+    });
+    const contrastoDiSistemaMq = window.matchMedia ? window.matchMedia('(prefers-contrast: more)') : null;
+    if (contrastoDiSistemaMq && contrastoDiSistemaMq.addEventListener) {
+      contrastoDiSistemaMq.addEventListener('change', () => {
+        if (!leggi(K_CONTRASTO)) applicaContrasto(contrastoDiSistema(), false);
+      });
+    }
+    $('menu-stato-servizio').addEventListener('click', apriStatoServizio);
+    $('menu-faq').addEventListener('click', apriFaq);
+    $('menu-sos').addEventListener('click', chiamaSos);
     $('menu-linee').addEventListener('change', (evento) => {
       mostraLineeTutte(evento.target.checked);
     });
@@ -9629,7 +9817,10 @@
   async function avvia() {
     // Tema prima della mappa: così all'apertura non si vede un lampo bianco.
     applicaTema(temaPreferito(), false);
-    applicaTesto(testoGrande(), false);
+    applicaTesto(testoPreferito(), false);
+    applicaContrasto(leggi(K_CONTRASTO) ? leggi(K_CONTRASTO) === 'alto' : contrastoDiSistema(), false);
+    applicaFontLeggibile(leggi(K_FONT_LEGGIBILE) === 'sì', false);
+    applicaSemplice(leggi(K_SEMPLICE) === 'sì', false);
     // Spazio, errori e conteggio degli usi vanno sistemati prima di tutto:
     // la pulizia deve avvenire quando le cache sono ancora scrivibili.
     pulisciCriteriObsoleti();

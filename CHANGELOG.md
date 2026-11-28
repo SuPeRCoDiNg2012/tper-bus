@@ -4,6 +4,16 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- **Tre dimensioni del testo**: al posto dell'interruttore «Testo grande» ci sono tre livelli (normale, grande 130%, molto grande 160%), salvati in `tperzc_testo_v1`. Il vecchio valore acceso viene letto come «grande», quindi chi l'aveva già scelto non perde l'ingrandimento. Il pannello ingrandisce con `zoom` come prima: la misura è sul contenuto, non sulla pagina, così la mappa non si sfasa.
+
+- **Alto contrasto**: bianco e nero pieni, bordi da 2 px al posto delle ombre, tratto delle icone a 2.5 px. Si accende dal menu o da solo se il sistema chiede `prefers-contrast: more` e l'utente non ha mai scelto; la scelta vive in `tperzc_alto_contrasto_v1`.
+
+- **Caratteri leggibili**: spaziatura fra lettere, interlinea 1.65 e fondo crema, con Atkinson Hyperlegible e OpenDyslexic usati *se installati sul dispositivo*. Non carichiamo un font dalla rete: la resa dipende dai caratteri presenti, e questo va detto invece di promettere un font che non arriva.
+
+- **Modalità semplice**: nasconde criteri, alternative, zone, linee, abbonamento e schermo acceso, e porta il testo a «grande». Restano ricerca, mappa e posizione.
+
+- **Stato del servizio, domande frequenti e 112 nel menu**: un pannello controlla HelloBus (via relay), il Worker delle notifiche e Open-Meteo, e dice «online» solo se la risposta HTTP è valida entro 8 secondi. Le FAQ sono dieci `<details>` con le risposte vere, comprese le due cose che l'app non fa (orari fuori dal bacino, mezzi privati). Il 112 chiede conferma e poi compone il numero: nessun dato viene inviato, e senza permesso di posizione non inventiamo una fermata. OSRM non è fra i servizi controllati.
+
 - **Changelog nell'app**: la voce **Changelog** nel menu apre `changelog.html`, con tutte le modifiche dall'inizio raggruppate per giorno: 110 commit, ognuno con la sua sigla che porta al commit su GitHub. Le voci sono i messaggi dei commit, non un riassunto riscritto dopo. La pagina sta in cache come le pagine legali, quindi si legge anche senza rete.
 
 - **Changelog rigenerabile**: `npm run changelog` (`scripts/genera-changelog.js`) ricostruisce `changelog.html` da `git log`, con le stesse sostituzioni per i messaggi telegrafici (per esempio `v3` o i commit di sola documentazione), così la pagina non resta indietro rispetto al repository.

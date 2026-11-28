@@ -510,7 +510,50 @@
   /* Testo grande: si ingrandisce il contenuto, non il pannello. Lasciare
      fuori `#sheet` tiene valida la misura dell'altezza e il gesto di trascina. */
   html[data-testo="grande"] .sheet-corpo,
-  html[data-testo="grande"] .drawer-corpo{zoom:1.15;}
+  html[data-testo="grande"] .drawer-corpo{zoom:1.3;}
+  html[data-testo="molto-grande"] .sheet-corpo,
+  html[data-testo="molto-grande"] .drawer-corpo{zoom:1.6;}
+  /* Font ad alta leggibilità: se Atkinson Hyperlegible o OpenDyslexic sono
+     installati si usano, altrimenti restano le caratteristiche che aiutano
+     comunque (lettere distanziate, interlinea ampia, fondo crema). */
+  html[data-font="leggibile"]{
+    --font:'Atkinson Hyperlegible','OpenDyslexic',Verdana,Tahoma,sans-serif;
+  }
+  html[data-font="leggibile"] body{background:#FFFEF0;}
+  html[data-font="leggibile"] .sheet,
+  html[data-font="leggibile"] .drawer,
+  html[data-font="leggibile"] .impostazioni,
+  html[data-font="leggibile"] .cerca{background:#FFFEF0;}
+  html[data-font="leggibile"] .sheet-corpo,
+  html[data-font="leggibile"] .drawer-corpo,
+  html[data-font="leggibile"] .menu-sezione,
+  html[data-font="leggibile"] .voce-menu{letter-spacing:.05em;line-height:1.65;}
+  /* Alto contrasto: bianco e nero, niente ombre, bordi al posto del rilievo. */
+  html[data-contrasto="alto"]{
+    --testo:#000;--testo-2:#000;--sup:#FFF;--sup-2:#FFF;--campo:#FFF;
+    --bordo:#000;--bordo-2:#000;--ombra:none;--ombra-su:none;--vetro:#FFF;
+    --rosso-testo:#A50E19;
+  }
+  html[data-contrasto="alto"] .sheet,
+  html[data-contrasto="alto"] .drawer,
+  html[data-contrasto="alto"] .impostazioni,
+  html[data-contrasto="alto"] .cerca{background:#FFF;}
+  html[data-contrasto="alto"] .voce-menu,
+  html[data-contrasto="alto"] .arrivo-item,
+  html[data-contrasto="alto"] .proposta-push,
+  html[data-contrasto="alto"] .nav,
+  html[data-contrasto="alto"] input,
+  html[data-contrasto="alto"] select{border:2px solid #000 !important;box-shadow:none !important;}
+  html[data-contrasto="alto"] svg{stroke-width:2.5;}
+  /* Modalità semplice: sparisce tutto ciò che non è "dove sono / dove vado". */
+  html[data-semplice="1"] .semplice-nascondi{display:none !important;}
+  .menu-select{border:1px solid var(--bordo-2);background:var(--sup);color:var(--testo);border-radius:8px;padding:6px 8px;font:inherit;font-size:13px;max-width:60%;}
+  .stato-servizio{list-style:none;margin:0;padding:0;}
+  .stato-servizio li{display:flex;align-items:center;gap:10px;padding:12px 2px;border-bottom:1px solid var(--bordo);font-size:14px;color:var(--testo);}
+  .stato-servizio li .spazio{flex:1;}
+  .stato-servizio li .esito{font-size:13px;color:var(--testo-2);}
+  .stato-servizio li .esito.ok{color:#0A6E30;}
+  .stato-servizio li .esito.ko{color:var(--rosso-testo);}
   .drawer .info,.impostazioni .info{display:flex;flex-direction:column;gap:12px;padding:0 16px 16px;font-size:12px;line-height:1.6;color:var(--testo-2);}
   .drawer .info h3,.impostazioni .info h3{font-size:13px;font-weight:600;color:var(--testo);margin:0 0 4px;}
   .drawer .info p,.impostazioni .info p{margin:0;}
@@ -914,16 +957,52 @@
     </label>
 
     <div class="menu-sezione">Aspetto</div>
-    <label class="voce-menu" for="menu-testo">
+    <label class="voce-menu" for="menu-testo-livello">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
-      <span class="spazio">Testo grande</span>
-      <span class="interruttore"><input type="checkbox" id="menu-testo"><span class="binario"></span></span>
+      <span class="spazio">Dimensione testo</span>
+      <select class="menu-select" id="menu-testo-livello" aria-label="Dimensione del testo">
+        <option value="normale">Normale</option>
+        <option value="grande">Grande</option>
+        <option value="molto-grande">Molto grande</option>
+      </select>
     </label>
     <label class="voce-menu" for="menu-tema">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
       <span class="spazio">Tema scuro</span>
       <span class="interruttore"><input type="checkbox" id="menu-tema"><span class="binario"></span></span>
     </label>
+    <label class="voce-menu" for="menu-contrasto">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor"/></svg>
+      <span class="spazio">Alto contrasto</span>
+      <span class="interruttore"><input type="checkbox" id="menu-contrasto"><span class="binario"></span></span>
+    </label>
+    <label class="voce-menu" for="menu-dislessia">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5"/><path d="M4 12h9a4 4 0 0 0 0-8H4"/><path d="M4 12h10a4 4 0 0 1 0 7H4"/></svg>
+      <span class="spazio">Caratteri leggibili</span>
+      <span class="interruttore"><input type="checkbox" id="menu-dislessia"><span class="binario"></span></span>
+    </label>
+    <label class="voce-menu" for="menu-semplice">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+      <span class="spazio">Modalità semplice</span>
+      <span class="interruttore"><input type="checkbox" id="menu-semplice"><span class="binario"></span></span>
+    </label>
+    <p class="menu-nota-notifiche">La modalità semplice lascia solo ricerca, mappa e «dove sono»: nasconde criteri, alternative e le voci avanzate.</p>
+
+    <div class="menu-sezione">Servizio</div>
+    <button class="voce-menu" id="menu-stato-servizio">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>
+      <span class="spazio">Stato del servizio</span>
+      <span class="nota">Verifica</span>
+    </button>
+    <button class="voce-menu" id="menu-faq">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><path d="M12 17h.01"/></svg>
+      <span class="spazio">Domande frequenti</span>
+    </button>
+    <button class="voce-menu" id="menu-sos">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 2 21h20L12 2Z"/><path d="M12 9v5"/><path d="M12 17h.01"/></svg>
+      <span class="spazio">Chiama il 112</span>
+      <span class="nota">Emergenza</span>
+    </button>
     <label class="voce-menu" id="menu-lingua-riga" for="menu-lingua">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
       <span class="spazio">English</span>

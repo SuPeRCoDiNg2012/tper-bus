@@ -168,10 +168,17 @@ test('il testo grande ingrandisce il pannello', async ({ page }) => {
   await page.goto('/');
   await chiudiOnboarding(page);
   await apriImpostazioni(page);
-  await page.locator('label[for="menu-testo"]').click();
+  // Tre livelli distinti, non più un interruttore acceso/spento.
+  await page.selectOption('#menu-testo-livello', 'grande');
   await expect(page.locator('html')).toHaveAttribute('data-testo', 'grande');
+  await page.selectOption('#menu-testo-livello', 'molto-grande');
+  await expect(page.locator('html')).toHaveAttribute('data-testo', 'molto-grande');
+  // L'alto contrasto è uno stato sull'elemento radice, non un foglio a parte.
+  await page.locator('label[for="menu-contrasto"]').click();
+  await expect(page.locator('html')).toHaveAttribute('data-contrasto', 'alto');
   await page.goto('/?fermata=100');
-  await expect(page.locator('html')).toHaveAttribute('data-testo', 'grande');
+  await expect(page.locator('html')).toHaveAttribute('data-testo', 'molto-grande');
+  await expect(page.locator('html')).toHaveAttribute('data-contrasto', 'alto');
   await expect(riga).toBeVisible();
   await expect.poll(altezzaRiga).toBeGreaterThan(altezzaPrima * 1.05);
 });
