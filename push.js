@@ -12,7 +12,7 @@
   'use strict';
 
   // Base del Worker, senza slash finale. Vuota = funzione spenta.
-  const ENDPOINT = '';
+  const ENDPOINT = 'https://muovi-bologna-push.zeno-astolfi12.workers.dev';
   const K_ATTIVO = 'tperzc_push_v1';
 
   let chiaveCache = null;

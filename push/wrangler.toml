@@ -19,7 +19,7 @@ VAPID_PUBLIC = "BI7YVv2L7m3M1XMJxXCfFcEVqfsf-sm5mTTp8lnIC1XdE3jwJ_rpmLPZ8mI_ZzQt
 
 [[kv_namespaces]]
 binding = "PUSH_KV"
-id = "SOSTITUISCI_CON_L_ID_DEL_NAMESPACE"
+id = "7f6a27248fb741cea494b81287659f4e"
 
 [triggers]
 # Ogni minuto: i promemoria sono al minuto, non al quarto d'ora.
