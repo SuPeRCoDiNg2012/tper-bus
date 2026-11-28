@@ -14,8 +14,8 @@ enabled = true
 [vars]
 # Origine dell'app: accetta solo richieste da qui (elenco separato da virgole).
 ORIGIN = "https://supercoding2012.github.io"
-# Sostituisci con l'output di `node push/genera-chiavi.js`.
-VAPID_PUBLIC = "INCOLLA_QUI_LA_CHIAVE_PUBBLICA"
+# Output di `node push/genera-chiavi.js` (coppia generata il 28 novembre 2026).
+VAPID_PUBLIC = "BI7YVv2L7m3M1XMJxXCfFcEVqfsf-sm5mTTp8lnIC1XdE3jwJ_rpmLPZ8mI_ZzQtCoNUA1Gm47nliJFW6qsWZa8"
 
 [[kv_namespaces]]
 binding = "PUSH_KV"
