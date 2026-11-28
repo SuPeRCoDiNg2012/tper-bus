@@ -4,6 +4,10 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- **Motore dell'intelligenza (`intelligenza.js`)**: i conti dei livelli 1–4 in un modulo puro, senza DOM, senza rete e senza ML — ritardo che si propaga, probabilità di perdere un cambio con le soglie 60/120/180 s, affidabilità 0–1, storico locale a mediana e MAD con tetto di 500 osservazioni e scadenza a 30 giorni (senza coordinate né identificativi), aggiustamenti meteo e ora, festivi, eventi e disruzioni, punteggio unificato con pesi in un solo oggetto, scelta di un solo suggerimento per priorità e memoria degli ignorati. 16 test nuovi, tra cui quello che fallisce se qualcuno salva `lat`/`lon` nello storico. Pesi e soglie sono in `INTELLIGENZA.md`.
+
+- **Cosa non è ancora collegato**: l'app non chiama il modulo, quindi per ora **l'interfaccia non cambia**. Mancano il collegamento a `caricaLivePercorso`/`punteggio`/`vista-percorso`, la riga del suggerimento, la cache dei risultati e `data/eventi.json` (nessun evento inventato).
+
 - **«Cosa sa l'app di te»**: un pannello elenca le chiavi `tperzc_*` presenti nel telefono con la loro dimensione in byte, permette di esportarle tutte in JSON (lo stesso file del backup) e di cancellarle. La cancellazione toglie solo le chiavi dell'app e ricarica la pagina: nessun dato parte verso un server, perché non c'è un server che lo riceva.
 
 - **Ricerca nelle domande frequenti**: le dieci risposte hanno un campo di ricerca che filtra sul testo già in pagina, senza richieste di rete; quando nessuna corrisponde lo dice invece di lasciare la lista vuota.
