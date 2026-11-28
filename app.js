@@ -4859,8 +4859,59 @@
     const voci = DOMANDE_FREQUENTI.map(([domanda, risposta]) =>
       '<details><summary>' + esc(domanda) + '</summary><p class="menu-nota-notifiche">' + esc(risposta) + '</p></details>'
     ).join('');
-    apriPannello('pannello-faq', 'Domande frequenti', voci +
+    const pannello = apriPannello('pannello-faq', 'Domande frequenti',
+      '<input type="search" id="faq-cerca" placeholder="Cerca nelle domande" aria-label="Cerca nelle domande frequenti">' +
+      '<div id="faq-elenco">' + voci + '</div>' +
+      '<p class="menu-nota-notifiche" id="faq-vuoto" hidden>Nessuna domanda corrisponde. Prova con un\'altra parola.</p>' +
       '<p class="menu-nota-notifiche">Non trovi la risposta? Segnala il problema su GitHub: <a href="https://github.com/SuPeRCoDiNg2012/tper-bus/issues" target="_blank" rel="noopener">issues</a>.</p>');
+    const campo = pannello.querySelector('#faq-cerca');
+    const elenco = pannello.querySelector('#faq-elenco');
+    const vuoto = pannello.querySelector('#faq-vuoto');
+    if (!campo || !elenco) return;
+    // Filtro sul testo già in pagina: niente indici, niente richieste.
+    campo.addEventListener('input', () => {
+      const cerca = campo.value.trim().toLowerCase();
+      let visibili = 0;
+      elenco.querySelectorAll('details').forEach((voce, indice) => {
+        const testo = (DOMANDE_FREQUENTI[indice] || []).join(' ').toLowerCase();
+        const mostra = !cerca || testo.indexOf(cerca) !== -1;
+        voce.hidden = !mostra;
+        if (mostra) visibili += 1;
+      });
+      if (vuoto) vuoto.hidden = visibili > 0;
+    });
+    campo.focus();
+  }
+
+  /* ------------------------------------------------------------------ *
+   * I tuoi dati
+   * ------------------------------------------------------------------ */
+  // Diritto di accesso e di cancellazione senza passare da un server: quello
+  // che leggiamo è esattamente quello che c'è in localStorage.
+  function apriDatiPersonali() {
+    const chiavi = Object.keys(window.localStorage).filter((k) => k.indexOf('tperzc_') === 0).sort();
+    const righe = chiavi.length
+      ? chiavi.map((k) => {
+        const valore = window.localStorage.getItem(k) || '';
+        return '<li><span class="spazio">' + esc(k) + '</span><span class="esito">' + valore.length + ' byte</span></li>';
+      }).join('')
+      : '<li><span class="spazio">Niente salvato</span></li>';
+    const pannello = apriPannello('pannello-dati', 'I tuoi dati',
+      '<p class="menu-nota-notifiche">Queste sono tutte le chiavi che l\'app scrive nel tuo telefono: preferiti, viaggi, storico ritardi, impostazioni. Nessuna di queste è inviata a un server di terze parti, e l\'app non ha analytics né tracking.</p>' +
+      '<ul class="stato-servizio">' + righe + '</ul>' +
+      '<div class="dati-azioni">' +
+        '<button type="button" id="dati-esporta">Esporta (JSON)</button>' +
+        '<button type="button" class="pericolo" id="dati-cancella">Cancella tutto</button>' +
+      '</div>' +
+      '<p class="menu-nota-notifiche">La cancellazione toglie preferiti, viaggi e impostazioni da questo telefono: non si può annullare. Esporta prima, se ti servono.</p>');
+    const esporta = pannello.querySelector('#dati-esporta');
+    const cancella = pannello.querySelector('#dati-cancella');
+    if (esporta) esporta.addEventListener('click', scaricaBackup);
+    if (cancella) cancella.addEventListener('click', () => {
+      if (!window.confirm('Cancellare tutti i dati salvati su questo telefono? Preferiti, viaggi e impostazioni non tornano.')) return;
+      chiavi.forEach((k) => window.localStorage.removeItem(k));
+      window.location.reload();
+    });
   }
 
   // 112: due passaggi, perché è un numero che non si compone per sbaglio.
@@ -9203,6 +9254,7 @@
       });
     }
     $('menu-stato-servizio').addEventListener('click', apriStatoServizio);
+    $('menu-dati').addEventListener('click', apriDatiPersonali);
     $('menu-faq').addEventListener('click', apriFaq);
     $('menu-sos').addEventListener('click', chiamaSos);
     $('menu-linee').addEventListener('change', (evento) => {

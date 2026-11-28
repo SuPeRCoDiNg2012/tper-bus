@@ -330,3 +330,22 @@ test('la proposta del push arriva alla terza volta la stessa fermata, una volta 
   await page.waitForTimeout(2000);
   await expect(proposta).toBeHidden();
 });
+
+// Diritto di accesso e cancellazione: il pannello deve mostrare davvero le
+// chiavi scritte nel telefono, non un elenco decorativo.
+test('i tuoi dati elenca le chiavi locali e le FAQ si cercano', async ({ page }) => {
+  await page.goto('/');
+  await chiudiOnboarding(page);
+  await page.evaluate(() => localStorage.setItem('tperzc_prova_v1', 'prova'));
+  await apriImpostazioni(page);
+  await page.locator('#menu-dati').click();
+  const pannello = page.locator('#pannello-dati');
+  await expect(pannello).toBeVisible();
+  await expect(pannello).toContainText('tperzc_prova_v1');
+  await expect(page.locator('#dati-cancella')).toBeVisible();
+  await pannello.locator('.impostazioni-testa button').click();
+  await page.locator('#menu-faq').click();
+  await expect(page.locator('#pannello-faq')).toBeVisible();
+  await page.locator('#faq-cerca').fill('offline');
+  await expect(page.locator('#faq-elenco details:not([hidden])')).toHaveCount(1);
+});

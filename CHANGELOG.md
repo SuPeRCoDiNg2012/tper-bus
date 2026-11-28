@@ -4,6 +4,10 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- **«Cosa sa l'app di te»**: un pannello elenca le chiavi `tperzc_*` presenti nel telefono con la loro dimensione in byte, permette di esportarle tutte in JSON (lo stesso file del backup) e di cancellarle. La cancellazione toglie solo le chiavi dell'app e ricarica la pagina: nessun dato parte verso un server, perché non c'è un server che lo riceva.
+
+- **Ricerca nelle domande frequenti**: le dieci risposte hanno un campo di ricerca che filtra sul testo già in pagina, senza richieste di rete; quando nessuna corrisponde lo dice invece di lasciare la lista vuota.
+
 - **Tre dimensioni del testo**: al posto dell'interruttore «Testo grande» ci sono tre livelli (normale, grande 130%, molto grande 160%), salvati in `tperzc_testo_v1`. Il vecchio valore acceso viene letto come «grande», quindi chi l'aveva già scelto non perde l'ingrandimento. Il pannello ingrandisce con `zoom` come prima: la misura è sul contenuto, non sulla pagina, così la mappa non si sfasa.
 
 - **Alto contrasto**: bianco e nero pieni, bordi da 2 px al posto delle ombre, tratto delle icone a 2.5 px. Si accende dal menu o da solo se il sistema chiede `prefers-contrast: more` e l'utente non ha mai scelto; la scelta vive in `tperzc_alto_contrasto_v1`.

@@ -554,6 +554,13 @@
   .stato-servizio li .esito{font-size:13px;color:var(--testo-2);}
   .stato-servizio li .esito.ok{color:#0A6E30;}
   .stato-servizio li .esito.ko{color:var(--rosso-testo);}
+  .impostazioni-corpo input[type="search"]{width:100%;box-sizing:border-box;margin:2px 0 12px;padding:10px 12px;border:1px solid var(--bordo-2);border-radius:10px;background:var(--campo);color:var(--testo);font:inherit;}
+  .impostazioni-corpo details{border-bottom:1px solid var(--bordo);padding:10px 0;}
+  .impostazioni-corpo details summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--testo);}
+  .impostazioni-corpo details p{margin:8px 0 0;}
+  .dati-azioni{display:flex;gap:8px;margin-top:14px;}
+  .dati-azioni button{flex:1;padding:12px;border-radius:10px;border:1px solid var(--bordo-2);background:var(--sup);color:var(--testo);font:inherit;font-size:14px;}
+  .dati-azioni button.pericolo{color:var(--rosso-testo);border-color:var(--rosso-testo);}
   .drawer .info,.impostazioni .info{display:flex;flex-direction:column;gap:12px;padding:0 16px 16px;font-size:12px;line-height:1.6;color:var(--testo-2);}
   .drawer .info h3,.impostazioni .info h3{font-size:13px;font-weight:600;color:var(--testo);margin:0 0 4px;}
   .drawer .info p,.impostazioni .info p{margin:0;}
@@ -987,6 +994,13 @@
       <span class="interruttore"><input type="checkbox" id="menu-semplice"><span class="binario"></span></span>
     </label>
     <p class="menu-nota-notifiche">La modalità semplice lascia solo ricerca, mappa e «dove sono»: nasconde criteri, alternative e le voci avanzate.</p>
+
+    <div class="menu-sezione">I tuoi dati</div>
+    <button class="voce-menu" id="menu-dati">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.4 8.3 8 9 4.6-.7 8-4 8-9V6l-8-3Z"/><path d="M9 12l2 2 4-4"/></svg>
+      <span class="spazio">Cosa sa l'app di te</span>
+      <span class="nota">Solo sul telefono</span>
+    </button>
 
     <div class="menu-sezione">Servizio</div>
     <button class="voce-menu" id="menu-stato-servizio">
