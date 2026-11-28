@@ -7453,6 +7453,11 @@
       esito.affidabilita = copertura.completa ? Intelligenza.affidabilitaRealtime(conRitardo) : null;
     }
     if (scartaCorsaInRitardo()) return;
+    // Il dettaglio è stato disegnato prima che i ritardi arrivassero: senza un
+    // ridisegno la riga arancione del cambio resterebbe calcolata ma invisibile.
+    // La chiamata non riparte da capo: la cache dei ritardi è appena stata
+    // scritta, quindi `caricaLiveTappe` esce subito e non si crea un ciclo.
+    if (vistaAttiva === 'percorso' && routing.esito === esito) disegnaPercorso();
     disegnaLivePercorso();
   }
 

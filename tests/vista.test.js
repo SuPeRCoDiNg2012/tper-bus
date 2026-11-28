@@ -395,3 +395,18 @@ test('le chip mostrano una linea sola per famiglia', () => {
   assert.deepEqual(Vista.lineeElenco([]), []);
   assert.deepEqual(Vista.lineeElenco(null), []);
 });
+
+test('un cambio mangiato dal ritardo si vede come «a rischio» con il motivo', () => {
+  const viaggioRischioso = viaggio({
+    cambi: 1,
+    tappe: [
+      corsa({ linea: '25', tipo: 3, da: '10002', a: '1', partenza: 9 * 3600 + 300, arrivo: 9 * 3600 + 620 }),
+      corsa({ linea: '27', tipo: 3, da: '1', a: '4305', partenza: 9 * 3600 + 862, arrivo: 9 * 3600 + 1600, attesa: 242 })
+    ],
+    rischi: [{ indice: 0, motivo: 'ritardo di 3 min sulla corsa che arriva' }]
+  });
+  const html = Vista.dettaglio(viaggioRischioso, (id) => id);
+  assert.match(html, /class="cambio cambio-rischio"/);
+  assert.match(html, /a rischio/);
+  assert.match(html, /ritardo di 3 min sulla corsa che arriva/);
+});

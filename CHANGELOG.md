@@ -4,6 +4,8 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- **La riga arancione del cambio ora si vede davvero**: i ritardi live arrivavano dopo che la scheda era stata disegnata, e nessun ridisegno mostrava i cambi a rischio già calcolati. Quando i dati arrivano, il dettaglio viene ricomposto una volta sola (la cache dei ritardi evita il ciclo). Un test end-to-end con percorso fissato a due corse e HelloBus in ritardo verifica la riga `.cambio-rischio`, il testo «a rischio» e il motivo; un test unitario copre lo stesso rendering senza browser.
+
 - **Affidabilità solo quando è completa**: se HelloBus risponde per una tappa sola, il riepilogo non scrive più «in orario» o «ritardi in corso» come se valesse per tutto il viaggio. Con una copertura parziale compare «dato parziale: 1 di 3 corse»; se nessuna corsa bus ha un ritardo noto non compare nessuna parola. I treni restano fuori dal conteggio, perché non hanno un feed live.
 
 - **Dove sono i bus della fermata**: aprendo una fermata, sulla mappa compaiono i bus che stanno arrivando, uno per corsa entro mezz'ora. HelloBus dà l'ora di passaggio, non le coordinate del mezzo: la posizione è stimata lungo il tracciato GTFS, con il ritardo dichiarato quando l'arrivo è live e con l'orario programmato quando non lo è. I puntini pieni sono in tempo reale, quelli tratteggiati sono una stima dall'orario, e sotto l'elenco una riga dice quali sono gli uni e quali gli altri. Se la fermata non ha una corsa riconoscibile nel GTFS, o il tracciato non copre quel tratto, non compare nessun puntino invece di uno inventato. La stima vive in `posizioni.js`, con test propri.

@@ -31,15 +31,20 @@ async function inItaliano(page) {
 
 async function senzaRete(page, opzioni) {
   if (!opzioni || !opzioni.inglese) await inItaliano(page);
-  const conHellobus = !!(opzioni && opzioni.hellobus);
+  const conHellobus = !!(opzioni && (opzioni.hellobus || opzioni.hellobusRisposta));
   await page.route('**/*', (route) => {
     const url = route.request().url();
     if (url.startsWith(ORIGINE)) return route.continue();
     if (conHellobus && (url.includes('hellobus') || url.includes('tper.it'))) {
+      // Una risposta su misura serve al test dei cambi a rischio: deve
+      // arrivare proprio per la linea e la fermata della corsa da ritardare.
+      const body = typeof opzioni.hellobusRisposta === 'function'
+        ? opzioni.hellobusRisposta(url)
+        : 'TperHellobus: 20 DaSatellite ' + oraTra(4) + ' (Bus 4242), 21 Previsto ' + oraTra(11);
       return route.fulfill({
         status: 200,
         contentType: 'text/plain; charset=utf-8',
-        body: 'TperHellobus: 20 DaSatellite ' + oraTra(4) + ' (Bus 4242), 21 Previsto ' + oraTra(11)
+        body: body
       });
     }
     return route.abort();
@@ -301,6 +306,98 @@ test('le pagine legali seguono la lingua scelta', async ({ page }) => {
   await chiudiOnboarding(page);
   await apriImpostazioni(page);
   await expect(page.locator('#impostazioni')).toContainText('Privacy policy');
+});
+
+// Fixture del percorso: il pianificatore vero sceglie percorsi diversi a
+// seconda del giorno e delle fermate vicine, quindi il test gli sostituisce
+// una risposta fissa a due corse con 242 secondi di cambio. Tutto il resto è
+// quello di produzione: HelloBus (intercettato), il motore dell'intelligenza
+// e il rendering della scheda. Serve a vedere la riga che nessun test toccava.
+async function percorsoFisso(page) {
+  await page.addInitScript(() => {
+    // L'ora è fissata alle 09:00: l'arrivo live dichiarato da HelloBus viene
+    // confrontato con `new Date()`, e senza un orologio fermo il test
+    // dipenderebbe dall'ora in cui gira.
+    const originale = Date;
+    const adesso = new originale(2026, 10, 28, 9, 0, 0).getTime();
+    class Orologio extends originale {
+      constructor(...argomenti) {
+        if (argomenti.length) super(...argomenti);
+        else super(adesso);
+      }
+      static now() { return adesso; }
+    }
+    window.Date = Orologio;
+
+    const base = {
+      richiesta: 9 * 3600,
+      partenza: 32700,          // 09:05 dalla fermata 10002 con la linea 25
+      arrivo: 34000,
+      tappe: [
+        { tipo: 3, linea: '25', da: '10002', a: '1', partenza: 32700, arrivo: 33020, fermate: 3, attesa: 0, camminoPrima: null, forma: 0 },
+        { tipo: 3, linea: '27', da: '1', a: '4305', partenza: 33262, arrivo: 34000, fermate: 2, attesa: 242, camminoPrima: null, forma: 0 }
+      ]
+    };
+    let chiamate = 0;
+    let reale = null;
+    Object.defineProperty(window, 'TPERRouting', {
+      configurable: true,
+      get() { return reale; },
+      set(valore) {
+        reale = valore;
+        // Ogni chiamata riceve una copia: l'app annota ritardi e rischi
+        // sull'oggetto, e riusare lo stesso inquinerebbe le chiamate dopo.
+        valore.calcola = () => {
+          chiamate += 1;
+          const copia = JSON.parse(JSON.stringify(Object.assign({ cambi: 1, camminoIniziale: 0, camminoFinale: 0, attesaIniziale: 0 }, base)));
+          if (chiamate > 1) {
+            // Le alternative successive arrivano dopo e non vengono scelte:
+            // servono solo a far fermare il ciclo di ricerca della scheda.
+            copia.tappe.forEach((tappa) => { tappa.linea = '9' + chiamate; });
+            copia.arrivo += 600 * chiamate;
+          }
+          return copia;
+        };
+        valore.alternative = () => [];
+        valore.graduatoria = (pool) => pool;
+        valore.punteggio = () => null;
+        valore.disponibile = () => true;
+        valore.carica = () => Promise.resolve();
+        valore.fermateDisponibili = () => [];
+        valore.impostaCammini = () => {};
+        valore.formaCorsa = () => null;
+        valore.tratta = () => null;
+        valore.caricaTracciati = () => Promise.resolve();
+      }
+    });
+  });
+}
+
+test('un ritardo live rende arancione il cambio a rischio, con il motivo', async ({ page }) => {
+  await percorsoFisso(page);
+  await senzaRete(page, {
+    hellobusRisposta: (url) => {
+      const target = decodeURIComponent(url);
+      if (/fermata=10002(&|$)/.test(target) && /linea=25(&|$)/.test(target)) {
+        // 180 secondi di ritardo sul bus che arriva al cambio: dei 242 secondi
+        // di buffer ne restano 62, abbastanza per il rischio ma non per
+        // perdere il cambio (che farebbe scartare l'opzione).
+        return 'TperHellobus: 25 DaSatellite 09:08 (Bus 5151)';
+      }
+      // Le altre tappe non hanno un ritardo noto: il rischio deve venire dalla
+      // prima corsa, non da un dato inventato per le altre.
+      return 'TperHellobus: NESSUNA ALTRA CORSA';
+    }
+  });
+  await page.goto('/?da=10002&a=4305&g=2026-11-28&o=09:00');
+  // Il dettaglio sta sotto il riepilogo: si apre come farebbe una persona.
+  await page.locator('[data-azione="dettagli"]').click();
+  const cambio = page.locator('.cambio.cambio-rischio').first();
+  await expect(cambio).toBeVisible({ timeout: 20000 });
+  await expect(cambio).toContainText('a rischio');
+  await expect(cambio).toContainText('ritardo di 3 min sulla corsa che arriva');
+  // La riga è quella del cambio, non un avviso generico da un'altra parte.
+  await expect(page.locator('.dettaglio .cambio')).toHaveCount(1);
 });
 
 test('nessun errore JavaScript sulle schermate principali', async ({ page }) => {
