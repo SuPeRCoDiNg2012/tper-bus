@@ -91,11 +91,19 @@
     return accumulato;
   }
 
+  // `null` e `undefined` non sono zero: sono «HelloBus non ha risposto per
+  // questa corsa». Confonderli con zero faceva sembrare in orario un viaggio
+  // di cui conoscevamo una tappa sola.
+  function haRitardo(tappa) {
+    if (!tappa || tappa.ritardoLive == null || tappa.ritardoLive === '') return false;
+    return Number.isFinite(Number(tappa.ritardoLive));
+  }
+
   // 1 = tutto in orario, 0.2 = ritardo grave o cambio a rischio, null = non
   // abbiamo ricevuto niente da HelloBus per nessuna tappa.
   function affidabilitaRealtime(tappe) {
     if (!Array.isArray(tappe) || !tappe.length) return null;
-    const conDato = tappe.filter((t) => Number.isFinite(Number(t && t.ritardoLive)));
+    const conDato = tappe.filter(haRitardo);
     if (!conDato.length) return null;
     const ritardi = conDato.map((t) => Math.max(0, Number(t.ritardoLive)));
     const massimo = Math.max.apply(null, ritardi);
@@ -105,6 +113,15 @@
     if (massimo > 120 || gravi > 1) return 0.5;
     if (massimo > 0) return 0.8;
     return 1;
+  }
+
+  // Quante corse bus hanno davvero un ritardo noto. Serve a non spacciare per
+  // «in orario» un viaggio in cui HelloBus ha risposto solo per una tappa.
+  function coperturaRealtime(tappe) {
+    if (!Array.isArray(tappe)) return { corse: 0, note: 0, completa: false };
+    const bus = tappe.filter((t) => t && t.tipo !== 1 && t.tipo !== 2);
+    const note = bus.filter(haRitardo).length;
+    return { corse: bus.length, note: note, completa: bus.length > 0 && note === bus.length };
   }
 
   // Una corsa si scarta se è troppo in ritardo per essere ancora quella che
@@ -348,6 +365,7 @@
     rischioCambi,
     ritardoCascata,
     affidabilitaRealtime,
+    coperturaRealtime,
     corsaDaScartare,
     mediana,
     statistiche,

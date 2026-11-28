@@ -64,8 +64,10 @@ compare più: il limite è per tipo, non globale, così un utente che ignora
 - **Collegato finora**: dopo che `caricaLiveTappe` legge i ritardi,
   `app.js` chiama `rischioCambi` e `affidabilitaRealtime`, il riepilogo scrive
   «in orario / qualche ritardo / ritardi in corso» e il dettaglio marca i
-  cambi con «a rischio» e il motivo. `intelligenza.js` è nel precache del
-  service worker.
+  cambi con «a rischio» e il motivo. La parola compare solo se `coperturaRealtime`
+  dice che **tutte** le corse bus hanno un ritardo noto: con una risposta sola
+  su tre il riepilogo scrive «dato parziale: 1 di 3 corse» e non un verdetto.
+  `intelligenza.js` è nel precache del service worker.
 - **Non ancora collegato**: `punteggio` di `routing.js` non usa
   `punteggioCombinato`, quindi i pesi non cambiano ancora *quale* percorso
   viene scelto, solo come viene raccontato. Restano fuori anche

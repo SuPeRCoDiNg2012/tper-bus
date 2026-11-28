@@ -112,6 +112,28 @@ test('con tutti i servizi giù il punteggio resta quello base', () => {
   assert.equal(I.affidabilitaRealtime([]), null);
   assert.equal(I.affidabilitaRealtime([{ ritardoLive: 0 }]), 1);
   assert.equal(I.affidabilitaRealtime([{ ritardoLive: 700 }]), 0.2);
+  // Un ritardo mancante non è uno zero: non deve diventare «in orario».
+  assert.equal(I.affidabilitaRealtime([{ ritardoLive: null }]), null);
+  assert.equal(I.affidabilitaRealtime([{ ritardoLive: 0 }, { ritardoLive: null }]), 1);
+});
+
+test('l\'affidabilità è completa solo se tutte le corse bus hanno un ritardo', () => {
+  const unaSola = I.coperturaRealtime([
+    { tipo: 3, ritardoLive: 0 },
+    { tipo: 3, ritardoLive: null },
+    { tipo: 1, ritardoLive: null }
+  ]);
+  assert.equal(unaSola.corse, 2);
+  assert.equal(unaSola.note, 1);
+  assert.equal(unaSola.completa, false);
+  // Il treno non conta: non ha un feed live e renderebbe parziale ogni viaggio.
+  const conTreno = I.coperturaRealtime([
+    { tipo: 3, ritardoLive: 60 },
+    { tipo: 2, ritardoLive: null }
+  ]);
+  assert.equal(conTreno.corse, 1);
+  assert.equal(conTreno.completa, true);
+  assert.equal(I.coperturaRealtime([{ tipo: 1, ritardoLive: null }]).completa, false);
 });
 
 test('una corsa troppo in ritardo si scarta, una in orario no', () => {
