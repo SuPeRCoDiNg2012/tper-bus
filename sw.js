@@ -3,8 +3,8 @@
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'muovi-bologna-static-v206';
-const CACHE_DATI = 'muovi-bologna-data-v206';
+const CACHE_STATICA = 'muovi-bologna-static-v207';
+const CACHE_DATI = 'muovi-bologna-data-v207';
 // Mappa: cache non versionata, così la zona salvata sopravvive agli aggiornamenti
 // dell'app. Non entra in pulisciCacheVecchie (che guarda solo i nomi -vN).
 const CACHE_MAPPA = 'muovi-bologna-mappa';
@@ -29,6 +29,7 @@ const ASSET_STATICI = [
   './termini.html',
   './cookie.html',
   './note-legali.html',
+  './changelog.html',
   './legale.css',
   './icons/icon-192.svg',
   './icons/icon-512.svg',
@@ -217,7 +218,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname.endsWith('/icone.js') || url.pathname.endsWith('/push.js') ||
     url.pathname.endsWith('/lingua.js') || url.pathname.endsWith('/tariffe.js') ||
     url.pathname.endsWith('/piedi.js') || url.pathname.endsWith('/manifest.json') ||
-    url.pathname.endsWith('/privacy.html');
+    url.pathname.endsWith('/privacy.html') || url.pathname.endsWith('/changelog.html');
   if (isApp) {
     event.respondWith(
       // no-cache rivalida sempre: il network-first non basta se il browser
