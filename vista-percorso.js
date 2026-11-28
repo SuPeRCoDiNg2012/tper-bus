@@ -314,7 +314,12 @@
       if (indice > 0) {
         // L'attesa è al netto del tratto a piedi, che ha la sua riga.
         const attesa = Math.round((tappa.attesa - (tappa.camminoPrima ? tappa.camminoPrima.secondi : 0)) / 60);
-        html += '<div class="cambio">Cambio' + (attesa >= 1 ? ' · ' + attesa + ' min' : '') + '</div>';
+        // Un cambio che il ritardo della corsa precedente ha già mangiato non
+        // va nascosto: è il motivo per cui il percorso potrebbe saltare.
+        const rischio = (e.rischi || []).filter((r) => r.indice === indice - 1)[0];
+        html += '<div class="cambio' + (rischio ? ' cambio-rischio' : '') + '">Cambio' +
+          (attesa >= 1 ? ' · ' + attesa + ' min' : '') +
+          (rischio ? ' · <b>a rischio</b>: ' + esc(rischio.motivo) : '') + '</div>';
       }
       if (tappa.camminoPrima && tappa.camminoPrima.secondi >= 45) {
         const minPiedi = Math.max(1, Math.round(tappa.camminoPrima.secondi / 60));

@@ -4,6 +4,8 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
+- **Il motore collegato a ciò che si vede**: quando l'elenco dei ritardi live arriva allineato alle tappe, `app.js` chiede al motore i cambi a rischio e l'affidabilità. Nel dettaglio del percorso un cambio che il ritardo ha già mangiato diventa una riga arancione con il motivo («attesa di 2 min: troppo poca»), e il riepilogo aggiunge «in orario», «qualche ritardo» o «ritardi in corso» accanto al tempo. `intelligenza.js` entra nel precache. I pesi **non** cambiano ancora quale percorso viene scelto: quello resta il passo successivo, perché richiede di toccare `punteggio` in `routing.js` e di riprovare l'intero ordinamento delle alternative.
+
 - **Motore dell'intelligenza (`intelligenza.js`)**: i conti dei livelli 1–4 in un modulo puro, senza DOM, senza rete e senza ML — ritardo che si propaga, probabilità di perdere un cambio con le soglie 60/120/180 s, affidabilità 0–1, storico locale a mediana e MAD con tetto di 500 osservazioni e scadenza a 30 giorni (senza coordinate né identificativi), aggiustamenti meteo e ora, festivi, eventi e disruzioni, punteggio unificato con pesi in un solo oggetto, scelta di un solo suggerimento per priorità e memoria degli ignorati. 16 test nuovi, tra cui quello che fallisce se qualcuno salva `lat`/`lon` nello storico. Pesi e soglie sono in `INTELLIGENZA.md`.
 
 - **Cosa non è ancora collegato**: l'app non chiama il modulo, quindi per ora **l'interfaccia non cambia**. Mancano il collegamento a `caricaLivePercorso`/`punteggio`/`vista-percorso`, la riga del suggerimento, la cache dei risultati e `data/eventi.json` (nessun evento inventato).

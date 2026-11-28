@@ -61,15 +61,25 @@ compare più: il limite è per tipo, non globale, così un utente che ignora
 
 ## Cosa manca (dichiarato, non nascosto)
 
-- **Il collegamento all'interfaccia.** Il modulo è provato dai test ma l'app
-  non lo chiama ancora: `caricaLivePercorso`, `ritardiPercorso`, `punteggio`
-  di `routing.js` e `vista-percorso.js` non sono stati toccati. Senza questo
-  passaggio l'utente non vede cambiare nulla.
+- **Collegato finora**: dopo che `caricaLiveTappe` legge i ritardi,
+  `app.js` chiama `rischioCambi` e `affidabilitaRealtime`, il riepilogo scrive
+  «in orario / qualche ritardo / ritardi in corso» e il dettaglio marca i
+  cambi con «a rischio» e il motivo. `intelligenza.js` è nel precache del
+  service worker.
+- **Non ancora collegato**: `punteggio` di `routing.js` non usa
+  `punteggioCombinato`, quindi i pesi non cambiano ancora *quale* percorso
+  viene scelto, solo come viene raccontato. Restano fuori anche
+  `ritardoCascata` sull'arrivo finale, la stima dallo storico (nessuna
+  osservazione viene ancora registrata), la riga del suggerimento e la cache
+  dei risultati.
+- **Verifica mancante**: il percorso con un ritardo vero non è provato
+  end-to-end. I test coprono il motore; la riga «a rischio» è stata vista solo
+  compilando, perché HelloBus in prova non produce ritardi controllabili.
 - **Eventi e disruzioni**: `disturboAttivo` e `toccaDisturbo` leggono una lista
   che qualcuno deve fornire. Non esiste `data/eventi.json`: **non ho inventato
   eventi**, partite o scioperi.
 - **Livello 5 nella UI**: la scelta del suggerimento è implementata, la riga
-  gialla in cima al percorso no.
+  gialla in cima al percorso no (`htmlSuggerimenti` esiste ma parla d'altro).
 - **Cache dei risultati (7.3)** e **criterio appreso (5.2)**: non implementati.
 - I test di precisione contro Google Maps (§9.2) non sono eseguibili da qui:
   Google Maps non offre un'API pubblica gratuita per confrontare i tempi.

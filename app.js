@@ -5432,6 +5432,12 @@
     if (e.cambi) meta += ' · ' + (e.cambi === 1 ? '1 cambio' : e.cambi + ' cambi');
     const piedi = Math.round(((e.camminoIniziale || 0) + (e.camminoFinale || 0)) / 60);
     if (piedi >= 1) meta += ' · a piedi ' + piedi + ' min';
+    // Affidabilità: una parola, non un numero. Il numero vero non lo sappiamo
+    // abbastanza bene da scriverlo.
+    if (e.affidabilita != null) {
+      meta += ' · ' + (e.affidabilita >= 0.75 ? 'in orario'
+        : e.affidabilita >= 0.5 ? 'qualche ritardo' : 'ritardi in corso');
+    }
     // Abbonamento: una spunta accanto al prezzo, non un altro chip in alto.
     const spunta = prezzo === 'Incluso'
       ? '<span class="spunta-abb" role="img" aria-label="Coperto dall\'abbonamento urbano">' +
@@ -7418,7 +7424,18 @@
     liveTappe.ts = Date.now();
     liveTappe.stato = noti ? 'ok' : 'nessuna-corsa';
     liveTappe.caricamento = false;
-    if (esito) esito.ritardi = valori;
+    if (esito) {
+      esito.ritardi = valori;
+      // I conti dei cambi a rischio e dell'affidabilità li fa il motore:
+      // qui si passano solo i ritardi appena letti, allineati alle tappe.
+      const conRitardo = (esito.tappe || []).map((tappa, indice) => ({
+        arrivo: tappa.arrivo,
+        partenza: tappa.partenza,
+        ritardoLive: valori[indice]
+      }));
+      esito.rischi = Intelligenza.rischioCambi(conRitardo);
+      esito.affidabilita = Intelligenza.affidabilitaRealtime(conRitardo);
+    }
     if (scartaCorsaInRitardo()) return;
     disegnaLivePercorso();
   }

@@ -561,6 +561,10 @@
   .dati-azioni{display:flex;gap:8px;margin-top:14px;}
   .dati-azioni button{flex:1;padding:12px;border-radius:10px;border:1px solid var(--bordo-2);background:var(--sup);color:var(--testo);font:inherit;font-size:14px;}
   .dati-azioni button.pericolo{color:var(--rosso-testo);border-color:var(--rosso-testo);}
+  /* Cambio che il ritardo ha reso incerto: arancione, non rosso — il percorso
+     esiste ancora, va solo guardato. */
+  .cambio.cambio-rischio{color:#8A5A00;background:#FFF7E0;border:1px solid #FFD966;border-radius:8px;padding:6px 8px;}
+  html[data-tema="scuro"] .cambio.cambio-rischio{color:#FFD966;background:#2A2415;border-color:#6B5A20;}
   .drawer .info,.impostazioni .info{display:flex;flex-direction:column;gap:12px;padding:0 16px 16px;font-size:12px;line-height:1.6;color:var(--testo-2);}
   .drawer .info h3,.impostazioni .info h3{font-size:13px;font-weight:600;color:var(--testo);margin:0 0 4px;}
   .drawer .info p,.impostazioni .info p{margin:0;}
@@ -1139,6 +1143,7 @@
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" defer></script>
 <script src="./utilita.js" defer></script>
+  <script src="./intelligenza.js" defer></script>
   <script src="./routing.js" defer></script>
   <script src="./linee.js" defer></script>
   <script src="./icone.js" defer></script>
