@@ -4784,6 +4784,7 @@
   // C'è ancora qualcosa che l'indietro può chiudere?
   function restaUnLivello() {
     if ($('onboarding') && !$('onboarding').hidden) return true;
+    if ($('impostazioni') && !$('impostazioni').hidden) return true;
     if (!$('cerca').hidden) return true;
     if ($('drawer').classList.contains('aperto')) return true;
     if (statoSheet === 'piena' || statoSheet === 'meta') return true;
@@ -4811,6 +4812,7 @@
   // Un livello per volta: overlay, menu, dettaglio, metà, poi il percorso.
   function indietroLivelli() {
     if ($('onboarding') && !$('onboarding').hidden) { chiudiOnboarding(); return; }
+    if ($('impostazioni') && !$('impostazioni').hidden) { chiudiImpostazioni(); apriMenu(); return; }
     if (!$('cerca').hidden) { chiudiOverlay(); return; }
     if ($('drawer').classList.contains('aperto')) { chiudiMenu(); return; }
     if (statoSheet === 'piena') { impostaSheet('meta'); return; }
@@ -7352,16 +7354,11 @@
         ? Utilita.direzioneCompatta(arrivo.destinazione || '')
         : (arrivo.destinazione || '');
       const meta = direzione ? '→ ' + direzione : '';
-      const segnala = urlSegnalazioneCorsa({ fermata: fermata, linea: arrivo.linea, ora: arrivo.ora, tipo: 'corsa' });
       const dettaglio = aperto
         ? '<div class="arrivo-dettaglio">' +
           '<div class="riga"><span>' + (arrivo.tipo === 'live' ? 'Bus ' + esc(arrivo.bus || '') : 'Orario programmato') + '</span>' +
           '<span>ore ' + esc(arrivo.ora) + '</span></div>' +
           (arrivo.destinazione ? '<div class="riga"><span>Direzione</span><span>' + esc(arrivo.destinazione) + '</span></div>' : '') +
-          (segnala
-            ? '<div class="riga"><span>Segnala</span>' +
-              '<a class="link-mini" href="' + esc(segnala) + '" target="_blank" rel="noopener">Errore di orario o percorso</a></div>'
-            : '') +
           '<div class="riga"><span>Avviso</span>' +
           '<button type="button" class="link-mini" data-azione="avvisa" data-avvisa-linea="' + esc(arrivo.linea) +
           '" data-avvisa-ora="' + esc(arrivo.ora) + '">' + (attivo ? 'Togli l\'avviso' : 'Avvisami') + '</button></div>' +
@@ -7429,7 +7426,8 @@
   /* --- Palina: schermo sempre acceso -------------------------------- */
   // In fermata il telefono sta in mano con gli arrivi aperti: la Wake Lock API
   // evita che lo schermo si spenga mentre si aspetta il bus.
-  let schermoSempre = false;
+  const K_SCHERMO = 'tperzc_schermo_v1';
+  let schermoSempre = false;   // wake lock attivo adesso, non la preferenza
   let sentinellaSchermo = null;
 
   async function chiediSchermo() {
@@ -7452,22 +7450,39 @@
     try { sentinella.release(); } catch (errore) { /* già rilasciata dal browser */ }
   }
 
-  async function alternaSchermo() {
-    if (schermoSempre) {
+  // Preferenza, non un pulsante da premere ogni volta in fermata: chi la
+  // accende la ritrova su ogni vista orari.
+  function schermoPreferito() {
+    return leggi(K_SCHERMO) === '1';
+  }
+
+  function aggiornaSchermoToggle() {
+    const riga = $('menu-schermo');
+    if (!riga) return;
+    riga.checked = schermoPreferito();
+    const etichetta = riga.closest('.voce-menu');
+    if (etichetta) etichetta.hidden = !(typeof navigator !== 'undefined' && 'wakeLock' in navigator);
+  }
+
+  async function impostaSchermo(attivo) {
+    if (attivo && !('wakeLock' in navigator)) {
+      mostraToast('Questo browser non può tenere lo schermo acceso');
+      aggiornaSchermoToggle();
+      return;
+    }
+    scrivi(K_SCHERMO, attivo ? '1' : '');
+    aggiornaSchermoToggle();
+    if (!attivo) {
       rilasciaSchermo();
-      renderLive();
       mostraToast('Lo schermo può spegnersi di nuovo');
       return;
     }
-    if (!('wakeLock' in navigator)) {
-      mostraToast('Questo browser non può tenere lo schermo acceso');
-      return;
+    if (vistaAttiva === 'orari') {
+      schermoSempre = true;
+      const ok = await chiediSchermo();
+      if (!ok) schermoSempre = false;
     }
-    schermoSempre = true;
-    const ok = await chiediSchermo();
-    if (!ok) schermoSempre = false;
-    renderLive();
-    mostraToast(ok ? 'Schermo acceso finché resti sugli arrivi' : 'Lo schermo non può restare acceso');
+    mostraToast('Schermo acceso mentre guardi gli orari');
   }
 
   // Il browser toglie il wake lock quando la pagina va in background: al
@@ -7511,26 +7526,6 @@
         '<button type="button" class="btn btn-tenue" data-azione="orari-destinazione">Vai qui</button>' +
         '</div>';
     }
-    // Segnalazione pronta: la fermata è già nel corpo della issue, con le
-    // linee che la servono e la versione dei dati usata.
-    if (fermata) {
-      const segnala = urlSegnalazioneCorsa({
-        fermata: fermata,
-        linee: lineaDi(fermata).slice(0, 4).join(' · ')
-      });
-      if (segnala) {
-        html += '<a class="link-segnala" href="' + esc(segnala) + '" target="_blank" rel="noopener">' +
-          Icone.svg('flag', 14) + '<span>Segnala un errore</span></a>';
-      }
-    }
-    // Palina sempre accesa: il telefono appoggiato alla fermata non deve
-    // spegnersi proprio mentre guardi quanto manca.
-    if (fermata && typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
-      html += '<button type="button" class="btn-schermo' + (schermoSempre ? ' acceso' : '') +
-        '" data-azione="schermo" aria-pressed="' + (schermoSempre ? 'true' : 'false') + '">' +
-        'Schermo acceso' + '</button>';
-    }
-
     if (!fermata) {
       html += '<div class="box">Tocca una fermata sulla mappa.</div>';
     } else if (live.stato === 'senza-linee') {
@@ -7816,6 +7811,12 @@
       renderLive();
       if (!live.items.length && !live.caricamento) caricaLive(false);
       avviaTimerLive();
+      // Preferenza «schermo acceso»: si applica entrando negli orari, senza
+      // un secondo tocco in fermata.
+      if (schermoPreferito() && !sentinellaSchermo) {
+        schermoSempre = true;
+        chiediSchermo().then((ok) => { if (!ok) schermoSempre = false; });
+      }
     } else {
       fermaTimerLive();
       // Uscendo dagli arrivi la palina non serve più: lo schermo torna libero.
@@ -8369,14 +8370,6 @@
       }
     }
     sincronizzaMenu();
-    renderInfo();
-    renderFeriale();
-    renderMappa();
-    const notaBackup = $('menu-esporta-nota');
-    if (notaBackup) {
-      const pacchetto = Utilita.esportaDati(window.localStorage);
-      notaBackup.textContent = pacchetto.chiavi ? pacchetto.chiavi + ' voci' : 'vuoto';
-    }
     drawer.classList.add('aperto');
     animaIngresso(drawer, 'menu');
     drawer.setAttribute('aria-hidden', 'false');
@@ -8392,6 +8385,48 @@
     $('drawer-velo').hidden = true;
     $('btn-menu').setAttribute('aria-expanded', 'false');
     if (drawer.contains(document.activeElement)) document.activeElement.blur();
+  }
+
+  // Il menu resta per quello che serve a un viaggio: posizione, percorso,
+  // viaggi salvati, preferiti. Tutto il resto vive qui, dietro un tasto solo.
+  function apriImpostazioni() {
+    const pannello = $('impostazioni');
+    if (!pannello) return;
+    chiudiMenu();
+    renderInfo();
+    renderFeriale();
+    renderMappa();
+    renderNotificheMenu();
+    renderSegnala();
+    aggiornaSchermoToggle();
+    const notaBackup = $('menu-esporta-nota');
+    if (notaBackup) {
+      const pacchetto = Utilita.esportaDati(window.localStorage);
+      notaBackup.textContent = pacchetto.chiavi ? pacchetto.chiavi + ' voci' : 'vuoto';
+    }
+    pannello.hidden = false;
+    const corpo = pannello.querySelector('.impostazioni-corpo');
+    if (corpo) corpo.scrollTop = 0;
+    const chiudi = $('impostazioni-chiudi');
+    if (chiudi) chiudi.focus();
+  }
+
+  function chiudiImpostazioni() {
+    const pannello = $('impostazioni');
+    if (!pannello || pannello.hidden) return;
+    pannello.hidden = true;
+  }
+
+  // Un solo punto per la segnalazione: la fermata aperta, se c'è, finisce già
+  // nel corpo della issue; altrimenti si apre il modulo vuoto.
+  function renderSegnala() {
+    const link = $('menu-segnala');
+    if (!link) return;
+    const fermata = fermataLive();
+    const segnala = fermata
+      ? urlSegnalazioneCorsa({ fermata: fermata, linee: lineaDi(fermata).slice(0, 4).join(' · ') })
+      : '';
+    link.href = segnala || 'https://github.com/SuPeRCoDiNg2012/tper-bus/issues/new';
   }
 
   /* ------------------------------------------------------------------ *
@@ -8673,6 +8708,13 @@
       renderPercorso();
     });
     $('menu-posizione').addEventListener('click', () => { chiudiMenu(); posizioneComePartenza(); });
+    $('menu-impostazioni').addEventListener('click', apriImpostazioni);
+    $('impostazioni-indietro').addEventListener('click', () => { chiudiImpostazioni(); apriMenu(); });
+    $('impostazioni-chiudi').addEventListener('click', chiudiImpostazioni);
+    const schermoRiga = $('menu-schermo');
+    if (schermoRiga) {
+      schermoRiga.addEventListener('change', (evento) => { impostaSchermo(evento.target.checked); });
+    }
     $('menu-notifiche').addEventListener('click', () => { attivaNotificheMenu(); });
     // Promemoria feriale: ora e preferito si salvano appena cambiano.
     const ferialeToggle = $('menu-feriale');
@@ -8819,6 +8861,7 @@
     document.addEventListener('keydown', (evento) => {
       if (evento.key !== 'Escape') return;
       if (!$('admin').hidden) { chiudiAdmin(); return; }
+      if (!$('impostazioni').hidden) { chiudiImpostazioni(); apriMenu(); return; }
       if ($('drawer').classList.contains('aperto')) { chiudiMenu(); return; }
       if (!$('cerca').hidden) { chiudiOverlay(); return; }
       if (miniFermata) { chiudiMini(); return; }
@@ -9177,7 +9220,6 @@
           aggiornaQuando(isoDi(domani), '08:00');
         }
         if (azione === 'aggiorna') caricaLive(true);
-        if (azione === 'schermo') alternaSchermo();
         if (azione === 'torna-bus') {
           routing.stato = 'ok';
           routing.piedi = null;

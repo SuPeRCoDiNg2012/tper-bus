@@ -61,6 +61,15 @@ async function chiudiOnboarding(page) {
   await expect(onboarding).toBeHidden();
 }
 
+// Le impostazioni non stanno più nel menu: un tasto solo le apre.
+async function apriImpostazioni(page) {
+  // Con la freccia indietro a sinistra il menu si apre dal tasto a destra.
+  const torna = await page.locator('#barra').evaluate((el) => el.classList.contains('torna'));
+  await page.locator(torna ? '#btn-menu-destra' : '#btn-menu').click();
+  await page.locator('#menu-impostazioni').click();
+  await expect(page.locator('#impostazioni')).toBeVisible();
+}
+
 test('il primo avvio mostra una sola schermata e «Inizia» la chiude', async ({ page }) => {
   await senzaRete(page);
   await page.addInitScript(() => {
@@ -88,30 +97,27 @@ test('gli orari di una fermata mostrano le corse, senza etichette ripetute', asy
   await expect(vista).not.toContainText('Direzione non disponibile');
 });
 
-test('fermata e corsa hanno la segnalazione già compilata', async ({ page }) => {
+test('la segnalazione si fa dalle impostazioni, con la fermata già dentro', async ({ page }) => {
   await senzaRete(page, { hellobus: true });
   await page.goto('/?fermata=100');
-  const linkFermata = page.locator('#vista-orari a.link-segnala');
-  await expect(linkFermata).toBeVisible();
-  const hrefFermata = decodeURIComponent(await linkFermata.getAttribute('href'));
-  expect(hrefFermata).toContain('github.com/SuPeRCoDiNg2012/tper-bus/issues/new');
-  expect(hrefFermata).toContain('palina 100');
-  expect(hrefFermata).toContain('| Giorno |');
-
-  await page.locator('#vista-orari .arrivo-chevron').first().click();
-  const linkCorsa = page.locator('#vista-orari .arrivo-dettaglio a.link-mini');
-  await expect(linkCorsa).toBeVisible();
-  const hrefCorsa = decodeURIComponent(await linkCorsa.getAttribute('href'));
-  expect(hrefCorsa).toContain('| Linea |');
-  expect(hrefCorsa).toContain('| Ora |');
-  expect(hrefCorsa).toContain('| Dati aggiornati al |');
+  // Nessun collegamento sparso negli arrivi: la segnalazione vive nelle impostazioni.
+  await expect(page.locator('#vista-orari a.link-segnala')).toHaveCount(0);
+  await expect(page.locator('#vista-orari .btn-schermo')).toHaveCount(0);
+  // La fermata aperta entra nella segnalazione senza doverla riscrivere.
+  await apriImpostazioni(page);
+  const link = page.locator('#menu-segnala');
+  await expect(link).toBeVisible();
+  const href = decodeURIComponent(await link.getAttribute('href'));
+  expect(href).toContain('github.com/SuPeRCoDiNg2012/tper-bus/issues/new');
+  expect(href).toContain('palina 100');
+  expect(href).toContain('| Giorno |');
 });
 
 test('il tema scuro resta dopo il ricaricamento', async ({ page }) => {
   await senzaRete(page);
   await page.goto('/');
   await chiudiOnboarding(page);
-  await page.locator('#btn-menu').click();
+  await apriImpostazioni(page);
   // Si tocca la riga, non l'input: l'interruttore è un input nascosto per il
   // disegno, e il clic sull'etichetta è quello che farebbe una persona.
   await page.locator('label[for="menu-tema"]').click();
@@ -125,7 +131,7 @@ test('esporta e reimporta i dati locali', async ({ page }) => {
   await senzaRete(page);
   await page.goto('/');
   await chiudiOnboarding(page);
-  await page.locator('#btn-menu').click();
+  await apriImpostazioni(page);
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     page.locator('#menu-esporta').click()
@@ -161,7 +167,7 @@ test('il testo grande ingrandisce il pannello', async ({ page }) => {
   // l'interruttore si tocca dalla home, poi si torna agli orari.
   await page.goto('/');
   await chiudiOnboarding(page);
-  await page.locator('#btn-menu').click();
+  await apriImpostazioni(page);
   await page.locator('label[for="menu-testo"]').click();
   await expect(page.locator('html')).toHaveAttribute('data-testo', 'grande');
   await page.goto('/?fermata=100');
@@ -215,7 +221,7 @@ test('il promemoria feriale ricorda ora e preferito', async ({ page }) => {
   await conPreferiti(page);
   await page.goto('/');
   await chiudiOnboarding(page);
-  await page.locator('#btn-menu').click();
+  await apriImpostazioni(page);
   await page.locator('label[for="menu-feriale"]').click();
   await expect(page.locator('#menu-feriale')).toBeChecked();
   await page.locator('#menu-feriale-ora').fill('07:40');
@@ -240,8 +246,15 @@ test('con la lingua inglese il menu è tradotto', async ({ page }) => {
   await page.locator('#btn-menu').click();
   const drawer = page.locator('#drawer');
   await expect(drawer).toContainText('Settings');
-  await expect(drawer).toContainText('Notifications');
-  await expect(drawer).toContainText('Dark theme');
+  // Le voci non essenziali non stanno più nel menu: sono nella schermata
+  // impostazioni, dietro quel tasto.
+  await expect(drawer).not.toContainText('Dark theme');
+  await page.locator('#menu-impostazioni').click();
+  const impostazioni = page.locator('#impostazioni');
+  await expect(impostazioni).toBeVisible();
+  await expect(impostazioni).toContainText('Notifications');
+  await expect(impostazioni).toContainText('Dark theme');
+  await expect(impostazioni).toContainText('Weekday reminder');
 });
 
 test('le pagine legali seguono la lingua scelta', async ({ page }) => {
@@ -279,8 +292,8 @@ test('le pagine legali seguono la lingua scelta', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('tperzc_lingua_v1', 'en'));
   await page.goto('/');
   await chiudiOnboarding(page);
-  await page.locator('#btn-menu').click();
-  await expect(page.locator('#drawer')).toContainText('Privacy policy');
+  await apriImpostazioni(page);
+  await expect(page.locator('#impostazioni')).toContainText('Privacy policy');
 });
 
 test('nessun errore JavaScript sulle schermate principali', async ({ page }) => {

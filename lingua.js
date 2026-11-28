@@ -144,6 +144,11 @@
     'Notifiche non attivate': 'Notifications not enabled',
 
     // --- Promemoria feriale, mappa offline, preferiti ---
+    'Viaggio': 'Trip',
+    'Aspetto': 'Appearance',
+    'App': 'App',
+    'Schermo acceso sugli orari': 'Keep the screen on for departures',
+    'Segnala un errore': 'Report an issue',
     'Promemoria feriale': 'Weekday reminder',
     'Ogni giorno feriale': 'Every weekday',
     'Mappa offline': 'Offline map',
