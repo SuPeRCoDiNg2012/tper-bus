@@ -305,3 +305,21 @@ test('nessun errore JavaScript sulle schermate principali', async ({ page }) => 
   await page.waitForTimeout(1200);
   expect(errori).toEqual([]);
 });
+
+test('la proposta del push arriva alla terza volta la stessa fermata, una volta sola', async ({ page }) => {
+  await senzaRete(page);
+  const proposta = page.locator('#proposta-push');
+  for (let giro = 0; giro < 3; giro += 1) {
+    await page.goto('/?fermata=100');
+    await expect(page.locator('#vista-orari')).toBeVisible();
+  }
+  await expect(proposta).toBeVisible({ timeout: 10000 });
+  await expect(proposta).toContainText("anche con l'app chiusa");
+  await page.locator('#proposta-push-no').click();
+  await expect(proposta).toBeHidden();
+  // «Non ora» è una risposta: alla quarta apertura non torna.
+  await page.goto('/?fermata=100');
+  await expect(page.locator('#vista-orari')).toBeVisible();
+  await page.waitForTimeout(2000);
+  await expect(proposta).toBeHidden();
+});

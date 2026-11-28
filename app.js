@@ -40,6 +40,8 @@
   const K_VIAGGI = 'tperzc_viaggi_salvati_v1';
   const K_ERRORI = 'tperzc_errori_v1';
   const K_TEMA = 'tperzc_tema_v1';
+  const K_APERTE = 'tperzc_fermate_aperte_v1';
+  const K_PUSH_PROPOSTO = 'tperzc_push_proposto_v1';
   const K_TESTO = 'tperzc_testo_v1';
   // Preferenze dei vecchi criteri di percorso, non più lette dall'app. Le
   // versioni con e senza prefisso coprono anche installazioni molto vecchie.
@@ -4501,9 +4503,8 @@
     else if (Notification.permission === 'granted') stato.textContent = 'Attive';
     else if (Notification.permission === 'denied') stato.textContent = 'Bloccate';
     else stato.textContent = 'Attiva';
-    // Su iPhone il permesso esiste solo con l'app nella schermata Home.
-    const soloHome = $('menu-notifiche-ios');
-    if (soloHome) soloHome.hidden = !notificheSoloDaHome();
+    // La spiegazione dell'aggiunta alla Home su iPhone non sta più qui: arriva
+    // con la proposta del push, quando l'utente sta guardando una fermata.
     // Con il push attivo la nota «solo ad app aperta» non è più vera.
     const nota = $('menu-notifiche-nota');
     const pushAttivo = !!(window.Push && Push.attivo());
@@ -4581,6 +4582,87 @@
     const inHome = window.navigator.standalone === true ||
       !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
     return !inHome;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Proposta del push
+   * ------------------------------------------------------------------ */
+  // Il push vive nelle impostazioni, dove nessuno lo cerca. Qui si propone nel
+  // momento in cui serve: la terza volta che si aprono gli orari della stessa
+  // fermata, una volta sola per installazione.
+  const APERTE_PER_PROPOSTA = 3;
+  const APERTE_MAX_RICORDE = 40;
+
+  function apertureSalvate() {
+    const salvate = leggiJSON(K_APERTE);
+    return salvate && typeof salvate === 'object' ? salvate : {};
+  }
+
+  function contaApertura(id) {
+    if (!id) return;
+    const conteggi = apertureSalvate();
+    conteggi[id] = (Number(conteggi[id]) || 0) + 1;
+    // Solo le fermate più usate: una mappa che cresce a ogni palina vista
+    // riempirebbe localStorage per niente.
+    const chiavi = Object.keys(conteggi);
+    if (chiavi.length > APERTE_MAX_RICORDE) {
+      chiavi.sort((a, b) => (Number(conteggi[b]) || 0) - (Number(conteggi[a]) || 0));
+      chiavi.slice(APERTE_MAX_RICORDE).forEach((chiave) => delete conteggi[chiave]);
+    }
+    scrivi(K_APERTE, JSON.stringify(conteggi));
+  }
+
+  function propostaPushTesto(soloHome) {
+    return soloHome
+      ? testoUI("Su iPhone le notifiche ad app chiusa arrivano solo con l'app aggiunta alla Home: Condividi → Aggiungi alla Home, poi riaprila da lì.",
+        'On iPhone notifications arrive only with the app added to the Home screen: Share → Add to Home Screen, then open it from there.')
+      : testoUI("Ti avviso quando il bus sta per passare, anche con l'app chiusa. Attivo?",
+        'Shall I tell you when the bus is about to come, even with the app closed?');
+  }
+
+  function proponiPushSeServe() {
+    const box = $('proposta-push');
+    if (!box || !box.hidden) return;
+    if (leggi(K_PUSH_PROPOSTO)) return;
+    if (!window.Push || !Push.configurato() || Push.attivo()) return;
+    const conteggi = apertureSalvate();
+    let massimo = 0;
+    Object.keys(conteggi).forEach((chiave) => {
+      massimo = Math.max(massimo, Number(conteggi[chiave]) || 0);
+    });
+    if (massimo < APERTE_PER_PROPOSTA) return;
+    const soloHome = notificheSoloDaHome();
+    if (!soloHome && !Push.supportato()) return;
+    const testo = $('proposta-push-testo');
+    const ok = $('proposta-push-ok');
+    const no = $('proposta-push-no');
+    if (testo) testo.textContent = propostaPushTesto(soloHome);
+    if (ok) {
+      ok.textContent = soloHome ? testoUI('Come si fa', 'How to') : testoUI('Attiva', 'Turn on');
+      ok.onclick = async () => {
+        box.hidden = true;
+        if (soloHome) {
+          if (typeof window.installaApp === 'function' && eventoInstallazione) window.installaApp();
+          else mostraToast("Condividi (□↑) → Aggiungi alla Home, poi apri l'app da lì");
+          return;
+        }
+        const esito = await Push.attiva();
+        if (esito.esito !== 'ok') {
+          mostraToast(esito.esito === 'denied'
+            ? 'Notifiche bloccate dalle impostazioni del sito'
+            : 'Iscrizione non riuscita, riprova dal menu');
+          renderNotificheMenu();
+          return;
+        }
+        renderNotificheMenu();
+        await sincronizzaPush();
+        mostraToast('Fatto: i promemoria arrivano anche ad app chiusa');
+      };
+    }
+    if (no) no.onclick = () => { box.hidden = true; };
+    box.hidden = false;
+    // Anche «Non ora» è una risposta: non si ripropone più.
+    scrivi(K_PUSH_PROPOSTO, '1');
   }
 
   // Tema: scelta esplicita dell'utente, altrimenti quella del sistema.
@@ -5582,6 +5664,10 @@
   function apriOrari(f, opzioni) {
     if (!f) return;
     chiudiMini();
+    // La stessa fermata che torna tre volte è il segnale giusto per proporre il
+    // push: l'utente l'ha già dimostrato di usarla, non glielo si chiede a caso.
+    contaApertura(f.id);
+    setTimeout(proponiPushSeServe, 1200);
     live.fermata = f;
     live.stopId = null;
     live.items = [];
