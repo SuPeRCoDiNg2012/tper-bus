@@ -157,3 +157,32 @@ test('due corse ravvicinate non diventano due notifiche', () => {
   // almeno dieci minuti più tardi.
   assert.deepEqual(scelte.map((v) => v.linea), ['94', '13', '20']);
 });
+
+test('il silenzio notturno vale per i bus ma non per ultima corsa e feriale', () => {
+  const notte = new Date(2026, 10, 28, 3, 30, 0).getTime();
+  const sera = new Date(2026, 10, 28, 21, 0, 0).getTime();
+  const tarda = new Date(2026, 10, 28, 23, 30, 0).getTime();
+  assert.equal(push.inSilenzio(notte, 'avviso-casa'), true);
+  assert.equal(push.inSilenzio(tarda, 'avviso-casa'), true);
+  assert.equal(push.inSilenzio(sera, 'avviso-casa'), false);
+  assert.equal(push.inSilenzio(notte, 'ultima-casa'), false);
+  assert.equal(push.inSilenzio(notte, 'feriale'), false);
+});
+
+test('con il bagnato previsto si esce quattro minuti prima', () => {
+  assert.equal(push.minutiPioggia(80), 4);
+  assert.equal(push.minutiPioggia(50), 4);
+  assert.equal(push.minutiPioggia(49), 0);
+  assert.equal(push.minutiPioggia(null), 0);
+});
+
+test('la partenza resta in chiaro accanto al momento della notifica', () => {
+  const adesso = Date.UTC(2026, 10, 28, 7, 0, 0);
+  const [scelta] = push.pianificaPartenze(
+    [{ linea: '13', orario: 7 * 3600 + 1800, quando: adesso + 30 * 60000 }],
+    adesso,
+    { sogliaMinuti: 5, quanti: 1 }
+  );
+  assert.equal(scelta.partenza, adesso + 30 * 60000);
+  assert.equal(scelta.quando, adesso + 25 * 60000);
+});

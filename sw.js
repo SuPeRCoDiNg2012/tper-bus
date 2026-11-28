@@ -3,8 +3,8 @@
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'muovi-bologna-static-v211';
-const CACHE_DATI = 'muovi-bologna-data-v211';
+const CACHE_STATICA = 'muovi-bologna-static-v212';
+const CACHE_DATI = 'muovi-bologna-data-v212';
 // Mappa: cache non versionata, così la zona salvata sopravvive agli aggiornamenti
 // dell'app. Non entra in pulisciCacheVecchie (che guarda solo i nomi -vN).
 const CACHE_MAPPA = 'muovi-bologna-mappa';

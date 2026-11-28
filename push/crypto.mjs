@@ -126,8 +126,11 @@ export async function firmaVapid({ chiave, soggetto, audience, secondi = 12 * 36
 /**
  * Invia una notifica al servizio push del browser.
  * `sottoscrizione` è l'oggetto di `PushSubscription.toJSON()`.
+ * `ttl` sono i secondi per cui il servizio push può tenere la notifica in
+ * coda se il telefono è spento o offline: quindici minuti, perché un «Bus 13
+ * tra 5 min» consegnato un'ora dopo è un'informazione sbagliata.
  */
-export async function inviaPush({ sottoscrizione, payload, vapid }) {
+export async function inviaPush({ sottoscrizione, payload, vapid, ttl }) {
   const endpoint = new URL(sottoscrizione.endpoint);
   const chiavi = sottoscrizione.keys || {};
   const uaPublic = b64uToBytes(chiavi.p256dh);
@@ -145,7 +148,7 @@ export async function inviaPush({ sottoscrizione, payload, vapid }) {
   return fetch(endpoint.toString(), {
     method: 'POST',
     headers: {
-      TTL: '3600',
+      TTL: String(Math.max(0, Number(ttl) || 900)),
       'Content-Encoding': 'aes128gcm',
       'Content-Type': 'application/octet-stream',
       Authorization: 'vapid t=' + jwt + ', k=' + vapid.chiavePubblica

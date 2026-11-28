@@ -3903,7 +3903,7 @@
         ? voce.etichetta + ' · ' + esci + ' min a piedi fino a ' + nomeBreve(fermata.nome) +
           ' · bus alle ' + prossimo.ora
         : voce.etichetta + ' · ' + nomeBreve(voce.luogo.nome) + ' · ' + prossimo.ora;
-      await mostraNotifica(titolo, corpo, fermata.id, esci ? 'esci-' + chiave : undefined);
+      await mostraNotifica(titolo, corpo, fermata.id, esci ? 'esci-' + chiave : 'avviso-' + voce.slot);
       await avvisaUltimaCorsa(voce, fermata, giorno);
     }
     // I promemoria del Worker seguono quello che l'app ha appena calcolato.
@@ -3962,9 +3962,46 @@
   // con la stessa soglia della notifica locale (5 minuti, o il tempo a piedi
   // quando il preferito è un indirizzo). Oltre dodici ore non si va: tanto
   // l'app risincronizza la prossima volta che si apre.
-  const PUSH_BUS_QUANTI = 3;
-  const PUSH_BUS_FINESTRA_ORE = 12;
+  const PUSH_BUS_QUANTI = 6;
+  const PUSH_BUS_FINESTRA_ORE = 7 * 24;
   const PUSH_BUS_DISTANZA_MIN = 10;
+
+  // Pioggia prevista per l'ora della partenza: Open-Meteo dà le probabilità
+  // orarie di una settimana in una chiamata sola, e si tiene per un'ora.
+  // Senza rete non si inventa niente: il promemoria resta all'asciutto.
+  const PIOGGIA_TTL = 3600 * 1000;
+  const pioggiaPrevista = { ts: 0, ore: null, caricamento: false };
+
+  async function caricaPioggia() {
+    if (pioggiaPrevista.caricamento) return;
+    if (pioggiaPrevista.ore && Date.now() - pioggiaPrevista.ts < PIOGGIA_TTL) return;
+    pioggiaPrevista.caricamento = true;
+    try {
+      const risposta = await fetch(METEO_URL + '?latitude=44.4944&longitude=11.3437' +
+        '&hourly=precipitation_probability&forecast_days=7&timezone=Europe%2FRome',
+      { cache: 'no-store' });
+      if (!risposta.ok) throw new Error('pioggia ' + risposta.status);
+      const dati = await risposta.json();
+      const orari = (dati.hourly && dati.hourly.time) || [];
+      const valori = (dati.hourly && dati.hourly.precipitation_probability) || [];
+      const mappa = {};
+      orari.forEach((testo, indice) => {
+        mappa[String(testo).slice(0, 13)] = Number(valori[indice]) || 0;
+      });
+      pioggiaPrevista.ore = mappa;
+      pioggiaPrevista.ts = Date.now();
+    } catch (errore) {
+      pioggiaPrevista.ore = pioggiaPrevista.ore || null;
+    } finally {
+      pioggiaPrevista.caricamento = false;
+    }
+  }
+
+  function probabilitaPioggia(quandoMs) {
+    if (!pioggiaPrevista.ore) return 0;
+    const d = new Date(Number(quandoMs));
+    return pioggiaPrevista.ore[isoDi(d) + 'T' + due(d.getHours())] || 0;
+  }
 
   function promemoriaProssimiBus() {
     const elenco = [];
@@ -3978,7 +4015,7 @@
       const partenze = [];
       // Oggi e domani: il servizio comincia alle 04:00, quindi una corsa dopo
       // mezzanotte appartiene al giorno prima.
-      for (let scarto = 0; scarto <= 1; scarto += 1) {
+      for (let scarto = 0; scarto <= 6; scarto += 1) {
         const giorno = new Date();
         giorno.setHours(12, 0, 0, 0);
         giorno.setDate(giorno.getDate() + scarto);
@@ -3998,28 +4035,36 @@
           });
         });
       }
+      const tag = 'avviso-' + voce.slot;
       Push.pianificaPartenze(partenze, Date.now(), {
         sogliaMinuti: soglia,
         quanti: PUSH_BUS_QUANTI,
         finestraOre: PUSH_BUS_FINESTRA_ORE,
         distanzaMinima: PUSH_BUS_DISTANZA_MIN
       }).forEach((corsa) => {
+        // Se all'ora della partenza è previsto bagnato si esce prima.
+        const extra = Push.minutiPioggia(probabilitaPioggia(corsa.partenza));
+        const quando = corsa.quando - extra * 60000;
+        if (Push.inSilenzio(quando, tag)) return;
+        const minutiUscita = soglia + extra;
         elenco.push({
           id: 'bus-' + voce.slot + '-' + corsa.linea + '-' + Math.round(corsa.quando / 60000),
-          quando: corsa.quando,
+          quando: quando,
           titolo: esci
-            ? 'Esci ora: bus ' + corsa.linea + ' tra ' + esci + ' min'
-            : 'Bus ' + corsa.linea + ' tra ' + soglia + ' min',
+            ? 'Esci ora: bus ' + corsa.linea + ' tra ' + minutiUscita + ' min'
+            : 'Bus ' + corsa.linea + ' tra ' + minutiUscita + ' min',
           corpo: voce.etichetta + ' · ' + nomeBreve(fermata.nome) + ' · bus alle ' + hhmm(corsa.orario),
           fermata: fermata.id,
-          tag: 'muovi-bologna-avviso'
+          tag: tag
         });
       });
     });
     return elenco;
   }
 
-  function promemoriaPush() {
+  async function promemoriaPush() {
+    // Senza rete si va avanti lo stesso: l'elenco esce come prima.
+    await caricaPioggia();
     const elenco = [];
     const inizio = new Date();
     inizio.setHours(0, 0, 0, 0);
@@ -4042,9 +4087,13 @@
     return promemoriaProssimiBus().concat(elenco, promemoriaFeriale());
   }
 
-  function sincronizzaPush() {
+  async function sincronizzaPush() {
     if (!window.Push || !Push.attivo()) return;
-    Push.sincronizza(promemoriaPush());
+    try {
+      await Push.sincronizza(await promemoriaPush());
+    } catch (errore) {
+      // Il Worker o la rete non rispondono: ci riprova il giro dopo.
+    }
   }
 
   /* ------------------------------------------------------------------ *
@@ -4454,7 +4503,39 @@
       const etichetta = riga.closest('.voce-menu');
       if (etichetta) etichetta.hidden = !pronto;
     }
-    if (notaPush) notaPush.hidden = !(pronto && pushAttivo);
+    if (notaPush) {
+      notaPush.hidden = !(pronto && pushAttivo);
+      // Con il push attivo la nota dice cosa ha fatto il Worker, non come si
+      // accende: senza questo, «nessun promemoria dovuto» e «tutto rotto»
+      // sembrano la stessa cosa.
+      if (pronto && pushAttivo) {
+        notaPush.textContent = 'Leggo lo stato del Worker…';
+        Push.stato().then((esito) => {
+          if (notaPush && !notaPush.hidden) notaPush.textContent = testoStatoPush(esito);
+        }).catch(() => { /* resta il testo precedente */ });
+      }
+    }
+  }
+
+  function testoStatoPush(esito) {
+    if (!esito || esito.esito === 'errore') return 'Stato non disponibile: il Worker non risponde.';
+    if (esito.esito === 'senza-sottoscrizione') {
+      return 'Questo telefono non ha più una sottoscrizione: spegni e riaccendi il push.';
+    }
+    if (!esito.iscritto) return 'Questo telefono non risulta iscritto: spegni e riaccendi il push.';
+    const pezzi = [esito.promemoria
+      ? esito.promemoria + ' promemoria in coda'
+      : 'nessun promemoria in coda'];
+    if (esito.ultimoInvio) {
+      const quando = new Date(esito.ultimoInvio);
+      pezzi.push('ultima notifica ' + due(quando.getDate()) + '/' + due(quando.getMonth() + 1) +
+        ' alle ' + due(quando.getHours()) + ':' + due(quando.getMinutes()));
+    } else {
+      pezzi.push('nessuna notifica inviata finora');
+    }
+    pezzi.push((Number(esito.consegne) || 0) + ' consegnate');
+    if (esito.ultimoErrore) pezzi.push('ultimo errore: ' + esito.ultimoErrore);
+    return pezzi.join(' · ') + '.';
   }
 
   async function attivaNotificheMenu() {
@@ -4572,6 +4653,13 @@
       return;
     }
     mostraToast('Ripristinate ' + esito.scritte + ' voci: ricarico');
+    // Il backup porta i promemoria ma non la sottoscrizione del browser: dopo
+    // un ripristino su un telefono nuovo il push va ricollegato, senza chiedere
+    // un permesso che c'è già (altrimenti resta muto senza dirlo).
+    if (window.Push && Push.configurato() && typeof Notification !== 'undefined' &&
+        Notification.permission === 'granted') {
+      try { await Push.attiva(); } catch (errore) { /* si riprova dal menu */ }
+    }
     setTimeout(() => location.reload(), 900);
   }
 

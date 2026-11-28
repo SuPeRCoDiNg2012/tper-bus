@@ -160,6 +160,7 @@
       .map((voce) => ({
         linea: String(voce.linea || ''),
         orario: Number(voce.orario) || 0,
+        partenza: Number(voce.quando),
         quando: Number(voce.quando) - soglia * 60000
       }))
       .filter((voce) => voce.quando > adesso && voce.quando - adesso <= finestra)
@@ -181,6 +182,32 @@
     return tenute;
   }
 
+  // Silenzio notturno: fra le 23 e le 6 non parte niente, perché un avviso
+  // alle tre sveglia e basta. L'ultima corsa e il promemoria feriale sono
+  // l'eccezione: sono a un'ora scelta (o a mezzanotte) e servono proprio lì.
+  function inSilenzio(quandoMs, tag) {
+    const categoria = String(tag || '');
+    if (categoria.indexOf('ultima') === 0 || categoria.indexOf('feriale') === 0) return false;
+    const ora = new Date(Number(quandoMs)).getHours();
+    return ora >= 23 || ora < 6;
+  }
+
+  // Con il bagnato previsto si esce un po' prima: il cammino dichiarato è
+  // asciutto, e sotto l'acqua il passo rallenta davvero.
+  function minutiPioggia(probabilita) {
+    return Number(probabilita) >= 50 ? 4 : 0;
+  }
+
+  async function stato() {
+    const sotto = await sottoscrizione();
+    if (!sotto) return { esito: 'senza-sottoscrizione' };
+    try {
+      return await chiama('/stato', { sottoscrizione: sotto.toJSON() });
+    } catch (errore) {
+      return { esito: 'errore' };
+    }
+  }
+
   async function prova() {
     const sotto = await sottoscrizione();
     if (!sotto) return { esito: 'senza-sottoscrizione' };
@@ -200,6 +227,9 @@
     spegni: spegni,
     sincronizza: sincronizza,
     pianificaPartenze: pianificaPartenze,
+    inSilenzio: inSilenzio,
+    minutiPioggia: minutiPioggia,
+    stato: stato,
     prova: prova
   };
 
