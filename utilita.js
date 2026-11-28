@@ -542,8 +542,28 @@
     return { scritte: scritte, errore: scritte ? null : 'vuoto' };
   }
 
+  /**
+   * Direzione compatta per le righe degli arrivi: «A Poliambulatorio Rizzoli»
+   * non ci sta e non dice da che parte va il bus. Si toglie la preposizione e,
+   * se il nome è lungo, restano le ultime parole — il capolinea è quella che
+   * si riconosce. Il nome intero resta nel dettaglio della corsa.
+   */
+  function direzioneCompatta(nome) {
+    const testo = String(nome == null ? '' : nome).trim().replace(/\s+/g, ' ');
+    if (!testo) return '';
+    const senzaPreposizione = testo.replace(/^(?:A|Ad|Per|Verso|Dir\.?|Direzione)\s+/i, '');
+    const parole = senzaPreposizione.split(' ');
+    let compatto = senzaPreposizione;
+    if (senzaPreposizione.length > 22 && parole.length > 1) {
+      compatto = parole.length > 2 ? parole.slice(-2).join(' ') : parole[parole.length - 1];
+    }
+    if (compatto.length > 26) compatto = compatto.slice(0, 25).replace(/[\s,;:\-]+$/, '') + '…';
+    return compatto;
+  }
+
   const API = {
     TIMEOUT: TIMEOUT,
+    direzioneCompatta: direzioneCompatta,
     esportaDati: esportaDati,
     applicaDati: applicaDati,
     NON_DA_BACKUP: NON_DA_BACKUP,

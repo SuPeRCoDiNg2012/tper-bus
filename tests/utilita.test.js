@@ -277,3 +277,17 @@ test('l\'involucro tiene solo i vertici esterni e scarta quelli interni', () => 
   // Coordinate sporche: si scartano, non fanno saltare il disegno.
   assert.equal(Utilita.involucro([[0, 0], ['x', 2], [1, 0], [1, 1]]).length, 3);
 });
+
+test('la direzione negli arrivi è compatta ma resta riconoscibile', () => {
+  // Il capolinea pieno non ci sta nella riga: resta la parte che si riconosce.
+  assert.equal(Utilita.direzioneCompatta('A Poliambulatorio Rizzoli'), 'Rizzoli');
+  assert.equal(Utilita.direzioneCompatta('A Stazione Centrale'), 'Stazione Centrale');
+  assert.equal(Utilita.direzioneCompatta('Verso Borgo Panigale'), 'Borgo Panigale');
+  assert.equal(Utilita.direzioneCompatta('Per Aeroporto Marconi'), 'Aeroporto Marconi');
+  // Nomi lunghissimi: si taglia, senza spezzare a metà una parola strana.
+  assert.equal(Utilita.direzioneCompatta('A Villa Spada Parcheggio Nord Ovest').length <= 26, true);
+  // Vuoto o assente non deve produrre una freccia verso il nulla.
+  assert.equal(Utilita.direzioneCompatta(''), '');
+  assert.equal(Utilita.direzioneCompatta(null), '');
+  assert.equal(Utilita.direzioneCompatta('   A   '), 'A');
+});

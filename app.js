@@ -93,6 +93,18 @@
   let coloriLinee = {};
   let aggiornato = null;
   const sel = { partenza: null, destinazione: null };
+  // Riconoscimento vocale in corso: chiudere la ricerca deve fermare il microfono.
+  let voceAscolto = null;
+
+  // Le finestre di sistema (prompt) non passano dal dizionario del DOM.
+  function testoUI(italiano, inglese) {
+    try {
+      return (window.Lingua && typeof Lingua.lingua === 'function' && Lingua.lingua() === 'en')
+        ? inglese : italiano;
+    } catch (errore) {
+      return italiano;
+    }
+  }
   // L'abbonamento urbano è una preferenza che vale per tutti i viaggi, non una
   // scelta del singolo percorso: come i minuti a piedi sopravvive al ricarico.
   let abbonamento = leggi(K_ABBONAMENTO) === '1';
@@ -3250,6 +3262,10 @@
 
   function chiudiOverlay() {
     preferitoInCorso = null;
+    if (voceAscolto) {
+      try { voceAscolto.abort(); } catch (errore) { /* già fermo */ }
+      voceAscolto = null;
+    }
     suggerimenti.token += 1;
     if (indirizziAbort) { indirizziAbort.abort(); indirizziAbort = null; }
     const schermo = $('cerca');
@@ -3557,28 +3573,80 @@
   /* --- Preferiti ----------------------------------------------------- */
   // Casa e lavoro sono gli unici due posti che si ripetono ogni giorno: due
   // scorciatoie, non un elenco da gestire. Restano sul dispositivo.
-  const PREFERITI = [
+  const PREFERITI_BASE = [
     { slot: 'casa', etichetta: 'Casa', icona: 'house', domanda: 'Dove è casa?' },
     { slot: 'lavoro', etichetta: 'Lavoro', icona: 'briefcase', domanda: 'Dove è il lavoro?' }
   ];
+  const PREFERITI_MAX = 4;
   let preferitoInCorso = null;
+  let preferitiModifica = false;
 
   function preferitiSalvati() {
     const salvati = leggiJSON(K_PREFERITI);
     return salvati && typeof salvati === 'object' ? salvati : {};
   }
 
+  // Nomi, ordine e preferiti aggiunti stanno nella stessa voce (`_meta`): una
+  // chiave in meno da dichiarare nella cookie policy e da portare nel backup.
+  function preferitiMeta() {
+    const meta = preferitiSalvati()._meta;
+    const m = meta && typeof meta === 'object' ? meta : {};
+    return {
+      nomi: m.nomi && typeof m.nomi === 'object' ? m.nomi : {},
+      ordine: Array.isArray(m.ordine) ? m.ordine.filter((slot) => typeof slot === 'string') : [],
+      extra: Array.isArray(m.extra)
+        ? m.extra.filter((voce) => voce && typeof voce.slot === 'string' && typeof voce.etichetta === 'string')
+          .slice(0, PREFERITI_MAX)
+        : []
+    };
+  }
+
+  function scriviPreferitiMeta(meta) {
+    const salvati = preferitiSalvati();
+    salvati._meta = meta;
+    scrivi(K_PREFERITI, JSON.stringify(salvati));
+  }
+
+  // Casa e lavoro sono i due posti di sempre; chi vuole può rinominarli e
+  // aggiungerne altri, e l'ordine è quello scelto nel menu.
+  function elencoPreferiti() {
+    const meta = preferitiMeta();
+    const base = PREFERITI_BASE.map((voce) => ({
+      slot: voce.slot,
+      etichetta: meta.nomi[voce.slot] || voce.etichetta,
+      icona: voce.icona,
+      domanda: voce.domanda
+    }));
+    const extra = meta.extra.map((voce) => ({
+      slot: voce.slot,
+      etichetta: voce.etichetta,
+      icona: 'map-pin',
+      domanda: 'Dove si trova ' + voce.etichetta + '?'
+    }));
+    const tutti = base.concat(extra);
+    if (!meta.ordine.length) return tutti;
+    const posizione = (slot) => {
+      const indice = meta.ordine.indexOf(slot);
+      return indice < 0 ? 999 : indice;
+    };
+    return tutti.slice().sort((a, b) => posizione(a.slot) - posizione(b.slot));
+  }
+
+  function vocePreferito(slot) {
+    return elencoPreferiti().find((voce) => voce.slot === slot) || null;
+  }
+
   // Solo quelli ancora risolvibili: una fermata sparita dal dataset non deve
   // lasciare un pulsante che non porta da nessuna parte.
   function preferitiValidi() {
     const salvati = preferitiSalvati();
-    return PREFERITI
+    return elencoPreferiti()
       .map((voce) => ({ slot: voce.slot, etichetta: voce.etichetta, icona: voce.icona, luogo: luogoRipristinato(salvati[voce.slot]) }))
       .filter((voce) => voce.luogo && voce.luogo.lat != null);
   }
 
   function salvaPreferito(slot, luogo) {
-    if (!PREFERITI.some((voce) => voce.slot === slot)) return false;
+    if (!vocePreferito(slot)) return false;
     const compatto = luogo ? luogoSalvato(luogo) : null;
     if (luogo && !compatto) {
       mostraToast('La posizione attuale cambia: scegli una fermata o un indirizzo');
@@ -3586,10 +3654,78 @@
     }
     const salvati = preferitiSalvati();
     if (compatto) salvati[slot] = compatto;
-    else delete salvati[slot];
+    else {
+      delete salvati[slot];
+      // Un preferito aggiunto senza posto non ha senso: si toglie anche dal menu.
+      const meta = preferitiMeta();
+      if (meta.extra.some((voce) => voce.slot === slot)) {
+        meta.extra = meta.extra.filter((voce) => voce.slot !== slot);
+        meta.ordine = meta.ordine.filter((s) => s !== slot);
+        delete meta.nomi[slot];
+        salvati._meta = meta;
+      }
+    }
     scrivi(K_PREFERITI, JSON.stringify(salvati));
     renderPreferiti();
     return true;
+  }
+
+  function rinominaPreferito(slot) {
+    const voce = vocePreferito(slot);
+    if (!voce) return;
+    const nome = typeof window.prompt === 'function'
+      ? window.prompt(testoUI('Nome del preferito', 'Favourite name'), voce.etichetta) : null;
+    if (nome == null) return;
+    const pulito = String(nome).trim().slice(0, 20);
+    if (!pulito) return;
+    const meta = preferitiMeta();
+    meta.nomi[slot] = pulito;
+    scriviPreferitiMeta(meta);
+    renderPreferiti();
+  }
+
+  function spostaPreferito(slot, direzione) {
+    const ordine = elencoPreferiti().map((voce) => voce.slot);
+    const indice = ordine.indexOf(slot);
+    const destinazione = indice + direzione;
+    if (indice < 0 || destinazione < 0 || destinazione >= ordine.length) return;
+    ordine.splice(destinazione, 0, ordine.splice(indice, 1)[0]);
+    const meta = preferitiMeta();
+    meta.ordine = ordine;
+    scriviPreferitiMeta(meta);
+    renderPreferiti();
+  }
+
+  function aggiungiPreferito() {
+    const elenco = elencoPreferiti();
+    if (elenco.length >= PREFERITI_MAX) {
+      mostraToast(testoUI('Al massimo ' + PREFERITI_MAX + ' preferiti',
+        'At most ' + PREFERITI_MAX + ' favourites'));
+      return;
+    }
+    const nome = typeof window.prompt === 'function'
+      ? window.prompt(testoUI('Nome del nuovo preferito, per esempio «Università»',
+        'Name of the new favourite, for example “University”'), '') : null;
+    if (nome == null) return;
+    const pulito = String(nome).trim().slice(0, 20);
+    if (!pulito) return;
+    if (elenco.some((voce) => voce.etichetta.toLowerCase() === pulito.toLowerCase())) {
+      mostraToast(testoUI('Hai già un preferito con questo nome',
+        'You already have a favourite with this name'));
+      return;
+    }
+    const usati = elenco.map((voce) => voce.slot);
+    let slot = '';
+    for (let numero = 3; numero <= 9 && !slot; numero += 1) {
+      if (usati.indexOf('p' + numero) < 0) slot = 'p' + numero;
+    }
+    if (!slot) return;
+    const meta = preferitiMeta();
+    meta.extra = meta.extra.concat([{ slot: slot, etichetta: pulito }]);
+    meta.ordine = usati.concat(slot);
+    scriviPreferitiMeta(meta);
+    // Subito la ricerca: un preferito senza posto non serve a niente.
+    apriCercaPreferito(slot);
   }
 
   // Il menu mostra sempre lo stato vero: nessun preferito "fantasma" se il
@@ -3598,31 +3734,56 @@
     const riquadro = $('menu-preferiti');
     if (riquadro) {
       const validi = preferitiValidi();
-      riquadro.innerHTML = PREFERITI.map((voce) => {
+      const elenco = elencoPreferiti();
+      const righe = elenco.map((voce, indice) => {
         const scelto = validi.find((v) => v.slot === voce.slot);
         const acceso = scelto && avvisoAttivo(voce.slot);
-        // Con un posto impostato la riga porta lì; la matita cambia il posto.
-        // Prima la riga apriva sempre la ricerca, quindi «Casa» non poteva
-        // essere usata come destinazione dal menu.
+        if (preferitiModifica) {
+          return '<div class="menu-pref-riga modifica">' +
+            '<span class="menu-pref-nome">' + esc(voce.etichetta) + '</span>' +
+            '<span class="spazio"></span>' +
+            '<button type="button" class="menu-pref-icona" data-azione="pref-su" data-slot="' + esc(voce.slot) +
+            '" aria-label="Sposta su ' + esc(voce.etichetta) + '"' + (indice === 0 ? ' disabled' : '') + '>' +
+            Icone.svg('arrow-up', 18) + '</button>' +
+            '<button type="button" class="menu-pref-icona" data-azione="pref-giu" data-slot="' + esc(voce.slot) +
+            '" aria-label="Sposta giù ' + esc(voce.etichetta) + '"' + (indice === elenco.length - 1 ? ' disabled' : '') + '>' +
+            Icone.svg('arrow-down', 18) + '</button>' +
+            '<button type="button" class="menu-pref-icona" data-azione="pref-rinomina" data-slot="' + esc(voce.slot) +
+            '" aria-label="Rinomina ' + esc(voce.etichetta) + '">' + Icone.svg('pencil', 18) + '</button>' +
+            (scelto
+              ? '<button type="button" class="menu-pref-rimuovi" data-azione="pref-rimuovi" data-slot="' + esc(voce.slot) +
+                '" aria-label="Rimuovi ' + esc(voce.etichetta) + '">' + ICONA_X + '</button>'
+              : '') +
+            '</div>';
+        }
+        // Con un posto impostato la riga porta lì; il segnaposto cambia il posto.
         return '<div class="menu-pref-riga">' +
           '<button type="button" class="menu-pref" data-azione="' + (scelto ? 'pref-vai' : 'pref-scegli') +
-          '" data-slot="' + voce.slot + '">' +
+          '" data-slot="' + esc(voce.slot) + '">' +
           Icone.svg(voce.icona, 20) +
-          '<span class="spazio">' + voce.etichetta + '</span>' +
+          '<span class="spazio">' + esc(voce.etichetta) + '</span>' +
           '<span class="nota' + (scelto ? '' : ' vuoto') + '">' +
           esc(scelto ? nomeBreve(scelto.luogo.nome) : 'Imposta') + '</span>' +
           '</button>' +
           (scelto
-            ? '<button type="button" class="menu-pref-modifica" data-azione="pref-scegli" data-slot="' + voce.slot +
-              '" aria-label="Cambia ' + voce.etichetta + '">' + Icone.svg('pencil', 18) + '</button>' +
+            ? '<button type="button" class="menu-pref-modifica" data-azione="pref-scegli" data-slot="' + esc(voce.slot) +
+              '" aria-label="Cambia il posto di ' + esc(voce.etichetta) + '">' + Icone.svg('map-pin', 18) + '</button>' +
               '<button type="button" class="menu-pref-avviso' + (acceso ? ' acceso' : '') + '" data-azione="pref-avviso" data-slot="' +
-              voce.slot + '" aria-pressed="' + (acceso ? 'true' : 'false') + '" aria-label="Avvisa quando devo uscire per il bus da ' +
-              voce.etichetta + '">' + Icone.svg(acceso ? 'bell' : 'bell-off', 18) + '</button>' +
-              '<button type="button" class="menu-pref-rimuovi" data-azione="pref-rimuovi" data-slot="' + voce.slot +
-              '" aria-label="Rimuovi ' + voce.etichetta + '">' + ICONA_X + '</button>'
+              esc(voce.slot) + '" aria-pressed="' + (acceso ? 'true' : 'false') + '" aria-label="Avvisa quando devo uscire per il bus da ' +
+              esc(voce.etichetta) + '">' + Icone.svg(acceso ? 'bell' : 'bell-off', 18) + '</button>' +
+              '<button type="button" class="menu-pref-rimuovi" data-azione="pref-rimuovi" data-slot="' + esc(voce.slot) +
+              '" aria-label="Rimuovi ' + esc(voce.etichetta) + '">' + ICONA_X + '</button>'
             : '') +
           '</div>';
       }).join('');
+      riquadro.innerHTML = righe +
+        '<div class="menu-pref-azioni">' +
+        (elenco.length < PREFERITI_MAX
+          ? '<button type="button" class="link-mini" data-azione="pref-aggiungi">Aggiungi preferito</button>'
+          : '') +
+        '<button type="button" class="link-mini" data-azione="pref-modifica">' +
+        (preferitiModifica ? 'Fatto' : 'Modifica') + '</button>' +
+        '</div>';
     }
     if (vistaAttiva === 'percorso' && !(sel.partenza && sel.destinazione)) renderPercorso();
   }
@@ -3756,6 +3917,7 @@
   // notifica sola per fermata e per giorno, un quarto d'ora prima.
   const ULTIMA_SOGLIA = 15;
   const K_ULTIME = 'tperzc_ultime_v1';
+  const K_FERIALE = 'tperzc_feriale_v1';
 
   function ultimaCorsaDaFermata(fermata) {
     const indice = lineeIndice();
@@ -3814,12 +3976,354 @@
         fermata: fermata.id
       });
     });
-    return elenco;
+    return elenco.concat(promemoriaFeriale());
   }
 
   function sincronizzaPush() {
     if (!window.Push || !Push.attivo()) return;
     Push.sincronizza(promemoriaPush());
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Promemoria feriale
+   * ------------------------------------------------------------------ */
+  // «Ogni giorno feriale alle 7:35 dimmi quando passa il prossimo bus da
+  // Casa». Con l'app aperta parte la notifica locale; con il push attivo lo
+  // stesso promemoria viene datato sul Worker per i prossimi giorni feriali.
+  function ferialeSalvato() {
+    const salvato = leggiJSON(K_FERIALE);
+    return salvato && typeof salvato === 'object' ? salvato : {};
+  }
+
+  function ferialeConfig() {
+    const salvato = ferialeSalvato();
+    const validi = preferitiValidi();
+    const ora = /^\d{2}:\d{2}$/.test(String(salvato.ora || '')) ? String(salvato.ora) : '07:35';
+    const slot = validi.some((voce) => voce.slot === salvato.slot) ? salvato.slot : (validi[0] || {}).slot || '';
+    return { attivo: !!salvato.attivo && !!slot, ora: ora, slot: slot, ultimo: String(salvato.ultimo || '') };
+  }
+
+  function scriviFeriale(valori) {
+    const salvato = ferialeSalvato();
+    Object.keys(valori).forEach((chiave) => { salvato[chiave] = valori[chiave]; });
+    scrivi(K_FERIALE, JSON.stringify(salvato));
+  }
+
+  // Prima partenza dopo l'ora scelta, dal dataset del giorno: nessuna rete,
+  // così il promemoria funziona anche con il telefono in tasca e lo schermo
+  // spento da un pezzo (le notifiche locali partono dall'app aperta).
+  function prossimoBusDa(fermata, giorno, oraSecondi) {
+    if (!fermata || typeof TPERRouting === 'undefined' || !TPERRouting.partenzeFermata) return null;
+    let elenco = [];
+    try {
+      elenco = TPERRouting.partenzeFermata(fermata.id, dataDaGiornoEOra(giorno, '04:00')) || [];
+    } catch (errore) {
+      return null;
+    }
+    const dopo = elenco
+      .filter((voce) => voce.orario >= oraSecondi)
+      .sort((a, b) => a.orario - b.orario);
+    return dopo[0] || null;
+  }
+
+  function oraInSecondi(ora) {
+    const trovata = /^(\d{2}):(\d{2})$/.exec(String(ora || ''));
+    if (!trovata) return null;
+    return parseInt(trovata[1], 10) * 3600 + parseInt(trovata[2], 10) * 60;
+  }
+
+  function testoCorsaBus(bus, fermata, voce) {
+    if (!bus) return 'Apri l\'app per vedere il prossimo bus da ' + nomeBreve(fermata.nome);
+    return 'Linea ' + bus.linea + ' alle ' + hhmm(bus.orario) + ' da ' + nomeBreve(fermata.nome) +
+      ' · ' + voce.etichetta;
+  }
+
+  // I prossimi giorni feriali con l'orario del bus già dentro: il Worker non
+  // deve calcolare niente, gli basta spedire alla data giusta.
+  function promemoriaFeriale() {
+    const config = ferialeConfig();
+    if (!config.attivo) return [];
+    const voce = preferitiValidi().find((p) => p.slot === config.slot);
+    const fermata = voce ? fermataPerAvviso(voce.luogo) : null;
+    const secondi = oraInSecondi(config.ora);
+    if (!voce || !fermata || secondi == null) return [];
+    const elenco = [];
+    for (let scarto = 0; scarto <= 8 && elenco.length < 7; scarto += 1) {
+      const giorno = new Date();
+      giorno.setHours(12, 0, 0, 0);
+      giorno.setDate(giorno.getDate() + scarto);
+      const indice = (giorno.getDay() + 6) % 7; // 0 = lunedì
+      if (indice > 4) continue;
+      const iso = isoDi(giorno);
+      const quando = dataDaGiornoEOra(iso, config.ora).getTime();
+      if (quando <= Date.now()) continue;
+      const bus = prossimoBusDa(fermata, iso, secondi);
+      elenco.push({
+        id: 'feriale-' + iso,
+        quando: quando,
+        titolo: 'Prossimo bus da ' + voce.etichetta,
+        corpo: testoCorsaBus(bus, fermata, voce),
+        fermata: fermata.id
+      });
+    }
+    return elenco;
+  }
+
+  // Notifica locale all'ora scelta, dal lunedì al venerdì.
+  async function controllaFeriale() {
+    const config = ferialeConfig();
+    if (!config.attivo) return;
+    const adesso = new Date();
+    if ((adesso.getDay() + 6) % 7 > 4) return;
+    if (due(adesso.getHours()) + ':' + due(adesso.getMinutes()) !== config.ora) return;
+    const giorno = oggiISO();
+    if (config.ultimo === giorno) return;
+    const voce = preferitiValidi().find((p) => p.slot === config.slot);
+    const fermata = voce ? fermataPerAvviso(voce.luogo) : null;
+    const secondi = oraInSecondi(config.ora);
+    if (!voce || !fermata || secondi == null) return;
+    const bus = prossimoBusDa(fermata, giorno, secondi);
+    // Senza un bus (orari non ancora caricati, giorno senza servizio) non si
+    // segna niente: al minuto dopo si riprova, invece di perdere il promemoria.
+    if (!bus) return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    scriviFeriale({ ultimo: giorno });
+    await mostraNotifica(
+      'Prossimo bus da ' + voce.etichetta,
+      testoCorsaBus(bus, fermata, voce),
+      fermata.id,
+      'feriale'
+    );
+  }
+
+  function renderFeriale() {
+    const riga = $('menu-feriale');
+    if (!riga) return;
+    const config = ferialeConfig();
+    const validi = preferitiValidi();
+    riga.checked = config.attivo;
+    const campoOra = $('menu-feriale-ora');
+    if (campoOra) campoOra.value = config.ora;
+    const campoLuogo = $('menu-feriale-luogo');
+    if (campoLuogo) {
+      campoLuogo.innerHTML = validi.map((voce) =>
+        '<option value="' + esc(voce.slot) + '">' + esc(voce.etichetta) + '</option>'
+      ).join('');
+      if (config.slot) campoLuogo.value = config.slot;
+      campoLuogo.disabled = !validi.length;
+    }
+    const nota = $('menu-feriale-nota');
+    if (nota) {
+      const voce = vocePreferito(config.slot);
+      const nome = voce ? voce.etichetta : testoUI('casa', 'home');
+      nota.textContent = !validi.length
+        ? testoUI('Imposta prima un preferito: il promemoria parte da lì.',
+          'Set a favourite first: the reminder starts from there.')
+        : config.attivo
+          ? testoUI('Ogni giorno feriale alle ' + config.ora + ', dal lunedì al venerdì, il prossimo bus da ' + nome + '.',
+            'Every weekday at ' + config.ora + ', Monday to Friday, the next bus from ' + nome + '.')
+          : testoUI('Un promemoria al giorno, dal lunedì al venerdì, dal preferito scelto.',
+            'One reminder a day, Monday to Friday, from the chosen favourite.');
+    }
+  }
+
+  async function impostaFeriale(attivo) {
+    if (attivo) {
+      const permesso = await permessoNotifiche();
+      renderNotificheMenu();
+      // Il promemoria resta salvato anche senza permesso: le notifiche si
+      // possono attivare dopo, e con il push il Worker non dipende da questa
+      // schermata. Senza permesso, però, non arriva niente.
+      if (permesso !== 'granted') {
+        mostraToast(permesso === 'denied'
+          ? 'Notifiche bloccate: il promemoria resta salvato ma non arriva'
+          : 'Notifiche non attivate: il promemoria resta salvato ma non arriva');
+      }
+    }
+    scriviFeriale({ attivo: !!attivo });
+    renderFeriale();
+    avviaAvvisi();
+    sincronizzaPush();
+    mostraToast(attivo
+      ? testoUI('Promemoria feriale attivo', 'Weekday reminder on')
+      : testoUI('Promemoria feriale spento', 'Weekday reminder off'));
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Mappa offline della zona di casa
+   * ------------------------------------------------------------------ */
+  // I tasselli vettoriali della mappa sono l'unica parte che smette di
+  // funzionare senza rete. Restano in una cache dedicata: quello che si è già
+  // visto non si riscarica (meno dati) e la zona salvata si apre anche offline.
+  const CACHE_MAPPA = 'muovi-bologna-mappa';
+  const TASSELLI_MAX = 900;
+
+  function tasselliAttorno(lat, lon, raggio) {
+    const punti = [];
+    [12, 13, 14].forEach((z) => {
+      const scala = Math.pow(2, z);
+      const x0 = Math.floor((lon + 180) / 360 * scala);
+      const latRad = lat * Math.PI / 180;
+      const y0 = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * scala);
+      for (let dx = -raggio; dx <= raggio; dx += 1) {
+        for (let dy = -raggio; dy <= raggio; dy += 1) {
+          const x = ((x0 + dx) % scala + scala) % scala;
+          const y = y0 + dy;
+          if (y < 0 || y >= scala) continue;
+          punti.push([z, x, y]);
+        }
+      }
+    });
+    return punti;
+  }
+
+  // Lo stile dichiara dove stanno i tasselli: si leggono dal suo JSON invece di
+  // scrivere a mano un indirizzo che il fornitore può cambiare.
+  async function modelliMappa() {
+    const risposta = await fetch(stileMappa(), { cache: 'force-cache' });
+    if (!risposta.ok) throw new Error('stile non disponibile');
+    const stile = await risposta.json();
+    const modelli = [];
+    const fonti = stile.sources || {};
+    const nomi = Object.keys(fonti);
+    for (let i = 0; i < nomi.length; i += 1) {
+      const fonte = fonti[nomi[i]];
+      // Solo i vettoriali: le fonti raster (natural earth) esistono a pochi
+      // livelli di zoom e a 12–14 risponderebbero 404 per ogni tassello.
+      if (!fonte || fonte.type !== 'vector') continue;
+      let tilejson = fonte;
+      if (fonte.url) {
+        try {
+          const dettaglio = await fetch(fonte.url, { cache: 'force-cache' });
+          if (!dettaglio.ok) continue;
+          tilejson = await dettaglio.json();
+        } catch (errore) { continue; }
+      }
+      (tilejson.tiles || []).forEach((modello) => {
+        if (modelli.indexOf(modello) < 0) modelli.push(modello);
+      });
+    }
+    return { modelli: modelli, stile: stile };
+  }
+
+  function indirizzoTassello(modello, z, x, y) {
+    const indirizzo = String(modello)
+      .replace(/\{z\}/g, z).replace(/\{x\}/g, x).replace(/\{y\}/g, y);
+    // Segnaposto che non conosciamo ({ratio}, {quadkey}): meglio saltarlo che
+    // salvare in cache un 404.
+    return /[{}]/.test(indirizzo) ? null : indirizzo;
+  }
+
+  async function salvaMappaCasa() {
+    if (typeof caches === 'undefined') {
+      mostraToast('Questo browser non permette di salvare la mappa');
+      return;
+    }
+    const casa = preferitiValidi().find((voce) => voce.slot === 'casa');
+    const centro = casa && casa.luogo ? casa.luogo
+      : (mappa && mappa.getCenter ? { lat: mappa.getCenter().lat, lon: mappa.getCenter().lng } : null);
+    if (!centro) {
+      mostraToast('Imposta Casa o sposta la mappa sulla zona che ti serve');
+      return;
+    }
+    mostraToast('Salvo la mappa attorno a casa…');
+    let dati = null;
+    try {
+      dati = await modelliMappa();
+    } catch (errore) {
+      mostraToast('Mappa non raggiungibile: serve la rete per salvarla');
+      return;
+    }
+    const indirizzi = [];
+    const aggiungi = (indirizzo) => { if (indirizzo && indirizzi.indexOf(indirizzo) < 0) indirizzi.push(indirizzo); };
+    tasselliAttorno(centro.lat, centro.lon, 2).forEach((punto) => {
+      dati.modelli.forEach((modello) => aggiungi(indirizzoTassello(modello, punto[0], punto[1], punto[2])));
+    });
+    // Senza stile, sprite e caratteri la mappa salvata non si disegna.
+    aggiungi(stileMappa());
+    if (dati.stile.sprite) {
+      aggiungi(dati.stile.sprite + '.json');
+      aggiungi(dati.stile.sprite + '.png');
+    }
+    if (dati.stile.glyphs) {
+      const caratteri = [];
+      (dati.stile.layers || []).forEach((livello) => {
+        const font = livello && livello.layout && livello.layout['text-font'];
+        if (Array.isArray(font) && font.length) {
+          const nome = font.join(',');
+          if (caratteri.indexOf(nome) < 0) caratteri.push(nome);
+        }
+      });
+      caratteri.forEach((font) => {
+        ['0-255', '256-511'].forEach((intervallo) => {
+          aggiungi(String(dati.stile.glyphs)
+            .replace('{fontstack}', encodeURIComponent(font))
+            .replace('{range}', intervallo));
+        });
+      });
+    }
+    const cache = await caches.open(CACHE_MAPPA);
+    let salvati = 0;
+    for (let i = 0; i < indirizzi.length && salvati < TASSELLI_MAX; i += 1) {
+      const indirizzo = indirizzi[i];
+      if (await cache.match(indirizzo)) { salvati += 1; continue; }
+      try {
+        const risposta = await fetch(indirizzo, { cache: 'force-cache' });
+        if (risposta && (risposta.ok || risposta.type === 'opaque')) {
+          await cache.put(indirizzo, risposta);
+          salvati += 1;
+        }
+      } catch (errore) { /* un tassello mancante non ferma gli altri */ }
+    }
+    await potaMappa(cache);
+    await renderMappa();
+    mostraToast(salvati ? 'Zona di casa salvata: ' + salvati + ' file' : 'Niente da salvare: controlla la connessione');
+  }
+
+  async function potaMappa(cache) {
+    const chiavi = await cache.keys();
+    for (let i = 0; i < chiavi.length - TASSELLI_MAX; i += 1) await cache.delete(chiavi[i]);
+  }
+
+  async function statMappa() {
+    if (typeof caches === 'undefined') return { file: 0, byte: 0 };
+    const cache = await caches.open(CACHE_MAPPA);
+    const chiavi = await cache.keys();
+    // Il peso si misura su un campione: leggere 900 corpi a ogni apertura del
+    // menu bloccherebbe il telefono per niente.
+    const campione = chiavi.slice(0, 80);
+    let byte = 0;
+    for (let i = 0; i < campione.length; i += 1) {
+      const risposta = await cache.match(campione[i]);
+      if (!risposta) continue;
+      const lunghezza = Number(risposta.headers.get('content-length'));
+      if (lunghezza > 0) byte += lunghezza;
+      else {
+        try { byte += (await risposta.clone().blob()).size; } catch (errore) { /* nulla */ }
+      }
+    }
+    if (chiavi.length > campione.length && campione.length) byte = byte / campione.length * chiavi.length;
+    return { file: chiavi.length, byte: Math.round(byte) };
+  }
+
+  async function renderMappa() {
+    const nota = $('menu-mappa-nota');
+    if (!nota) return;
+    const stat = await statMappa();
+    const peso = stat.byte ? ' · ' + testoUI('circa ', 'about ') + (stat.byte / 1048576).toFixed(1) + ' MB' : '';
+    nota.textContent = stat.file
+      ? testoUI(stat.file + ' file della mappa sul telefono' + peso +
+        '. La zona salvata si apre anche senza rete.',
+        stat.file + ' map files on your phone' + peso +
+        '. The saved area opens even offline.')
+      : testoUI('I tasselli della mappa già visti restano sul telefono: non si riscaricano e la zona funziona senza rete.',
+        'Map tiles you have already seen stay on your phone: they are not downloaded again and that area works offline.');
+  }
+
+  async function svuotaMappa() {
+    if (typeof caches !== 'undefined') await caches.delete(CACHE_MAPPA);
+    await renderMappa();
+    mostraToast('Mappa salvata cancellata');
   }
 
   async function avvisaUltimaCorsa(voce, fermata, giorno) {
@@ -3841,12 +4345,14 @@
 
   function avviaAvvisi() {
     if (avvisiTimer) return;
-    avvisiTimer = setInterval(() => { controllaAvvisi(); }, AVVISO_INTERVALLO);
+    avvisiTimer = setInterval(() => { controllaAvvisi(); controllaFeriale(); }, AVVISO_INTERVALLO);
     controllaAvvisi();
+    controllaFeriale();
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
         controllaAvvisi();
         controllaAvvisoArrivo();
+        controllaFeriale();
       }
     });
   }
@@ -4083,7 +4589,7 @@
   }
 
   async function alternaAvviso(slot) {
-    const voce = PREFERITI.find((p) => p.slot === slot);
+    const voce = vocePreferito(slot);
     if (!voce) return;
     if (avvisoAttivo(slot)) {
       scriviAvviso(slot, false);
@@ -4118,7 +4624,7 @@
   }
 
   function apriCercaPreferito(slot) {
-    const voce = PREFERITI.find((p) => p.slot === slot);
+    const voce = vocePreferito(slot);
     if (!voce) return;
     chiudiMenu();
     preferitoInCorso = slot;
@@ -4153,8 +4659,29 @@
     if (azione === 'pref-rimuovi') {
       const slot = pulsante.getAttribute('data-slot');
       scriviAvviso(slot, false);
-      const voce = PREFERITI.find((p) => p.slot === slot);
+      const voce = vocePreferito(slot);
       if (salvaPreferito(slot, null)) mostraToast((voce ? voce.etichetta : 'Preferito') + ' rimosso');
+      return true;
+    }
+    if (azione === 'pref-rinomina') {
+      rinominaPreferito(pulsante.getAttribute('data-slot'));
+      return true;
+    }
+    if (azione === 'pref-su') {
+      spostaPreferito(pulsante.getAttribute('data-slot'), -1);
+      return true;
+    }
+    if (azione === 'pref-giu') {
+      spostaPreferito(pulsante.getAttribute('data-slot'), 1);
+      return true;
+    }
+    if (azione === 'pref-aggiungi') {
+      aggiungiPreferito();
+      return true;
+    }
+    if (azione === 'pref-modifica') {
+      preferitiModifica = !preferitiModifica;
+      renderPreferiti();
       return true;
     }
     if (azione === 'apri-preferiti') {
@@ -4177,7 +4704,7 @@
     preferitoInCorso = null;
     if (!salvaPreferito(slot, luogo)) return;
     chiudiOverlay();
-    const voce = PREFERITI.find((p) => p.slot === slot);
+    const voce = vocePreferito(slot);
     mostraToast((voce ? voce.etichetta : 'Preferito') + ' salvato');
   }
 
@@ -6819,7 +7346,12 @@
       // Il numero del bus non è una destinazione: resta nel dettaglio, mentre
       // in riga si mostra il capolinea o, se il GTFS non lo sa, uno stato
       // onesto invece di «Bus 5554».
-      const meta = arrivo.destinazione || '';
+      // Il capolinea per esteso non ci sta e non dice da che parte va il bus:
+      // in riga resta la direzione compatta, il nome intero nel dettaglio.
+      const direzione = (typeof Utilita !== 'undefined' && Utilita.direzioneCompatta)
+        ? Utilita.direzioneCompatta(arrivo.destinazione || '')
+        : (arrivo.destinazione || '');
+      const meta = direzione ? '→ ' + direzione : '';
       const segnala = urlSegnalazioneCorsa({ fermata: fermata, linea: arrivo.linea, ora: arrivo.ora, tipo: 'corsa' });
       const dettaglio = aperto
         ? '<div class="arrivo-dettaglio">' +
@@ -6839,10 +7371,12 @@
       // per l'avviso a due minuti, senza nascondere l'azione principale.
       return '<li class="arrivo-item"><div class="arrivo">' +
         '<button type="button" class="arrivo-principale" data-linea-arrivo="' + esc(arrivo.linea) +
-        '" aria-label="Apri la linea ' + esc(arrivo.linea) + '">' +
+        '" aria-label="Apri la linea ' + esc(arrivo.linea) +
+        (arrivo.destinazione ? ', direzione ' + esc(arrivo.destinazione) : '') + '">' +
         '<span class="arrivo-tempo">' + tempo + '</span>' +
         '<span class="badge-linea"' + colore + '>' + esc(arrivo.linea) + '</span>' +
-        '<span class="arrivo-meta">' + esc(meta) + '</span>' +
+        '<span class="arrivo-meta"' + (arrivo.destinazione ? ' title="' + esc(arrivo.destinazione) + '"' : '') + '>' +
+        esc(meta) + '</span>' +
         // Solo le corse reali hanno l'etichetta: quella programmata È la norma
         // e occupava lo spazio della destinazione.
         (arrivo.tipo === 'live' ? '<span class="tag-live">LIVE</span>' : '') +
@@ -7819,8 +8353,25 @@
   function apriMenu() {
     const drawer = $('drawer');
     if (!drawer) return;
+    // Un preferito aggiunto e poi abbandonato senza posto non deve restare
+    // nel menu come riga vuota.
+    if (!preferitoInCorso) {
+      const meta = preferitiMeta();
+      const salvati = preferitiSalvati();
+      const orfani = meta.extra.filter((voce) => !salvati[voce.slot]);
+      if (orfani.length) {
+        meta.extra = meta.extra.filter((voce) => !!salvati[voce.slot]);
+        const tenuti = meta.extra.map((voce) => voce.slot);
+        meta.ordine = meta.ordine.filter((slot) =>
+          slot === 'casa' || slot === 'lavoro' || tenuti.indexOf(slot) >= 0);
+        orfani.forEach((voce) => { delete meta.nomi[voce.slot]; });
+        scriviPreferitiMeta(meta);
+      }
+    }
     sincronizzaMenu();
     renderInfo();
+    renderFeriale();
+    renderMappa();
     const notaBackup = $('menu-esporta-nota');
     if (notaBackup) {
       const pacchetto = Utilita.esportaDati(window.localStorage);
@@ -8123,6 +8674,29 @@
     });
     $('menu-posizione').addEventListener('click', () => { chiudiMenu(); posizioneComePartenza(); });
     $('menu-notifiche').addEventListener('click', () => { attivaNotificheMenu(); });
+    // Promemoria feriale: ora e preferito si salvano appena cambiano.
+    const ferialeToggle = $('menu-feriale');
+    if (ferialeToggle) {
+      ferialeToggle.addEventListener('change', (evento) => { impostaFeriale(evento.target.checked); });
+    }
+    const ferialeOra = $('menu-feriale-ora');
+    if (ferialeOra) {
+      ferialeOra.addEventListener('change', () => {
+        scriviFeriale({ ora: /^\d{2}:\d{2}$/.test(ferialeOra.value) ? ferialeOra.value : '07:35' });
+        renderFeriale();
+        sincronizzaPush();
+      });
+    }
+    const ferialeLuogo = $('menu-feriale-luogo');
+    if (ferialeLuogo) {
+      ferialeLuogo.addEventListener('change', () => {
+        scriviFeriale({ slot: ferialeLuogo.value });
+        renderFeriale();
+        sincronizzaPush();
+      });
+    }
+    $('menu-mappa-salva').addEventListener('click', salvaMappaCasa);
+    $('menu-mappa-svuota').addEventListener('click', svuotaMappa);
     $('menu-esporta').addEventListener('click', scaricaBackup);
     $('menu-importa').addEventListener('change', (evento) => {
       const file = evento.target.files && evento.target.files[0];
@@ -8290,6 +8864,60 @@
       }
     });
     $('cerca-indietro').addEventListener('click', chiudiOverlay);
+    // ---- Ricerca a voce ----
+    // Web Speech API del browser: dove non c'è, il pulsante resta nascosto e
+    // non si chiede nessun permesso. L'audio lo elabora il servizio del
+    // browser, non l'app (dichiarato nella privacy policy).
+    const voceBtn = $('cerca-voce');
+    const Riconoscimento = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (voceBtn && Riconoscimento) {
+      voceBtn.hidden = false;
+      voceBtn.addEventListener('click', () => {
+        if (voceAscolto) {
+          try { voceAscolto.abort(); } catch (errore) { /* già fermo */ }
+          voceAscolto = null;
+          voceBtn.classList.remove('in-ascolto');
+          return;
+        }
+        let riconoscimento = null;
+        try {
+          riconoscimento = new Riconoscimento();
+        } catch (errore) {
+          mostraToast('Ricerca a voce non disponibile');
+          return;
+        }
+        riconoscimento.lang = document.documentElement.lang === 'en' ? 'en-US' : 'it-IT';
+        riconoscimento.interimResults = false;
+        riconoscimento.maxAlternatives = 1;
+        riconoscimento.onresult = (evento) => {
+          const voce = evento.results && evento.results[0] && evento.results[0][0];
+          const testo = voce ? String(voce.transcript || '').trim() : '';
+          if (!testo) return;
+          inputCerca.value = testo;
+          aggiornaPulisci();
+          apriSuggerimenti(campoAttivo || 'destinazione', testo);
+        };
+        riconoscimento.onerror = (evento) => {
+          if (evento.error === 'not-allowed' || evento.error === 'service-not-allowed') {
+            mostraToast('Microfono non consentito');
+          } else if (evento.error === 'no-speech') {
+            mostraToast('Non ho sentito niente: riprova');
+          }
+        };
+        riconoscimento.onend = () => {
+          voceAscolto = null;
+          voceBtn.classList.remove('in-ascolto');
+        };
+        voceAscolto = riconoscimento;
+        voceBtn.classList.add('in-ascolto');
+        try {
+          riconoscimento.start();
+        } catch (errore) {
+          voceAscolto = null;
+          voceBtn.classList.remove('in-ascolto');
+        }
+      });
+    }
     // Focus trap: con la ricerca aperta il Tab gira dentro l'overlay, non
     // finisce sulla mappa o sul pannello che stanno sotto.
     $('cerca').addEventListener('keydown', (evento) => {

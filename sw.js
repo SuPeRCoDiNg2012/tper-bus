@@ -3,8 +3,13 @@
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'muovi-bologna-static-v204';
-const CACHE_DATI = 'muovi-bologna-data-v204';
+const CACHE_STATICA = 'muovi-bologna-static-v205';
+const CACHE_DATI = 'muovi-bologna-data-v205';
+// Mappa: cache non versionata, così la zona salvata sopravvive agli aggiornamenti
+// dell'app. Non entra in pulisciCacheVecchie (che guarda solo i nomi -vN).
+const CACHE_MAPPA = 'muovi-bologna-mappa';
+const MAPPA_HOST = 'tiles.openfreemap.org';
+const MAPPA_MAX = 900;
 
 const ASSET_STATICI = [
   './',
@@ -102,7 +107,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((nomi) => Promise.all(
       nomi
-        .filter((n) => n !== CACHE_STATICA && n !== CACHE_DATI)
+        .filter((n) => n !== CACHE_STATICA && n !== CACHE_DATI && n !== CACHE_MAPPA)
         .map((n) => caches.delete(n))
     )).then(potaturaCache)
   );
@@ -145,10 +150,39 @@ self.addEventListener('push', (event) => {
   }));
 });
 
+// Potatura della cache mappa: si tengono i tasselli più recenti. Senza, la
+// mappa scaricata in mesi di uso poteva occupare centinaia di MB.
+function potaMappa(cache) {
+  return cache.keys().then((chiavi) => Promise.all(
+    chiavi.slice(0, Math.max(0, chiavi.length - MAPPA_MAX)).map((richiesta) => cache.delete(richiesta))
+  ));
+}
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
   if (event.request.method !== 'GET') return;
+
+  // Mappa vettoriale: cache-first. Quello che si è già visto non si riscarica
+  // (meno dati) e la zona salvata si apre anche senza rete.
+  if (url.hostname === MAPPA_HOST) {
+    event.respondWith(
+      caches.open(CACHE_MAPPA).then((cache) =>
+        cache.match(event.request).then((rispostaCache) => {
+          if (rispostaCache) return rispostaCache;
+          return fetch(event.request).then((rispostaRete) => {
+            if (rispostaRete && (rispostaRete.ok || rispostaRete.type === 'opaque')) {
+              const copia = rispostaRete.clone();
+              cache.put(event.request, copia).then(() => potaMappa(cache)).catch(() => {});
+            }
+            return rispostaRete;
+          }).catch(() => rispostaCache || Response.error());
+        })
+      )
+    );
+    return;
+  }
+
+  if (url.origin !== self.location.origin) return;
 
   const isDato = ASSET_DATI.some((p) => url.pathname.endsWith(p.replace('./', '/')));
 

@@ -57,6 +57,7 @@
     <tr><td><code>tperzc_camminata_v1</code></td><td>Minuti</td><td>Soglia oltre la quale non si cammina</td></tr>
     <tr><td><code>tperzc_linee_evitate_v1</code></td><td>Elenco di linee</td><td>Non proporre quelle linee nei percorsi</td></tr>
     <tr><td><code>tperzc_onboarding_visto_v1</code></td><td>Sì/no</td><td>Non ripetere l'invito iniziale</td></tr>
+    <tr><td><code>tperzc_feriale_v1</code></td><td>Ora, preferito e giorno dell'ultimo invio</td><td>Promemoria dal lunedì al venerdì</td></tr>
     <tr><td colspan="3"><b>Tratta e luoghi</b></td></tr>
     <tr><td><code>tperzc_tratta_v2</code></td><td>Fermate scelte e orario</td><td>Riaprire l'app sull'ultimo percorso</td></tr>
     <tr><td><code>tperzc_quando_v1</code></td><td>Adesso/partenza/arrivo</td><td>Ricordare il tipo di ricerca</td></tr>
@@ -69,7 +70,7 @@
     <tr><td colspan="3"><b>Dati tecnici</b></td></tr>
     <tr><td><code>tperzc_errori_v1</code></td><td>Ultimi errori dell'app</td><td>Diagnosi, visibile solo a te nel pannello «admin»</td></tr>
     <tr><td><code>tperzc_proxy</code>, <code>tperzc_relay</code></td><td>Indirizzo del relay</td><td>Solo se ne imposti uno tuo</td></tr>
-    <tr><td>Cache del service worker (<code>muovi-bologna-static-*</code>, <code>muovi-bologna-data-*</code>)</td><td>File dell'app e dati</td><td>Funzionare senza connessione</td></tr>
+    <tr><td>Cache del service worker (<code>muovi-bologna-static-*</code>, <code>muovi-bologna-data-*</code>, <code>muovi-bologna-mappa</code>)</td><td>File dell'app, dati e tasselli della mappa</td><td>Funzionare senza connessione</td></tr>
   </table>
 
   <h2>Risorse esterne</h2>
@@ -117,6 +118,7 @@
     <tr><td><code>tperzc_camminata_v1</code></td><td>Minutes</td><td>Threshold beyond which you don't walk</td></tr>
     <tr><td><code>tperzc_linee_evitate_v1</code></td><td>List of lines</td><td>Doesn't propose those lines in routes</td></tr>
     <tr><td><code>tperzc_onboarding_visto_v1</code></td><td>Yes/no</td><td>Doesn't repeat the initial prompt</td></tr>
+    <tr><td><code>tperzc_feriale_v1</code></td><td>Time, favourite and last-sent day</td><td>Weekday reminder</td></tr>
     <tr><td colspan="3"><b>Route and places</b></td></tr>
     <tr><td><code>tperzc_tratta_v2</code></td><td>Chosen stops and time</td><td>Reopens the app on the last route</td></tr>
     <tr><td><code>tperzc_quando_v1</code></td><td>Now/departure/arrival</td><td>Remembers the search type</td></tr>
@@ -129,7 +131,7 @@
     <tr><td colspan="3"><b>Technical data</b></td></tr>
     <tr><td><code>tperzc_errori_v1</code></td><td>Last app errors</td><td>Diagnosis, visible only to you in the "admin" panel</td></tr>
     <tr><td><code>tperzc_proxy</code>, <code>tperzc_relay</code></td><td>Relay address</td><td>Only if you set one yourself</td></tr>
-    <tr><td>Service worker cache (<code>muovi-bologna-static-*</code>, <code>muovi-bologna-data-*</code>)</td><td>App files and data</td><td>Working without a connection</td></tr>
+    <tr><td>Service worker cache (<code>muovi-bologna-static-*</code>, <code>muovi-bologna-data-*</code>, <code>muovi-bologna-mappa</code>)</td><td>App files, data and map tiles</td><td>Working without a connection</td></tr>
   </table>
 
   <h2>External resources</h2>

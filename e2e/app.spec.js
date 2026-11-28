@@ -170,6 +170,65 @@ test('il testo grande ingrandisce il pannello', async ({ page }) => {
   await expect.poll(altezzaRiga).toBeGreaterThan(altezzaPrima * 1.05);
 });
 
+// Preferiti già impostati: il salvataggio passa dalla ricerca, che ha i suoi
+// test; qui conta cosa fa il menu con quello che c'è.
+async function conPreferiti(page) {
+  await page.addInitScript(() => {
+    try {
+      // Solo alla prima visita: al ricaricamento i preferiti sono quelli che
+      // l'utente ha appena rinominato e spostato.
+      if (localStorage.getItem('tperzc_preferiti_v1')) return;
+      localStorage.setItem('tperzc_preferiti_v1', JSON.stringify({
+        casa: { id: '100', nome: 'Piazza Maggiore', indirizzo: '', lat: 44.4937, lon: 11.343, zona: '500', tipo: 'fermata', genere: 'fermata', categoria: '' },
+        lavoro: { id: '200', nome: 'Stazione Centrale', indirizzo: '', lat: 44.5055, lon: 11.3432, zona: '500', tipo: 'fermata', genere: 'fermata', categoria: '' },
+        _meta: { nomi: {}, ordine: ['lavoro', 'casa'], extra: [] }
+      }));
+    } catch (errore) { /* nulla */ }
+  });
+}
+
+test('un preferito si rinomina e si sposta', async ({ page }) => {
+  await senzaRete(page);
+  await conPreferiti(page);
+  await page.goto('/');
+  await chiudiOnboarding(page);
+  await page.locator('#btn-menu').click();
+  const righe = page.locator('#menu-preferiti .menu-pref-riga');
+  // L'ordine salvato è quello scelto: prima il lavoro.
+  await expect(righe.first()).toContainText('Lavoro');
+  await page.locator('[data-azione="pref-modifica"]').click();
+  page.once('dialog', (finestra) => finestra.accept('Ufficio'));
+  await page.locator('[data-azione="pref-rinomina"]').first().click();
+  await expect(righe.first()).toContainText('Ufficio');
+  await page.locator('[data-azione="pref-giu"]').first().click();
+  await expect(righe.first()).toContainText('Casa');
+  // La scelta resta dopo il ricaricamento, perché sta su localStorage.
+  await page.reload();
+  await chiudiOnboarding(page);
+  await page.locator('#btn-menu').click();
+  await expect(page.locator('#menu-preferiti .menu-pref-riga').first()).toContainText('Casa');
+  await expect(page.locator('#menu-preferiti')).toContainText('Ufficio');
+});
+
+test('il promemoria feriale ricorda ora e preferito', async ({ page }) => {
+  await senzaRete(page);
+  await conPreferiti(page);
+  await page.goto('/');
+  await chiudiOnboarding(page);
+  await page.locator('#btn-menu').click();
+  await page.locator('label[for="menu-feriale"]').click();
+  await expect(page.locator('#menu-feriale')).toBeChecked();
+  await page.locator('#menu-feriale-ora').fill('07:40');
+  await page.locator('#menu-feriale-ora').dispatchEvent('change');
+  await page.locator('#menu-feriale-luogo').selectOption('lavoro');
+  await expect(page.locator('#menu-feriale-nota')).toContainText('07:40');
+  await expect(page.locator('#menu-feriale-nota')).toContainText('Lavoro');
+  const salvato = await page.evaluate(() => JSON.parse(localStorage.getItem('tperzc_feriale_v1')));
+  expect(salvato.attivo).toBe(true);
+  expect(salvato.ora).toBe('07:40');
+  expect(salvato.slot).toBe('lavoro');
+});
+
 test('con la lingua inglese il menu è tradotto', async ({ page }) => {
   await senzaRete(page, { inglese: true });
   await page.addInitScript(() => {

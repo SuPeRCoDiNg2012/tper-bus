@@ -143,6 +143,18 @@
     'Questo browser non supporta le notifiche': 'This browser does not support notifications',
     'Notifiche non attivate': 'Notifications not enabled',
 
+    // --- Promemoria feriale, mappa offline, preferiti ---
+    'Promemoria feriale': 'Weekday reminder',
+    'Ogni giorno feriale': 'Every weekday',
+    'Mappa offline': 'Offline map',
+    'Salva la zona di casa': 'Save the area around home',
+    'Svuota la mappa salvata': 'Clear the saved map',
+    'Aggiungi preferito': 'Add a favourite',
+    'Modifica': 'Edit',
+    'Fatto': 'Done',
+    'Imposta': 'Set',
+    'Cerca a voce': 'Search by voice',
+
     // --- Pagine legali (link nel menu) ---
     'Informativa privacy': 'Privacy policy',
     'Termini': 'Terms',
