@@ -243,6 +243,9 @@
   let lineeInCaricamento = false;
 
   const live = { items: [], ts: 0, stato: 'idle', caricamento: false, errore: null, stopId: null, avviso: '', fermata: null, aperto: -1, avvisa: null };
+  // Puntini dei bus sulla mappa mentre si guarda una fermata: posizione
+  // stimata dall'orario o dal tempo reale, mai un GPS che non abbiamo.
+  const busMappa = { marker: [], token: 0, fermata: null, ultimi: [], inquadrata: null };
 
   const $ = (id) => document.getElementById(id);
   // Set unico di icone: Lucide inline, nessuna CDN e nessun font esterno.
@@ -5902,6 +5905,7 @@
     live.avviso = '';
     live.aperto = -1;
     live.avvisa = null;
+    pulisciBusMappa();
     // Gli orari programmati arrivano dal GTFS: se non sono ancora in memoria
     // si caricano adesso e la vista si ridisegna da sola.
     if (typeof TPERRouting !== 'undefined' && TPERRouting.carica &&
@@ -8046,8 +8050,10 @@
         html += arriviHTML() || '<div class="box">Nessun passaggio.</div>';
       }
     }
+    if (fermata) html += '<p class="bus-mappa-nota" id="bus-mappa-nota" hidden></p>';
     box.innerHTML = html;
     aggiornaScrim();
+    if (vistaAttiva === 'orari') aggiornaBusMappa(fermata);
   }
 
   function avviaTimerLive() {
@@ -8058,6 +8064,170 @@
   }
   function fermaTimerLive() {
     if (timerLive) { clearInterval(timerLive); timerLive = null; }
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Posizione dei bus sulla mappa (stimata)
+   * ------------------------------------------------------------------ */
+  // HelloBus dice quando passa il bus, non dove sia: la posizione si ricava
+  // dall'orario della corsa lungo il suo tracciato. Se l'arrivo è live si
+  // tiene conto dell'anticipo o del ritardo dichiarato, altrimenti si assume
+  // che il bus sia in orario. In entrambi i casi è una stima, e la scheda lo
+  // scrive invece di far credere a un GPS.
+  function rimuoviMarkerBus() {
+    busMappa.marker.forEach((m) => { try { m.remove(); } catch (errore) { /* già via */ } });
+    busMappa.marker = [];
+  }
+
+  function pulisciBusMappa() {
+    busMappa.token += 1;
+    rimuoviMarkerBus();
+    busMappa.ultimi = [];
+    busMappa.fermata = null;
+    busMappa.inquadrata = null;
+    const nota = $('bus-mappa-nota');
+    if (nota) nota.hidden = true;
+  }
+
+  // 13 e 13A sono la stessa corsa: una lettera di troppo non deve far fallire
+  // l'incontro tra HelloBus e GTFS.
+  function lineaBase(nome) {
+    return String(nome == null ? '' : nome).toUpperCase().replace(/[A-Z]$/, '');
+  }
+
+  function scartoSecondi(a, b) {
+    let d = a - b;
+    if (d > 43200) d -= 86400;
+    if (d < -43200) d += 86400;
+    return Math.abs(d);
+  }
+
+  // La partenza GTFS della stessa linea più vicina all'ora indicata da
+  // HelloBus. Un arrivo live arriva già con l'ora prevista, quindi lo scarto
+  // con l'orario programmato è il ritardo: si accetta fino a venti minuti,
+  // oltre i quali è più probabile che sia un'altra corsa.
+  function partenzaPerArrivo(partenze, arrivo, adessoSec) {
+    if (!arrivo || arrivo.minuti == null) return null;
+    const target = adessoSec + arrivo.minuti * 60;
+    const base = lineaBase(arrivo.linea);
+    let migliore = null;
+    partenze.forEach((partenza) => {
+      if (lineaBase(partenza.linea) !== base) return;
+      const scarto = scartoSecondi(partenza.orario, target);
+      const capolinea = !!(arrivo.destinazione && partenza.capolinea &&
+        String(partenza.capolinea).toUpperCase() === String(arrivo.destinazione).toUpperCase());
+      if (!migliore || scarto < migliore.scarto - 60 ||
+          (Math.abs(scarto - migliore.scarto) <= 60 && capolinea && !migliore.capolinea)) {
+        migliore = { partenza: partenza, scarto: scarto, capolinea: capolinea };
+      }
+    });
+    return migliore && migliore.scarto <= 20 * 60 ? migliore.partenza : null;
+  }
+
+  function posizioneStimata(partenza, arrivo, adessoSec) {
+    const traccia = partenza && partenza.tragitto;
+    if (!traccia || traccia.forma == null || traccia.forma < 0) return null;
+    if (typeof Posizioni === 'undefined' ||
+        typeof TPERRouting === 'undefined' || typeof TPERRouting.formaDettaglio !== 'function') return null;
+    const geometria = TPERRouting.formaDettaglio(traccia.forma);
+    if (!geometria) return null;
+    // Con il live l'orologio del bus è l'orario programmato meno i minuti che
+    // HelloBus dichiara; senza live si assume che rispetti l'orario.
+    const istante = arrivo.tipo === 'live'
+      ? partenza.orario - Math.round(arrivo.minuti * 60)
+      : adessoSec;
+    const punto = Posizioni.stimaPosizione({
+      punti: geometria.punti,
+      posizioni: geometria.posizioni,
+      fermate: traccia.fermate,
+      orari: traccia.orari,
+      istante: istante
+    });
+    return punto ? { punto: punto, live: arrivo.tipo === 'live' } : null;
+  }
+
+  function aggiornaNotaBus(trovati) {
+    const nota = $('bus-mappa-nota');
+    if (!nota) return;
+    if (!trovati.length) { nota.hidden = true; return; }
+    const live = [];
+    const stima = [];
+    trovati.forEach((voce) => {
+      const elenco = voce.live ? live : stima;
+      if (elenco.indexOf(voce.arrivo.linea) < 0) elenco.push(voce.arrivo.linea);
+    });
+    const parti = [];
+    if (live.length) parti.push('bus ' + live.join(', ') + ' in tempo reale');
+    if (stima.length) {
+      parti.push('bus ' + stima.join(', ') + (stima.length === 1 ? ' stimato' : ' stimati') + ' dall\'orario');
+    }
+    nota.textContent = 'Posizione sulla mappa: ' + parti.join('; ') + '.';
+    nota.hidden = false;
+  }
+
+  async function aggiornaBusMappa(fermata) {
+    if (!fermata || vistaAttiva !== 'orari' || !mappa || eIndirizzo(fermata) ||
+        routing.giorno !== oggiISO() || typeof Posizioni === 'undefined' ||
+        typeof TPERRouting === 'undefined' || !TPERRouting.partenzeFermata ||
+        !TPERRouting.formaDettaglio) {
+      pulisciBusMappa();
+      return;
+    }
+    const token = (busMappa.token += 1);
+    // Gli orari stanno ancora arrivando: si riproverà al loro caricamento.
+    if (!TPERRouting.disponibile()) return;
+    try {
+      await TPERRouting.caricaTracciati(URL_TRACC_GZ, URL_TRACC);
+    } catch (errore) {
+      return;   // senza tracciato non c'è una posizione da mostrare
+    }
+    const corrente = fermataLive();
+    if (token !== busMappa.token || vistaAttiva !== 'orari' ||
+        !corrente || corrente.id !== fermata.id) return;
+    const arrivi = arriviUniti(fermata)
+      .filter((arrivo) => arrivo && arrivo.minuti != null && arrivo.minuti >= 1 && arrivo.minuti <= 30)
+      .slice(0, 8);
+    const partenze = TPERRouting.partenzeFermata(fermata.id, dataDaGiornoEOra(routing.giorno, '12:00'))
+      .filter((partenza) => partenza.tipo !== 1 && partenza.tipo !== 2);
+    const adesso = new Date();
+    const adessoSec = adesso.getHours() * 3600 + adesso.getMinutes() * 60 + adesso.getSeconds();
+    const trovati = [];
+    const visti = new Set();
+    arrivi.forEach((arrivo) => {
+      const partenza = partenzaPerArrivo(partenze, arrivo, adessoSec);
+      if (!partenza) return;
+      const esito = posizioneStimata(partenza, arrivo, adessoSec);
+      if (!esito) return;
+      const chiave = Math.round(esito.punto.lat * 1e4) + '|' + Math.round(esito.punto.lon * 1e4);
+      if (visti.has(chiave)) return;
+      visti.add(chiave);
+      trovati.push({ arrivo: arrivo, punto: esito.punto, live: esito.live });
+    });
+    rimuoviMarkerBus();
+    busMappa.ultimi = trovati;
+    busMappa.fermata = fermata.id;
+    trovati.forEach((voce) => {
+      const elemento = document.createElement('div');
+      elemento.className = 'bus-mappa' + (voce.live ? '' : ' stimato');
+      elemento.setAttribute('aria-hidden', 'true');
+      elemento.textContent = voce.arrivo.linea;
+      busMappa.marker.push(new maplibregl.Marker({ element: elemento, anchor: 'center' })
+        .setLngLat([voce.punto.lon, voce.punto.lat]).addTo(mappa));
+    });
+    aggiornaNotaBus(trovati);
+    // La prima volta per questa fermata la mappa si allarga sui bus; dopo, chi
+    // l'ha spostata non se la vede riportare indietro a ogni aggiornamento.
+    if (trovati.length && busMappa.inquadrata !== fermata.id) {
+      busMappa.inquadrata = fermata.id;
+      const limiti = new maplibregl.LngLatBounds();
+      trovati.forEach((voce) => limiti.extend([voce.punto.lon, voce.punto.lat]));
+      if (fermata.lat != null && fermata.lon != null) limiti.extend([fermata.lon, fermata.lat]);
+      mappa.fitBounds(limiti, {
+        padding: { top: 90, left: 50, right: 50, bottom: Math.round(window.innerHeight * 0.5) },
+        maxZoom: 15,
+        duration: durataMovimento(600)
+      });
+    }
   }
 
   /* ------------------------------------------------------------------ *
@@ -8292,6 +8462,7 @@
     if (corpo) corpo.scrollTop = 0;
     if (nome === 'linea') renderLinea();
     else pulisciLineaMappa();
+    if (nome !== 'orari') pulisciBusMappa();
     // Uscendo dalla linea la direzione non serve più: senza questo, gli orari
     // aperti dalla home erediterrebbero il parametro `linea` e un ritorno
     // sbagliato alla vista linea.

@@ -559,7 +559,10 @@
         orario: corsa.orari[posizione],
         capolinea: oggetto ? ultima.nome : (ultima || ''),
         capolineaId: oggetto ? ultima.id : (ultima || null),
-        forma: corsa.forma
+        forma: corsa.forma,
+        // La corsa intera serve a stimare dove si trova il bus: fermate,
+        // orari e forma vengono dalla stessa rete già costruita per il giorno.
+        tragitto: corsa
       });
     }
     elenco.sort((a, b) => a.orario - b.orario || String(a.linea).localeCompare(String(b.linea)));
@@ -874,6 +877,17 @@
     return punti && punti.length > 1 ? punti.map((punto) => [punto[1], punto[0]]) : null;
   }
 
+  /** Tracciato decodificato e tabella fermata→vertice di una forma. */
+  function formaDettaglio(indiceForma) {
+    if (!tracciati || indiceForma == null || indiceForma < 0) return null;
+    const punti = forma(indiceForma);
+    if (!punti || punti.length < 2) return null;
+    return {
+      punti: punti,
+      posizioni: tracciati.posizioni ? tracciati.posizioni[indiceForma] : null
+    };
+  }
+
   const API = {
     carica: carica,
     // Dati grezzi e servizi del giorno: servono all'indice delle linee (linee.js)
@@ -881,6 +895,7 @@
     orari: function () { return dati; },
     serviziDelGiorno: function (chiave) { return Array.from(serviziAttivi(chiave)); },
     formaCorsa: formaCorsa,
+    formaDettaglio: formaDettaglio,
     impostaCammini: impostaCammini,
     caricaTracciati: caricaTracciati,
     tratta: tratta,

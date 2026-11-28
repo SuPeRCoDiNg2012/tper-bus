@@ -3,8 +3,8 @@
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'muovi-bologna-static-v218';
-const CACHE_DATI = 'muovi-bologna-data-v218';
+const CACHE_STATICA = 'muovi-bologna-static-v219';
+const CACHE_DATI = 'muovi-bologna-data-v219';
 // Mappa: cache non versionata, così la zona salvata sopravvive agli aggiornamenti
 // dell'app. Non entra in pulisciCacheVecchie (che guarda solo i nomi -vN).
 const CACHE_MAPPA = 'muovi-bologna-mappa';
@@ -17,7 +17,8 @@ const ASSET_STATICI = [
   './app.min.js',
   './utilita.js',
   './routing.js',
-  './intelligenza.js',
+  './posizioni.js',
+  './intelligenza.js'
   './linee.js',
   './icone.js',
   './push.js',
@@ -214,7 +215,8 @@ self.addEventListener('fetch', (event) => {
   // Tutti i moduli dell'app vanno in network-first: se uno solo restasse
   // cache-first, un aggiornamento darebbe app.js nuovo con icone.js vecchio.
   const isApp = url.pathname.endsWith('/') || url.pathname.endsWith('/index.html') ||
-    url.pathname.endsWith('/app.js') || url.pathname.endsWith('/app.min.js') || url.pathname.endsWith('/routing.js') ||
+          url.pathname.endsWith('/app.js') || url.pathname.endsWith('/app.min.js') || url.pathname.endsWith('/routing.js') ||
+      url.pathname.endsWith('/posizioni.js') ||
     url.pathname.endsWith('/utilita.js') || url.pathname.endsWith('/vista-percorso.js') ||
     url.pathname.endsWith('/icone.js') || url.pathname.endsWith('/push.js') ||
     url.pathname.endsWith('/lingua.js') || url.pathname.endsWith('/tariffe.js') ||
