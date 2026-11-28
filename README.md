@@ -318,6 +318,16 @@ node --test tests
 
 I test non richiedono browser né rete: usano i file in `data/` e un `fetch` simulato per il motore. Vanno eseguiti dopo ogni modifica a `routing.js`, `tariffe.js`, `piedi.js`, `icone.js`, `vista-percorso.js`, agli script di preprocessing o ai dati.
 
+## Changelog della pagina
+
+`changelog.html` non si scrive a mano: si rigenera dai commit del repository, un giorno per sezione e una voce per commit con la sigla che porta a GitHub.
+
+```bash
+npm run changelog      # oppure: node scripts/genera-changelog.js
+```
+
+Lo script legge `git log` dalla cartella del progetto, quindi va lanciato dove c'è la storia git (non in un archivio scaricato senza `.git`). I messaggi troppo telegrafici si riscrivono nella mappa `sostituzioni` in testa a `scripts/genera-changelog.js`: chiave = oggetto esatto del commit, valore = testo mostrato; i commit non elencati compaiono con il loro oggetto originale. Se una chiave non corrisponde più a nessun commit lo script lo segnala senza fermarsi. Dopo la rigenerazione conviene `npm run bump` per la cache del service worker.
+
 ## Limiti noti
 
 - Il dataset bus è reale e completo (9.603 fermate), ma alcune fermate compaiono due volte con lo stesso nome: sono i due "pali" della stessa fermata, uno per ciascun senso di marcia. È normale: selezionando l'uno o l'altro il risultato del calcolo non cambia.

@@ -4,7 +4,9 @@ Tutte le modifiche importanti dell'app. Formato basato su [Keep a Changelog](htt
 
 ## [Non pubblicato]
 
-- **Changelog nell'app**: la voce **Changelog** nel menu apre `changelog.html`, con tutte le modifiche dall'inizio raggruppate per giorno: 109 commit, ognuno con la sua sigla che porta al commit su GitHub. Le voci sono i messaggi dei commit, non un riassunto riscritto dopo. La pagina sta in cache come le pagine legali, quindi si legge anche senza rete.
+- **Changelog nell'app**: la voce **Changelog** nel menu apre `changelog.html`, con tutte le modifiche dall'inizio raggruppate per giorno: 110 commit, ognuno con la sua sigla che porta al commit su GitHub. Le voci sono i messaggi dei commit, non un riassunto riscritto dopo. La pagina sta in cache come le pagine legali, quindi si legge anche senza rete.
+
+- **Changelog rigenerabile**: `npm run changelog` (`scripts/genera-changelog.js`) ricostruisce `changelog.html` da `git log`, con le stesse sostituzioni per i messaggi telegrafici (per esempio `v3` o i commit di sola documentazione), così la pagina non resta indietro rispetto al repository.
 
 - **Un tasto «Impostazioni» nel menu**: nel menu a panino restano solo le cose che servono a un viaggio (la mia posizione, il percorso aperto, i viaggi salvati, i preferiti) più un tasto **Impostazioni** che apre una schermata a sé. Lì dentro sono finite tutte le altre voci: notifiche con la nota iPhone, push, promemoria feriale, abbonamento urbano, linee, zone, testo grande, tema, lingua, mappa offline, backup, aggiornamento, installazione, segnalazione e fonti dati. «Schermo acceso» non è più un pulsante da ripremere in ogni fermata: è una preferenza che accende il Wake Lock ogni volta che si guardano gli orari; «Segnala un errore» è una voce sola, con la fermata aperta se c'è già nel corpo della issue.
 
