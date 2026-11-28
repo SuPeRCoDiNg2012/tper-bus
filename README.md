@@ -328,6 +328,10 @@ npm run changelog      # oppure: node scripts/genera-changelog.js
 
 Lo script legge `git log` dalla cartella del progetto, quindi va lanciato dove c'è la storia git (non in un archivio scaricato senza `.git`). I messaggi troppo telegrafici si riscrivono nella mappa `sostituzioni` in testa a `scripts/genera-changelog.js`: chiave = oggetto esatto del commit, valore = testo mostrato; i commit non elencati compaiono con il loro oggetto originale. Se una chiave non corrisponde più a nessun commit lo script lo segnala senza fermarsi. Dopo la rigenerazione conviene `npm run bump` per la cache del service worker.
 
+### `app.min.js`
+
+`npm run minifica` (`scripts/minifica.js`, terser, nessun bundler) rigenera `app.min.js` da `app.js`: è il file che `index.html` carica e che il service worker mette in precache. Misurato il 28/11/2026: `app.js` 413.881 → **177.883 byte** (−57%), 113.711 → **57.791 gzip** (−49%). Il file generato si committa (in produzione non c'è una build) e va rilanciato dopo ogni modifica ad `app.js`; se resta indietro `tests/minificato.test.js` fallisce, perché il file porta in testa l'impronta del sorgente.
+
 ## Limiti noti
 
 - Il dataset bus è reale e completo (9.603 fermate), ma alcune fermate compaiono due volte con lo stesso nome: sono i due "pali" della stessa fermata, uno per ciascun senso di marcia. È normale: selezionando l'uno o l'altro il risultato del calcolo non cambia.

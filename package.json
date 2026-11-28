@@ -7,11 +7,13 @@
     "bump": "node scripts/bump-cache.js",
     "dati": "node scripts/aggiorna-dati.js",
     "changelog": "node scripts/genera-changelog.js",
+    "minifica": "node scripts/minifica.js",
     "test": "node --test tests",
     "e2e": "playwright test",
     "e2e:install": "playwright install chromium"
   },
   "devDependencies": {
-    "@playwright/test": "^1.65.1"
+    "@playwright/test": "^1.65.1",
+    "terser": "^5.51.4"
   }
 }

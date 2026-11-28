@@ -92,6 +92,19 @@
   let lineePerFermata = {};
   let coloriLinee = {};
   let aggiornato = null;
+  // Oltre tre giorni senza aggiornamento il dato non è più affidabile per gli
+  // orari: si dice quanti giorni sono passati invece di far finta di niente.
+  const GIORNI_DATI_VECCHI = 3;
+
+  function giorniDa(iso) {
+    const parti = String(iso || '').split('-').map(Number);
+    if (parti.length !== 3 || !parti[0] || !parti[1] || !parti[2]) return null;
+    const quando = Date.UTC(parti[0], parti[1] - 1, parti[2]);
+    const oggi = new Date();
+    const adesso = Date.UTC(oggi.getFullYear(), oggi.getMonth(), oggi.getDate());
+    return Math.round((adesso - quando) / 86400000);
+  }
+
   const sel = { partenza: null, destinazione: null };
   // Riconoscimento vocale in corso: chiudere la ricerca deve fermare il microfono.
   let voceAscolto = null;
@@ -5531,7 +5544,12 @@
     const piede = $('drawer-aggiornato');
     if (piede) {
       const [anno, mese, giorno] = String(aggiornato || '').split('-');
-      piede.textContent = anno ? 'Dati aggiornati al ' + giorno + '/' + mese + '/' + anno : 'Dati locali';
+      const passati = giorniDa(aggiornato);
+      const vecchi = passati != null && passati > GIORNI_DATI_VECCHI;
+      piede.textContent = (anno ? 'Dati aggiornati al ' + giorno + '/' + mese + '/' + anno : 'Dati locali') +
+        (vecchi ? ' · non aggiornati da ' + passati + ' giorni' : '') +
+        ' · app non ufficiale';
+      piede.classList.toggle('dati-vecchi', !!vecchi);
     }
     aggiornaVisibilitaFermate();
   }
@@ -8382,7 +8400,7 @@
       '<a href="cookie.html">Cookie</a> · ' +
       '<a href="note-legali.html">Note legali</a></p>' +
       '<p><button type="button" class="link-mini" data-azione="cancella-dati">Cancella tutti i dati</button></p></div>' +
-      '<p><b>App non ufficiale</b>, non affiliata a TPER. Orari e prezzi possono essere imprecisi: verifica sempre su <a href="https://www.tper.it" target="_blank" rel="noopener">tper.it</a>.</p>';
+      '<p><b>App non ufficiale</b>: non è realizzata, approvata né supportata da TPER, e non è l\'app del servizio pubblico. Orari e prezzi possono essere imprecisi: per decisioni importanti verifica sempre su <a href="https://www.tper.it" target="_blank" rel="noopener">tper.it</a>.</p>';
   }
 
   // "Cancella tutti i dati": preferenze, cache e service worker. Sul server non
