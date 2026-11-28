@@ -7,11 +7,38 @@
 <meta name="theme-color" content="#C1121F">
 <meta name="robots" content="index,follow">
 <link rel="stylesheet" href="legale.css">
+<style>
+  .en { display: none; }
+  html[data-lang="en"] .it { display: none; }
+  html[data-lang="en"] .en { display: block; }
+  .lang-switch { margin-left: auto; font-size: .85rem; }
+  .lang-switch a { margin-left: .5rem; }
+</style>
+<script>
+(function(){
+  var K='tperzc_lingua_v1';
+  function lingua(){ try { var v=localStorage.getItem(K); if(v==='en'||v==='it') return v; } catch(e){} return /^en\b/i.test(navigator.language||'')?'en':'it'; }
+  var L=lingua();
+  document.documentElement.setAttribute('data-lang', L);
+  document.documentElement.lang = L==='en'?'en':'it';
+  var titoli={it:'Note legali — Muovi Bologna', en:'Legal notes — Muovi Bologna'};
+  if(titoli[L]) document.title=titoli[L];
+  document.addEventListener('click', function(e){
+    var a=e.target.closest('[data-lang-switch]');
+    if(!a) return;
+    e.preventDefault();
+    try { localStorage.setItem(K, a.getAttribute('data-lang-switch')); } catch(err){}
+    location.reload();
+  });
+})();
+</script>
 </head>
 <body>
+<div class="it">
 <header>
   <a href="./">&larr; Torna all'app</a>
   <h1>Note legali</h1>
+  <span class="lang-switch"><a href="#" data-lang-switch="en">English</a></span>
 </header>
 <main>
   <h2>App non ufficiale</h2>
@@ -56,5 +83,57 @@
     <span class="aggiornata">Ultimo aggiornamento: 26 novembre 2026</span>
   </footer>
 </main>
+</div>
+
+<div class="en">
+<header>
+  <a href="./">&larr; Back to app</a>
+  <h1>Legal notes</h1>
+  <span class="lang-switch"><a href="#" data-lang-switch="it">Italiano</a></span>
+</header>
+<main>
+  <h2>Unofficial app</h2>
+  <p>Muovi Bologna is an independent, free project. <b>It is not an official TPER app</b> and is not affiliated with, approved or sponsored by TPER, Trenitalia Tper, the Emilia-Romagna Region or other public transport operators. It does not sell tickets, manage passes or provide assistance on the operators' behalf.</p>
+
+  <h2>Trademarks</h2>
+  <p>"TPER", "Tper", "Trenitalia", the line names, the logos and the other distinctive signs cited in the app belong to their respective owners. They are used only descriptively, to indicate the service whose times the app shows, without intent to confuse or to exploit the mark.</p>
+
+  <h2>Data sources and licences</h2>
+  <p>The data is not invented: it comes from the public sources listed below. They remain the property of their respective owners, with their licences; errors introduced by the conversion are ours.</p>
+  <table>
+    <tr><th>Data</th><th>Source</th><th>Licence / conditions</th></tr>
+    <tr><td>Stops, fare zones, lines</td><td>TPER open data / Emilia-Romagna Region</td><td>CC BY 3.0 IT</td></tr>
+    <tr><td>Bus times</td><td>TPER GTFS</td><td>Source licence</td></tr>
+    <tr><td>Train times</td><td>Trenitalia GTFS, conversion <code>deryclem/trenitalia-gtfs</code></td><td>CC BY 4.0</td></tr>
+    <tr><td>Live arrivals</td><td>HelloBus (TPER)</td><td>Public service, used via relay</td></tr>
+    <tr><td>Cartography</td><td>OpenStreetMap via OpenFreeMap</td><td>ODbL — © OpenStreetMap contributors</td></tr>
+    <tr><td>Addresses and place search</td><td>Nominatim (OpenStreetMap)</td><td>ODbL, Nominatim usage policy</td></tr>
+    <tr><td>Walking routes</td><td>OSRM (OpenStreetMap Deutschland)</td><td>ODbL, OSRM usage policy</td></tr>
+    <tr><td>Weather</td><td>Open-Meteo</td><td>CC BY 4.0</td></tr>
+    <tr><td>Map library</td><td>MapLibre GL JS, from unpkg CDN</td><td>BSD 3-Clause</td></tr>
+  </table>
+  <p>Prices and zones are estimates calculated from stop data: they do not replace the official TPER calculator.</p>
+
+  <h2>Code</h2>
+  <p>The app's code is published on GitHub: <a href="https://github.com/SuPeRCoDiNg2012/tper-bus" target="_blank" rel="noopener">github.com/SuPeRCoDiNg2012/tper-bus</a>. The conditions of use of the code are those of the repository.</p>
+
+  <h2>Accessibility</h2>
+  <p>The app aims at the essential requirements of the WCAG 2.1 level AA guidelines regarding colour contrast, touch target sizes, screen reader labels and respect of the system "reduce motion" option. It is not a public administration website, so it is not subject to the accessibility declaration obligation under law 4/2004, but accessibility problems are treated as bugs: report them in the repository.</p>
+
+  <h2>Reporting an error</h2>
+  <p>Wrong times, missing stops, wrong prices or malfunctions are reported by opening an issue in the repository, indicating line, stop and time. Reports help fix the data, do not produce refunds and do not constitute a complaint to the operators.</p>
+
+  <h2>Hosting service and connections</h2>
+  <p>The pages are served as static files via GitHub Pages/the service hosting the repository; the time relay runs on Cloudflare. None of these services receives personal data beyond the technical request: see the <a href="privacy.html">privacy policy</a>.</p>
+
+  <footer>
+    <a href="./">App</a>
+    <a href="privacy.html">Privacy</a>
+    <a href="termini.html">Terms</a>
+    <a href="cookie.html">Cookie</a>
+    <span class="aggiornata">Last updated: 26 November 2026</span>
+  </footer>
+</main>
+</div>
 </body>
 </html>

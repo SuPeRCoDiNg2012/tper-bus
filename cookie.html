@@ -7,11 +7,38 @@
 <meta name="theme-color" content="#C1121F">
 <meta name="robots" content="index,follow">
 <link rel="stylesheet" href="legale.css">
+<style>
+  .en { display: none; }
+  html[data-lang="en"] .it { display: none; }
+  html[data-lang="en"] .en { display: block; }
+  .lang-switch { margin-left: auto; font-size: .85rem; }
+  .lang-switch a { margin-left: .5rem; }
+</style>
+<script>
+(function(){
+  var K='tperzc_lingua_v1';
+  function lingua(){ try { var v=localStorage.getItem(K); if(v==='en'||v==='it') return v; } catch(e){} return /^en\b/i.test(navigator.language||'')?'en':'it'; }
+  var L=lingua();
+  document.documentElement.setAttribute('data-lang', L);
+  document.documentElement.lang = L==='en'?'en':'it';
+  var titoli={it:'Cookie — Muovi Bologna', en:'Cookie policy — Muovi Bologna'};
+  if(titoli[L]) document.title=titoli[L];
+  document.addEventListener('click', function(e){
+    var a=e.target.closest('[data-lang-switch]');
+    if(!a) return;
+    e.preventDefault();
+    try { localStorage.setItem(K, a.getAttribute('data-lang-switch')); } catch(err){}
+    location.reload();
+  });
+})();
+</script>
 </head>
 <body>
+<div class="it">
 <header>
   <a href="./">&larr; Torna all'app</a>
   <h1>Cookie policy</h1>
+  <span class="lang-switch"><a href="#" data-lang-switch="en">English</a></span>
 </header>
 <main>
   <p class="nota"><b>In breve:</b> Muovi Bologna non usa cookie e non usa il browser per riconoscerti. Non c'è quindi nessun banner da accettare: quello che serve al funzionamento è memoria tecnica locale, esente da consenso.</p>
@@ -65,5 +92,66 @@
     <span class="aggiornata">Ultimo aggiornamento: 26 novembre 2026</span>
   </footer>
 </main>
+</div>
+
+<div class="en">
+<header>
+  <a href="./">&larr; Back to app</a>
+  <h1>Cookie policy</h1>
+  <span class="lang-switch"><a href="#" data-lang-switch="it">Italiano</a></span>
+</header>
+<main>
+  <p class="nota"><b>In short:</b> Muovi Bologna uses no cookies and does not use the browser to recognise you. So there is no banner to accept: what is needed to run is technical local memory, exempt from consent.</p>
+
+  <h2>Cookies: none</h2>
+  <p>The app sets no own or third-party cookies, uses no pixels, fingerprinting or advertising identifiers, and has no statistics tools. There is no profiling and no advertising.</p>
+
+  <h2>Technical local memory</h2>
+  <p>To work even offline, the app saves some information in <code>localStorage</code> and in the service worker cache on your device. It is data that stays there and that nobody receives: it only remembers your choices and avoids re-downloading the same files. It falls under technical memory exempt from consent (art. 122 of the Privacy Code and the Garante's 2021 guidelines).</p>
+
+  <table>
+    <tr><th>Key</th><th>Content</th><th>Purpose</th></tr>
+    <tr><td colspan="3"><b>Preferences</b></td></tr>
+    <tr><td><code>tperzc_abbonamento_v1</code></td><td>Yes/no</td><td>Shows the price with the urban pass</td></tr>
+    <tr><td><code>tperzc_tema_v1</code></td><td>Light/dark</td><td>Keeps the chosen theme (if absent, follows the system)</td></tr>
+    <tr><td><code>tperzc_camminata_v1</code></td><td>Minutes</td><td>Threshold beyond which you don't walk</td></tr>
+    <tr><td><code>tperzc_linee_evitate_v1</code></td><td>List of lines</td><td>Doesn't propose those lines in routes</td></tr>
+    <tr><td><code>tperzc_onboarding_visto_v1</code></td><td>Yes/no</td><td>Doesn't repeat the initial prompt</td></tr>
+    <tr><td colspan="3"><b>Route and places</b></td></tr>
+    <tr><td><code>tperzc_tratta_v2</code></td><td>Chosen stops and time</td><td>Reopens the app on the last route</td></tr>
+    <tr><td><code>tperzc_quando_v1</code></td><td>Now/departure/arrival</td><td>Remembers the search type</td></tr>
+    <tr><td><code>tperzc_recenti_v2</code></td><td>Stops and addresses</td><td>"Recent routes" list</td></tr>
+    <tr><td><code>tperzc_preferiti_v1</code></td><td>Home and work</td><td>Shortcuts in the panel</td></tr>
+    <tr><td><code>tperzc_viaggi_salvati_v1</code></td><td>Departure, destination and time</td><td>Saved trips in the menu</td></tr>
+    <tr><td colspan="3"><b>Data cache</b></td></tr>
+    <tr><td><code>tperzc_fermate_v2</code>, <code>tperzc_linee_v2</code>, <code>tperzc_colori_v1</code>, <code>tperzc_avvisi_v1</code></td><td>Line lists and colours</td><td>Faster start and offline use</td></tr>
+    <tr><td><code>tperzc_piedi_v4</code></td><td>Walking times and geometries</td><td>Doesn't recalculate the same stretches</td></tr>
+    <tr><td colspan="3"><b>Technical data</b></td></tr>
+    <tr><td><code>tperzc_errori_v1</code></td><td>Last app errors</td><td>Diagnosis, visible only to you in the "admin" panel</td></tr>
+    <tr><td><code>tperzc_proxy</code>, <code>tperzc_relay</code></td><td>Relay address</td><td>Only if you set one yourself</td></tr>
+    <tr><td>Service worker cache (<code>muovi-bologna-static-*</code>, <code>muovi-bologna-data-*</code>)</td><td>App files and data</td><td>Working without a connection</td></tr>
+  </table>
+
+  <h2>External resources</h2>
+  <p>The map, weather, addresses and times come from external domains (OpenFreeMap, Open-Meteo, Nominatim, OSRM, HelloBus via relay, unpkg). They are file and data requests, not trackers: the app does not install cookies on their behalf. As with any connection, those servers see the request's IP address. Details are in the <a href="privacy.html">privacy policy</a>.</p>
+
+  <h2>How to delete everything</h2>
+  <ul>
+    <li>In the app: menu &rarr; <b>Info and data sources</b> &rarr; <b>Delete all data</b>. Removes preferences, cache and service worker.</li>
+    <li>From the browser: settings &rarr; site data &rarr; clear this site's data.</li>
+  </ul>
+
+  <h2>If things change in the future</h2>
+  <p>If one day the app introduced statistics or non-technical cookies, this page would be updated <b>first</b> and consent would be asked for explicitly, with the option to refuse without losing basic functions. That does not happen today.</p>
+
+  <footer>
+    <a href="./">App</a>
+    <a href="privacy.html">Privacy</a>
+    <a href="termini.html">Terms</a>
+    <a href="note-legali.html">Legal notes</a>
+    <span class="aggiornata">Last updated: 26 November 2026</span>
+  </footer>
+</main>
+</div>
 </body>
 </html>

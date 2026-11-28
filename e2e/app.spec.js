@@ -151,7 +151,12 @@ test('il testo grande ingrandisce il pannello', async ({ page }) => {
   await page.goto('/?fermata=100');
   const riga = page.locator('#vista-orari .arrivo-item').first();
   await expect(riga).toBeVisible();
-  const altezzaPrima = (await riga.boundingBox()).height;
+  // La lista si ridisegna da sola: si legge la riga con una query fresca.
+  const altezzaRiga = () => page.evaluate(() => {
+    const el = document.querySelector('#vista-orari .arrivo-item');
+    return el ? Math.round(el.getBoundingClientRect().height) : 0;
+  });
+  const altezzaPrima = await altezzaRiga();
   // Sugli orari il pulsante in alto torna indietro invece di aprire il menu:
   // l'interruttore si tocca dalla home, poi si torna agli orari.
   await page.goto('/');
@@ -162,8 +167,7 @@ test('il testo grande ingrandisce il pannello', async ({ page }) => {
   await page.goto('/?fermata=100');
   await expect(page.locator('html')).toHaveAttribute('data-testo', 'grande');
   await expect(riga).toBeVisible();
-  const altezzaDopo = (await riga.boundingBox()).height;
-  expect(altezzaDopo).toBeGreaterThan(altezzaPrima * 1.05);
+  await expect.poll(altezzaRiga).toBeGreaterThan(altezzaPrima * 1.05);
 });
 
 test('con la lingua inglese il menu è tradotto', async ({ page }) => {
@@ -179,6 +183,45 @@ test('con la lingua inglese il menu è tradotto', async ({ page }) => {
   await expect(drawer).toContainText('Settings');
   await expect(drawer).toContainText('Notifications');
   await expect(drawer).toContainText('Dark theme');
+});
+
+test('le pagine legali seguono la lingua scelta', async ({ page }) => {
+  await senzaRete(page, { inglese: true });
+  // Solo se non c'è già una scelta: così il clic sull'interruttore della
+  // pagina, che ricarica, non viene sovrascritto a ogni navigazione.
+  await page.addInitScript(() => {
+    try {
+      if (!localStorage.getItem('tperzc_lingua_v1')) localStorage.setItem('tperzc_lingua_v1', 'en');
+    } catch (errore) { /* nulla */ }
+  });
+
+  const pagine = [
+    ['privacy.html', 'Privacy policy'],
+    ['termini.html', 'Terms and conditions of use'],
+    ['cookie.html', 'Cookie policy'],
+    ['note-legali.html', 'Legal notes']
+  ];
+  for (const [file, titolo] of pagine) {
+    await page.goto('/' + file);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(page.locator('.en h1')).toHaveText(titolo);
+    await expect(page.locator('.en')).toBeVisible();
+    // L'italiano non deve restare visibile accanto all'inglese.
+    await expect(page.locator('.it')).toBeHidden();
+  }
+
+  // L'interruttore sulla pagina stessa riporta all'italiano.
+  await page.locator('[data-lang-switch="it"]').click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'it');
+  await expect(page.locator('.it h1')).toHaveText('Note legali');
+  await expect(page.locator('.it')).toBeVisible();
+
+  // E i link nel menu dell'app sono tradotti.
+  await page.evaluate(() => localStorage.setItem('tperzc_lingua_v1', 'en'));
+  await page.goto('/');
+  await chiudiOnboarding(page);
+  await page.locator('#btn-menu').click();
+  await expect(page.locator('#drawer')).toContainText('Privacy policy');
 });
 
 test('nessun errore JavaScript sulle schermate principali', async ({ page }) => {

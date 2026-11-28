@@ -143,6 +143,11 @@
     'Questo browser non supporta le notifiche': 'This browser does not support notifications',
     'Notifiche non attivate': 'Notifications not enabled',
 
+    // --- Pagine legali (link nel menu) ---
+    'Informativa privacy': 'Privacy policy',
+    'Termini': 'Terms',
+    'Note legali': 'Legal notes',
+
     // --- Errori e stati ---
     'Offline': 'Offline',
     'Errore': 'Error',

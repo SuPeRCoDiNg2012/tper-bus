@@ -7,11 +7,38 @@
 <meta name="theme-color" content="#C1121F">
 <meta name="robots" content="index,follow">
 <link rel="stylesheet" href="legale.css">
+<style>
+  .en { display: none; }
+  html[data-lang="en"] .it { display: none; }
+  html[data-lang="en"] .en { display: block; }
+  .lang-switch { margin-left: auto; font-size: .85rem; }
+  .lang-switch a { margin-left: .5rem; }
+</style>
+<script>
+(function(){
+  var K='tperzc_lingua_v1';
+  function lingua(){ try { var v=localStorage.getItem(K); if(v==='en'||v==='it') return v; } catch(e){} return /^en\b/i.test(navigator.language||'')?'en':'it'; }
+  var L=lingua();
+  document.documentElement.setAttribute('data-lang', L);
+  document.documentElement.lang = L==='en'?'en':'it';
+  var titoli={it:'Termini e condizioni — Muovi Bologna', en:'Terms and conditions — Muovi Bologna'};
+  if(titoli[L]) document.title=titoli[L];
+  document.addEventListener('click', function(e){
+    var a=e.target.closest('[data-lang-switch]');
+    if(!a) return;
+    e.preventDefault();
+    try { localStorage.setItem(K, a.getAttribute('data-lang-switch')); } catch(err){}
+    location.reload();
+  });
+})();
+</script>
 </head>
 <body>
+<div class="it">
 <header>
   <a href="./">&larr; Torna all'app</a>
   <h1>Termini e condizioni d'uso</h1>
+  <span class="lang-switch"><a href="#" data-lang-switch="en">English</a></span>
 </header>
 <main>
   <p>Usando Muovi Bologna accetti queste condizioni. Se non le condividi, non usare l'app: non serve alcun account e non c'è nulla da disdire.</p>
@@ -53,5 +80,54 @@
     <span class="aggiornata">Ultimo aggiornamento: 26 novembre 2026</span>
   </footer>
 </main>
+</div>
+
+<div class="en">
+<header>
+  <a href="./">&larr; Back to app</a>
+  <h1>Terms and conditions of use</h1>
+  <span class="lang-switch"><a href="#" data-lang-switch="it">Italiano</a></span>
+</header>
+<main>
+  <p>By using Muovi Bologna you accept these conditions. If you don't share them, don't use the app: no account is needed and there is nothing to cancel.</p>
+
+  <h2>What this service is</h2>
+  <p>Muovi Bologna is a free, ad-free app that shows stops, times and possible routes of public transport in Bologna and surroundings. It is an independent project: <b>it is not a TPER service</b>, it is not affiliated with, sponsored or approved by TPER or other operators, and it does not sell tickets.</p>
+
+  <h2>Permitted use</h2>
+  <ul>
+    <li>You may use it for your personal needs and for internal use within your organisation, free of charge.</li>
+    <li>You may not resell it, use it as a paid service, remove the licence and source notes, or present it as official.</li>
+    <li>You may not load it with massive automated requests or use it to bulk-extract providers' data: the external services (HelloBus, Nominatim, OSRM, OpenFreeMap) have their own usage limits that must be respected.</li>
+  </ul>
+
+  <h2>Times, fares and routes are indicative</h2>
+  <p>The data comes from public sources and from real-time services that can be wrong, incomplete or out of date. Live data depends on HelloBus; trains have only the scheduled time; prices are estimates calculated from zones and must be verified. <b>Before departing, and especially before boarding without a ticket, always check the official time and fare on <a href="https://www.tper.it" target="_blank" rel="noopener">tper.it</a>.</b></p>
+  <p>The app is not an emergency service and does not replace TPER's indications, on-board staff or the authorities.</p>
+
+  <h2>Limitation of liability</h2>
+  <p>The app is provided "as is", without guarantees of availability, accuracy or fitness for a particular purpose. To the extent permitted by law, the publisher is not liable for delays, missed buses, fines, damages or expenses arising from use or malfunction of the app. The consumer's mandatory rights under the Consumer Code (D.Lgs. 206/2005) remain unaffected.</p>
+
+  <h2>Intellectual property</h2>
+  <p>The app's code is published in the repository indicated on the <a href="note-legali.html">legal notes page</a>. The names "TPER", "Tper", the logos and the marks of transport operators belong to their respective owners and are used only to describe the service. Third-party cartography and data remain their authors', with the licences stated in the legal notes.</p>
+
+  <h2>Changes and interruptions</h2>
+  <p>The app may change, be suspended or closed at any time, even without notice: it is a free project with no guarantee of continuity. Changes to these conditions take effect from publication on this page, with the updated date at the bottom.</p>
+
+  <h2>Applicable law and jurisdiction</h2>
+  <p>Italian law applies. If you are a consumer, the competent court is that of your place of residence or domicile; for any other dispute, the court where the publisher is based is competent.</p>
+
+  <h2>Contacts</h2>
+  <p>Error reports, requests and disputes are sent by opening an issue in the GitHub repository indicated in the <a href="note-legali.html">legal notes</a>.</p>
+
+  <footer>
+    <a href="./">App</a>
+    <a href="privacy.html">Privacy</a>
+    <a href="cookie.html">Cookie</a>
+    <a href="note-legali.html">Legal notes</a>
+    <span class="aggiornata">Last updated: 26 November 2026</span>
+  </footer>
+</main>
+</div>
 </body>
 </html>

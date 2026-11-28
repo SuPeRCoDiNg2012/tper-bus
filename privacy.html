@@ -7,11 +7,38 @@
 <meta name="theme-color" content="#C1121F">
 <meta name="robots" content="index,follow">
 <link rel="stylesheet" href="legale.css">
+<style>
+  .en { display: none; }
+  html[data-lang="en"] .it { display: none; }
+  html[data-lang="en"] .en { display: block; }
+  .lang-switch { margin-left: auto; font-size: .85rem; }
+  .lang-switch a { margin-left: .5rem; }
+</style>
+<script>
+(function(){
+  var K='tperzc_lingua_v1';
+  function lingua(){ try { var v=localStorage.getItem(K); if(v==='en'||v==='it') return v; } catch(e){} return /^en\b/i.test(navigator.language||'')?'en':'it'; }
+  var L=lingua();
+  document.documentElement.setAttribute('data-lang', L);
+  document.documentElement.lang = L==='en'?'en':'it';
+  var titoli={it:'Privacy — Muovi Bologna', en:'Privacy — Muovi Bologna'};
+  if(titoli[L]) document.title=titoli[L];
+  document.addEventListener('click', function(e){
+    var a=e.target.closest('[data-lang-switch]');
+    if(!a) return;
+    e.preventDefault();
+    try { localStorage.setItem(K, a.getAttribute('data-lang-switch')); } catch(err){}
+    location.reload();
+  });
+})();
+</script>
 </head>
 <body>
+<div class="it">
 <header>
   <a href="./">&larr; Torna all'app</a>
   <h1>Informativa privacy</h1>
+  <span class="lang-switch"><a href="#" data-lang-switch="en">English</a></span>
 </header>
 <main>
   <p>Muovi Bologna è un'app non ufficiale, non affiliata a TPER. Questa pagina dice quali dati tocca e dove finiscono, ai sensi dell'art. 13 del Regolamento UE 2016/679 (GDPR).</p>
@@ -85,5 +112,84 @@
     <span class="aggiornata">Ultimo aggiornamento: 27 novembre 2026</span>
   </footer>
 </main>
+</div>
+
+<div class="en">
+<header>
+  <a href="./">&larr; Back to app</a>
+  <h1>Privacy policy</h1>
+  <span class="lang-switch"><a href="#" data-lang-switch="it">Italiano</a></span>
+</header>
+<main>
+  <p>Muovi Bologna is an unofficial app, not affiliated with TPER. This page explains which data it touches and where it ends up, under Article 13 of EU Regulation 2016/679 (GDPR).</p>
+
+  <h2>Data controller</h2>
+  <p>The controller is whoever publishes this app: the project is hosted on GitHub at <a href="https://github.com/SuPeRCoDiNg2012/tper-bus" target="_blank" rel="noopener">github.com/SuPeRCoDiNg2012/tper-bus</a>, where you can open an issue to exercise your rights.</p>
+
+  <h2>Data that stays on your phone</h2>
+  <ul>
+    <li><b>Preferences</b>: urban pass, lines to avoid, walking threshold.</li>
+    <li><b>Route and places</b>: last route, recent stops, favourites (home, work). Only stop names and identifiers.</li>
+    <li><b>Cache</b>: times, stop list and walking times, so they don't have to be re-downloaded.</li>
+    <li><b>Reports</b>: a random browser id, used only to avoid sending the same report twice.</li>
+    <li><b>Error log</b>: the app's last technical errors, visible only to you in the "admin" panel.</li>
+  </ul>
+  <p>All of it is in <code>localStorage</code> and in the browser cache. It can be deleted from the app menu with <b>Info and data sources &rarr; Delete all data</b>, or by clearing the site's data from the browser settings. The full list of keys is in the <a href="cookie.html">cookie policy</a>.</p>
+
+  <h2>Location</h2>
+  <p>Location is asked only when you tap "Find" or "Start navigation", and only if you grant the browser permission (legal basis: your consent, art. 6.1.a GDPR). It is used to centre the map, find nearby stops and follow the trip. It is not saved and is not sent to any app server: it stays in the page's memory and disappears when you close it. You can deny permission and use the app by searching for stops by name.</p>
+
+  <h2>What leaves your phone</h2>
+  <p>The functions that cannot stay in the browser send a request to an external provider. In every case the request contains only what the function needs, never a profile:</p>
+  <table>
+    <tr><th>Provider</th><th>What it receives</th><th>Why</th></tr>
+    <tr><td>TPER — HelloBus, via public relay</td><td>Stop, line, requested time</td><td>Live arrivals</td></tr>
+    <tr><td>Nominatim (OpenStreetMap)</td><td>The searched text</td><td>Addresses and places</td></tr>
+    <tr><td>OSRM (OpenStreetMap)</td><td>Point coordinates</td><td>Walking routes</td></tr>
+    <tr><td>OpenFreeMap</td><td>Coordinates of the map portion</td><td>Cartography</td></tr>
+    <tr><td>Open-Meteo</td><td>Zone coordinates</td><td>Weather for walking times</td></tr>
+    <tr><td>Cloudflare (time relay)</td><td>Technical request, IP address</td><td>Forwarding requests to HelloBus</td></tr>
+    <tr><td>unpkg (CDN)</td><td>IP address</td><td>Map library</td></tr>
+  </table>
+  <p>These providers receive the request like any visit to a website: they can see the IP address, as with any connection. There is no profiling, no advertising, no third-party statistics, no accounts.</p>
+
+  <h2>Legal basis</h2>
+  <ul>
+    <li><b>Performance of the service</b> (art. 6.1.b): searching stops, calculating routes, showing times and fares.</li>
+    <li><b>Legitimate interest</b> (art. 6.1.f): running the app and keeping a local technical error log.</li>
+    <li><b>Consent</b> (art. 6.1.a): device location, which you can revoke at any time from the browser settings.</li>
+  </ul>
+
+  <h2>Transfers outside the European Union</h2>
+  <p>The providers listed above are companies with headquarters also in the United States (Cloudflare, unpkg) and may process the request outside the EU on the basis of the European Commission's standard contractual clauses. No data you have stored is transferred: only the single technical request.</p>
+
+  <h2>Retention</h2>
+  <p>Local data lasts until you update the app or delete it. Times and geometries stay in cache until the service worker renews them. We keep nothing about you on a server.</p>
+
+  <h2>Notifications</h2>
+  <p>Notifications are local and start only after you tap "Notifications" or a favourite's bell and grant the browser permission. They alert you to the next bus, the chosen trip or the alight stop. There is no push server: no promotional messages and no alerts when the app is completely closed. Permission can be revoked from the site settings.</p>
+
+  <h2>Your rights</h2>
+  <p>You can request access, rectification, erasure, restriction and portability of data, or object to processing (art. 15–22 GDPR). Since the app has no accounts, most data is already only on your phone and deletion is immediate from the menu. For the rest, write to the controller via the repository indicated above.</p>
+  <p>If you believe the processing breaches the rules, you can lodge a complaint with the <a href="https://www.garanteprivacy.it" target="_blank" rel="noopener">Garante per la protezione dei dati personali</a> or your country's supervisory authority.</p>
+
+  <h2>Minors</h2>
+  <p>The app is not aimed at children under 14 and does not knowingly collect data about them: there are no accounts, advertising or profiling.</p>
+
+  <h2>Security</h2>
+  <p>All connections to the outside use HTTPS. There is no user database to protect and the app stores no personal data on a server.</p>
+
+  <h2>Changes</h2>
+  <p>If anything changes in the data processing, this page is updated and the date at the bottom changes. Changes take effect from publication.</p>
+
+  <footer>
+    <a href="./">App</a>
+    <a href="termini.html">Terms</a>
+    <a href="cookie.html">Cookie</a>
+    <a href="note-legali.html">Legal notes</a>
+    <span class="aggiornata">Last updated: 27 November 2026</span>
+  </footer>
+</main>
+</div>
 </body>
 </html>
