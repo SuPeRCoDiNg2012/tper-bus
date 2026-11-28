@@ -165,6 +165,33 @@
   }
 
   /**
+   * Tragitti che passano da una fermata: uno per linea e per capolinea, preso
+   * dal gruppo con più corse. Serve alla mappa della fermata, dove si disegna
+   * una forma per verso invece di tutte le varianti della linea.
+   */
+  function tragittiAllaFermata(linee, idFermata, massimo) {
+    const elenco = [];
+    if (!linee || idFermata == null) return elenco;
+    linee.forEach((linea) => {
+      const perCapolinea = new Map();
+      linea.gruppi.forEach((gruppo) => {
+        if (gruppo.fermate.indexOf(idFermata) < 0) return;
+        const attuale = perCapolinea.get(gruppo.capolinea);
+        if (!attuale || gruppo.corse.length > attuale.corse.length) perCapolinea.set(gruppo.capolinea, gruppo);
+      });
+      perCapolinea.forEach((gruppo, capolinea) => {
+        elenco.push({
+          nome: linea.nome,
+          tipo: linea.tipo,
+          capolinea: capolinea,
+          corsa: gruppo.corsa
+        });
+      });
+    });
+    return typeof massimo === 'number' ? elenco.slice(0, massimo) : elenco;
+  }
+
+  /**
    * Linee che rispondono a un testo: nome esatto, poi prefisso, poi contenuto.
    * «linea 20» e «20» danno lo stesso risultato.
    */
@@ -201,6 +228,7 @@
     fermateVerso: fermateVerso,
     corsaVerso: corsaVerso,
     partenze: partenze,
+    tragittiAllaFermata: tragittiAllaFermata,
     ultima: ultima,
     ultimaAllaFermata: ultimaAllaFermata,
     cerca: cerca

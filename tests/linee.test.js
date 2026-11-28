@@ -77,3 +77,15 @@ test('l\'indice regge orari vuoti o incompleti', () => {
   assert.deepEqual(Linee.partenze(null, 'C', null, 0), []);
   assert.equal(Linee.ultima(null, 'C', null), null);
 });
+
+test('i tragitti di una fermata sono uno per linea e per capolinea', () => {
+  const indice = Linee.indice(orari);
+  const tragitti = Linee.tragittiAllaFermata(indice, 'B');
+  assert.equal(tragitti.length, 2);
+  assert.deepEqual(tragitti.map((t) => t.capolinea).sort(), ['A', 'C']);
+  // Ogni verso porta la corsa del gruppo più frequente, non una variante.
+  tragitti.forEach((t) => assert.equal(typeof t.corsa, 'number'));
+  // Una fermata che non esiste non inventa linee.
+  assert.deepEqual(Linee.tragittiAllaFermata(indice, 'Z'), []);
+  assert.deepEqual(Linee.tragittiAllaFermata(indice, 'B', 1).length, 1);
+});

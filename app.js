@@ -246,6 +246,8 @@
   // Puntini dei bus sulla mappa mentre si guarda una fermata: posizione
   // stimata dall'orario o dal tempo reale, mai un GPS che non abbiamo.
   const busMappa = { marker: [], token: 0, fermata: null, ultimi: [], inquadrata: null };
+  // Linee disegnate quando si apre una fermata: una forma per linea e verso.
+  const fermataMappa = { chiave: null, ts: 0 };
 
   const $ = (id) => document.getElementById(id);
   // Set unico di icone: Lucide inline, nessuna CDN e nessun font esterno.
@@ -711,6 +713,8 @@
       if (zone && zone.checked) mostraZone(true);
       aggiornaMarker();
       aggiornaVisibilitaFermate();
+      // Lo stile nuovo ha portato via i livelli: la fermata aperta li riprende.
+      if (vistaAttiva === 'orari') disegnaFermataMappa();
     });
     mappa.setStyle(nuovo, { diff: false });
   }
@@ -774,7 +778,13 @@
       inquadra(false);
       disegnaTracciato();
     });
-    mappa.on('style.load', aggiungiLivelliPercorso);
+    mappa.on('style.load', () => {
+      aggiungiLivelliPercorso();
+      if (vistaAttiva === 'orari') {
+        fermataMappa.chiave = null;
+        disegnaFermataMappa();
+      }
+    });
     mappa.on('styledata', nascondiPoiTransito);
     mappa.on('idle', aggiungiLivelliPercorso);
   }
@@ -5912,6 +5922,7 @@
     live.aperto = -1;
     live.avvisa = null;
     pulisciBusMappa();
+    pulisciFermataMappa();
     // Gli orari programmati arrivano dal GTFS: se non sono ancora in memoria
     // si caricano adesso e la vista si ridisegna da sola.
     if (typeof TPERRouting !== 'undefined' && TPERRouting.carica &&
@@ -8070,7 +8081,10 @@
     if (fermata) html += '<p class="bus-mappa-nota" id="bus-mappa-nota" hidden></p>';
     box.innerHTML = html;
     aggiornaScrim();
-    if (vistaAttiva === 'orari') aggiornaBusMappa(fermata);
+    if (vistaAttiva === 'orari') {
+      aggiornaBusMappa(fermata);
+      if (fermata) disegnaFermataMappa();
+    }
   }
 
   function avviaTimerLive() {
@@ -8454,6 +8468,82 @@
     }
   }
 
+  /* ------------------------------------------------------------------ *
+   * Linee della fermata sulla mappa
+   * ------------------------------------------------------------------ */
+  // Una fermata è servita da più linee: si disegnano tutte, una forma per
+  // linea e per verso, con il colore ufficiale. Le sovrapposizioni non sono un
+  // problema: la linea disegnata dopo copre quella prima.
+  function assicuraLivelliFermata() {
+    if (mappa.getSource('fermate-linee')) return;
+    mappa.addSource('fermate-linee', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+    mappa.addLayer({
+      id: 'fermate-linee-bordo', type: 'line', source: 'fermate-linee',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#FFFFFF', 'line-width': 8, 'line-opacity': 0.85 }
+    });
+    mappa.addLayer({
+      id: 'fermate-linee', type: 'line', source: 'fermate-linee',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      // Il colore è per linea, non per strato: ogni forma porta il suo.
+      paint: { 'line-color': ['get', 'colore'], 'line-width': 3.5 }
+    });
+  }
+
+  function pulisciFermataMappa() {
+    fermataMappa.chiave = null;
+    fermataMappa.ts = 0;
+    if (mappa && mappa.getSource('fermate-linee')) {
+      mappa.getSource('fermate-linee').setData({ type: 'FeatureCollection', features: [] });
+    }
+  }
+
+  function disegnaFermataMappa(tentativo) {
+    if (vistaAttiva !== 'orari') return;
+    const fermata = fermataLive();
+    if (!fermata || eIndirizzo(fermata) || typeof Linee === 'undefined' ||
+        typeof TPERRouting === 'undefined' || !TPERRouting.formaCorsa) return;
+    if (!mappa) return;
+    if (!mappa.isStyleLoaded()) {
+      // La mappa può non avere ancora lo stile: si riprova, come per la linea.
+      setTimeout(() => disegnaFermataMappa((tentativo || 0) + 1), 300);
+      return;
+    }
+    const indice = lineeIndice();
+    if (!indice) { preparaLinee(); return; }
+    if (fermataMappa.chiave === fermata.id && Date.now() - fermataMappa.ts < 60000) return;
+    TPERRouting.caricaTracciati(URL_TRACC_GZ, URL_TRACC).then(() => {
+      if (vistaAttiva !== 'orari') return;
+      const corrente = fermataLive();
+      if (!corrente || corrente.id !== fermata.id) return;
+      assicuraLivelliFermata();
+      const features = [];
+      const visti = new Set();
+      Linee.tragittiAllaFermata(indice, fermata.id).forEach((voce) => {
+        const punti = TPERRouting.formaCorsa(voce.corsa);
+        if (!punti || punti.length < 2) return;
+        const primo = punti[0];
+        const ultimo = punti[punti.length - 1];
+        // Due varianti possono usare la stessa forma: si disegna una volta sola.
+        const firma = [primo[0], primo[1], ultimo[0], ultimo[1]]
+          .map((numero) => Math.round(numero * 1e4)).join(',');
+        if (visti.has(firma)) return;
+        visti.add(firma);
+        features.push({
+          type: 'Feature',
+          properties: { colore: coloreTracciato(voce.nome) || '#C1121F' },
+          geometry: { type: 'LineString', coordinates: punti }
+        });
+      });
+      mappa.getSource('fermate-linee').setData({ type: 'FeatureCollection', features: features });
+      fermataMappa.chiave = fermata.id;
+      fermataMappa.ts = Date.now();
+    }).catch(() => { /* senza tracciato restano gli arrivi */ });
+  }
+
   // Comparsa a cascata dei contenuti: il contenitore riceve `.ingresso`, il CSS
   // sfalsa le righe di 40 ms. La chiave evita che una vista già composta
   // (o un aggiornamento del live) rifaccia l'animazione da capo.
@@ -8479,7 +8569,10 @@
     if (corpo) corpo.scrollTop = 0;
     if (nome === 'linea') renderLinea();
     else pulisciLineaMappa();
-    if (nome !== 'orari') pulisciBusMappa();
+    if (nome !== 'orari') {
+      pulisciBusMappa();
+      pulisciFermataMappa();
+    }
     // Uscendo dalla linea la direzione non serve più: senza questo, gli orari
     // aperti dalla home erediterrebbero il parametro `linea` e un ritorno
     // sbagliato alla vista linea.
