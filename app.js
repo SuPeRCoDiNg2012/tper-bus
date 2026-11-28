@@ -35,7 +35,9 @@
   const K_PREFERITI = 'tperzc_preferiti_v1';
   const K_AVVISI = 'tperzc_avvisi_v1';
   const K_INDIRIZZI = 'tperzc_indirizzi_v2';
-  const K_RITARDI = 'tperzc_storico_ritardi_v2';
+  // Storico delle osservazioni live: linea, giorno, ora e ritardo. La v2
+  // teneva solo una media per linea e resta nel telefono come dato vecchio.
+  const K_STORICO = 'tperzc_storico_ritardi_v3';
   const K_FISSE = 'tperzc_fermate_fisse_v1';
   const K_VIAGGI = 'tperzc_viaggi_salvati_v1';
   const K_ERRORI = 'tperzc_errori_v1';
@@ -5461,6 +5463,7 @@
       meta += ' · dato parziale: ' + copertura.note + ' di ' + copertura.corse +
         (conTreno ? ' corse bus' : ' corse');
     }
+    if (e.stimaStorico) meta += ' · ritardo stimato';
     // Abbonamento: una spunta accanto al prezzo, non un altro chip in alto.
     const spunta = prezzo === 'Incluso'
       ? '<span class="spunta-abb" role="img" aria-label="Coperto dall\'abbonamento urbano">' +
@@ -7287,28 +7290,46 @@
   }
 
   // Lo storico è solo quello osservato dall'app: niente dati inventati.
-  function annotaRitardo(linea, scarto, partenza) {
+  function storicoRitardi() {
+    const dati = leggiJSON(K_STORICO);
+    return Array.isArray(dati) ? dati : [];
+  }
+
+  function registraRitardo(linea, scarto, partenza) {
     if (!linea || scarto == null || Math.abs(scarto) > 1800) return;
     if (!routing.ritardiVisti) routing.ritardiVisti = {};
+    // La stessa corsa viene interrogata due volte (prima tappa, poi tutte):
+    // una sola osservazione per corsa.
     const chiave = linea + ':' + partenza;
     if (routing.ritardiVisti[chiave]) return;
     if (Object.keys(routing.ritardiVisti).length > 400) routing.ritardiVisti = {};
     routing.ritardiVisti[chiave] = 1;
-    const salvati = leggiJSON(K_RITARDI) || {};
-    const voce = salvati[linea] || { somma: 0, n: 0 };
-    voce.somma += scarto;
-    voce.n += 1;
-    salvati[linea] = voce;
-    try { scrivi(K_RITARDI, JSON.stringify(salvati)); } catch (errore) { /* pieno */ }
+    const oggi = dataDaGiorno(oggiISO());
+    const elenco = Intelligenza.registraOsservazione(storicoRitardi(), {
+      linea: linea,
+      giorno: oggi ? oggi.getDay() : new Date().getDay(),
+      ora: Math.floor(partenza / 3600) % 24,
+      ritardo: scarto
+    });
+    try { scrivi(K_STORICO, JSON.stringify(elenco)); } catch (errore) { /* pieno */ }
+  }
+
+  // Quando HelloBus non risponde, il ritardo tipico della linea alla stessa
+  // ora è l'unica cosa che possiamo dire: si dichiara stimato, mai live.
+  function stimaRitardo(linea, partenza, giorno) {
+    if (!linea) return null;
+    const stats = Intelligenza.statisticheLinea(storicoRitardi(), linea, giorno,
+      Math.floor(partenza / 3600) % 24);
+    if (!stats || stats.n < Intelligenza.SOGLIE.OSSERVAZIONI_MINIME || stats.mediana == null) return null;
+    // Sotto i due minuti non è informazione: è rumore.
+    return Math.abs(stats.mediana) >= 120 ? Math.round(stats.mediana) : null;
   }
 
   function ritardoTipico(linea) {
-    const salvati = leggiJSON(K_RITARDI) || {};
-    const voce = salvati[linea];
-    if (!voce || voce.n < 5) return null;
-    const media = voce.somma / voce.n;
-    if (Math.abs(media) < 60) return null;
-    return Math.round(media / 60);
+    const stats = Intelligenza.statisticheLinea(storicoRitardi(), linea);
+    if (!stats || stats.n < Intelligenza.SOGLIE.OSSERVAZIONI_MINIME || stats.mediana == null) return null;
+    if (Math.abs(stats.mediana) < 60) return null;
+    return Math.round(stats.mediana / 60);
   }
 
   function ritardiPercorso() {
@@ -7318,9 +7339,6 @@
     // I valori sono allineati alle tappe di un esito preciso: cambiando
     // soluzione non valgono più.
     if (!tappe.length || !valori.length || liveTappe.esito !== esito) return null;
-    tappe.forEach((tappa, indice) => {
-      if (valori[indice] != null) annotaRitardo(tappa.linea, valori[indice], tappa.partenza);
-    });
     return Utilita.analizzaRitardi(tappe, valori);
   }
 
@@ -7446,6 +7464,22 @@
     liveTappe.ts = Date.now();
     liveTappe.caricamento = false;
     esito.ritardi = valori;
+    // Ogni risposta di HelloBus diventa un'osservazione dello storico.
+    valori.forEach((scarto, indice) => {
+      const tappa = tappe[indice];
+      if (tappa && scarto != null) registraRitardo(tappa.linea, scarto, tappa.partenza);
+    });
+    // Dove HelloBus non ha risposto, la stima viene dallo storico e resta
+    // separata dai ritardi live: non entra nei conti di copertura e affidabilità.
+    const giornoViaggio = (() => {
+      const data = dataDaGiorno(routing.giorno);
+      return data ? data.getDay() : new Date().getDay();
+    })();
+    esito.ritardiStimati = tappe.map((tappa, indice) => (
+      valori[indice] != null || tappa.tipo === 1 || tappa.tipo === 2
+        ? null : stimaRitardo(tappa.linea, tappa.partenza, giornoViaggio)
+    ));
+    esito.stimaStorico = esito.ritardiStimati.some((stima) => stima != null);
     // I conti dei cambi a rischio e dell'affidabilità li fa il motore:
     // qui si passano solo i ritardi appena letti, allineati alle tappe.
     const conRitardo = (esito.tappe || []).map((tappa, indice) => ({

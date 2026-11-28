@@ -298,10 +298,13 @@
   // Ritardo live della singola corsa (secondi, calcolato dall'app). Sotto i due
   // minuti non si scrive niente: è rumore, non informazione.
   function ritardoHTML(e, indice) {
-    const scarto = e && e.ritardi ? e.ritardi[indice] : null;
+    const live = e && e.ritardi ? e.ritardi[indice] : null;
+    const stima = live == null && e && e.ritardiStimati ? e.ritardiStimati[indice] : null;
+    const scarto = live != null ? live : stima;
     if (scarto == null || Math.abs(scarto) < 120) return '';
     const segno = scarto > 0 ? '+' : '−';
-    return ' · <b>' + segno + Math.round(Math.abs(scarto) / 60) + ' min</b>';
+    return ' · <b>' + segno + Math.round(Math.abs(scarto) / 60) + ' min</b>' +
+      (live == null ? ' <span class="stima">stimati</span>' : '');
   }
 
   /** Itinerario completo di una singola opzione. */

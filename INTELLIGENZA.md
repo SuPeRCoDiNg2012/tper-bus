@@ -69,16 +69,26 @@ compare più: il limite è per tipo, non globale, così un utente che ignora
   su tre il riepilogo scrive «dato parziale: 1 di 3 corse» e non un verdetto.
   Se il viaggio include un treno la parola è qualificata — «bus in orario»,
   «ritardi sui bus» — perché per i treni non esiste un feed live.
+  Ogni ritardo letto diventa un'osservazione con `registraOsservazione`
+  (linea, giorno della settimana, ora, ritardo; niente posizione), tenuta in
+  `tperzc_storico_ritardi_v3`. Una corsa viene registrata una volta sola, anche
+  se la interroghiamo da due punti.
+- **Stima dallo storico**: se HelloBus non risponde per una corsa bus,
+  `statisticheLinea` cerca la mediana della stessa linea nella stessa fascia
+  oraria, poi nello stesso giorno, poi in tutto lo storico. La stima compare
+  solo con almeno 5 osservazioni e sopra i 2 minuti, ed è **dichiarata** —
+  «+3 min stimati» nel dettaglio, «ritardo stimato» nel riepilogo. Non entra
+  nei conti di copertura, affidabilità o cambi a rischio: quelli restano solo
+  sui dati live.
   `intelligenza.js` è nel precache del service worker.
 - **Non ancora collegato**: `punteggio` di `routing.js` non usa
   `punteggioCombinato`, quindi i pesi non cambiano ancora *quale* percorso
   viene scelto, solo come viene raccontato. Restano fuori anche
-  `ritardoCascata` sull'arrivo finale, la stima dallo storico (nessuna
-  osservazione viene ancora registrata), la riga del suggerimento e la cache
+  `ritardoCascata` sull'arrivo finale, la riga del suggerimento e la cache
   dei risultati.
-- **Verifica mancante**: il percorso con un ritardo vero non è provato
-  end-to-end. I test coprono il motore; la riga «a rischio» è stata vista solo
-  compilando, perché HelloBus in prova non produce ritardi controllabili.
+- **Verifica**: il ritardo live e la stima sono coperti da test end-to-end con
+  HelloBus simulato e percorso fissato; non sono stati visti con HelloBus reale,
+  che in prova non produce ritardi controllabili.
 - **Eventi e disruzioni**: `disturboAttivo` e `toccaDisturbo` leggono una lista
   che qualcuno deve fornire. Non esiste `data/eventi.json`: **non ho inventato
   eventi**, partite o scioperi.

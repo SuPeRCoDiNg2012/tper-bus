@@ -406,6 +406,27 @@ test('un ritardo live rende arancione il cambio a rischio, con il motivo', async
   await expect(meta).not.toContainText('ritardi in corso');
 });
 
+test('senza risposta live il ritardo arriva dallo storico ed è dichiarato stimato', async ({ page }) => {
+  await percorsoFisso(page);
+  await page.addInitScript(() => {
+    const osservazioni = [];
+    for (let i = 0; i < 5; i += 1) {
+      osservazioni.push({ linea: '25', giorno: 6, ora: 9, ritardo: 180, ts: 1795000000000 + i });
+    }
+    localStorage.setItem('tperzc_storico_ritardi_v3', JSON.stringify(osservazioni));
+  });
+  await senzaRete(page, { hellobusRisposta: () => 'TperHellobus: NESSUNA ALTRA CORSA' });
+  await page.goto('/?da=10002&a=4305&g=2026-11-28&o=09:00');
+  await page.locator('[data-azione="dettagli"]').click();
+  const prima = page.locator('.dettaglio .corsa').first();
+  // La mediana dello storico è 3 minuti: compare, ma come stima, non come live.
+  await expect(prima).toContainText('+3 min', { timeout: 20000 });
+  await expect(prima).toContainText('stimati');
+  await expect(page.locator('.riep-meta')).toContainText('ritardo stimato');
+  // Niente verdetto live su una corsa che non ha risposto.
+  await expect(page.locator('.riep-meta')).not.toContainText('in orario');
+});
+
 test('nessun errore JavaScript sulle schermate principali', async ({ page }) => {
   const errori = [];
   page.on('pageerror', (errore) => errori.push(String((errore && errore.message) || errore)));

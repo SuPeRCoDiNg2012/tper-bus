@@ -45,6 +45,20 @@ test("l'affidabilità rompe il pareggio", () => {
   assert.equal(incerto - affidabile, 48); // (0.9 - 0.5) * 120
 });
 
+test('la stima della linea usa la fascia oraria, poi il giorno, poi tutto', () => {
+  const elenco = [];
+  for (let i = 0; i < 5; i += 1) elenco.push({ linea: '25', giorno: 6, ora: 9, ritardo: 240 });
+  for (let i = 0; i < 5; i += 1) elenco.push({ linea: '25', giorno: 6, ora: 18, ritardo: 60 });
+  for (let i = 0; i < 5; i += 1) elenco.push({ linea: '25', giorno: 2, ora: 9, ritardo: 0 });
+  // Stessa ora e stesso giorno: solo quella fascia.
+  assert.equal(I.statisticheLinea(elenco, '25', 6, 9).mediana, 240);
+  // Ora diversa: tutto il giorno, 240 e 60 insieme.
+  assert.equal(I.statisticheLinea(elenco, '25', 6, 12).mediana, 150);
+  // Giorno diverso: tutta la linea.
+  assert.equal(I.statisticheLinea(elenco, '25', 3, 9).mediana, 60);
+  assert.equal(I.statisticheLinea(elenco, '27', 6, 9), null);
+});
+
 test('lo storico non salva coordinate GPS', () => {
   const elenco = I.registraOsservazione([], { linea: '20', giorno: 3, ora: 8, ritardo: 120, lat: 44.49, lon: 11.34 }, 1000);
   assert.equal(elenco.length, 1);
