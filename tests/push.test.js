@@ -103,3 +103,57 @@ test('il JWT VAPID è ES256, verificabile e con la chiave giusta', async () => {
   assert.equal(punto.length, 65);
   assert.equal(punto[0], 4);
 });
+
+const push = require('../push.js');
+
+test('le partenze diventano promemoria alla soglia giusta, senza quelle già perse', () => {
+  const adesso = Date.UTC(2026, 10, 28, 7, 0, 0);
+  const partenza = (minuti) => ({
+    linea: '13',
+    orario: 7 * 3600 + minuti * 60,
+    quando: adesso + minuti * 60000
+  });
+  const scelte = push.pianificaPartenze(
+    [partenza(30), partenza(3), partenza(8), partenza(20)],
+    adesso,
+    { sogliaMinuti: 5, quanti: 3, finestraOre: 12 }
+  );
+  // Con cinque minuti di soglia la corsa tra 3 minuti è già persa; le altre
+  // restano in ordine di quando parte la notifica.
+  assert.deepEqual(scelte.map((v) => v.quando), [
+    adesso + 3 * 60000,
+    adesso + 15 * 60000,
+    adesso + 25 * 60000
+  ]);
+  assert.ok(scelte.every((v) => v.linea === '13'));
+});
+
+test('le partenze oltre la finestra e i doppioni non entrano in elenco', () => {
+  const adesso = Date.UTC(2026, 10, 28, 7, 0, 0);
+  const voce = (linea, minuti) => ({ linea: linea, orario: 0, quando: adesso + minuti * 60000 });
+  const scelte = push.pianificaPartenze(
+    [voce('13', 30), voce('13', 30), voce('20', 20), voce('13', 20 * 60 + 5)],
+    adesso,
+    { sogliaMinuti: 0, quanti: 10, finestraOre: 12 }
+  );
+  assert.deepEqual(scelte.map((v) => v.linea + '@' + (v.quando - adesso) / 60000), ['20@20', '13@30']);
+});
+
+test('senza partenze o con valori sporchi non si pianifica niente', () => {
+  const adesso = Date.UTC(2026, 10, 28, 7, 0, 0);
+  assert.deepEqual(push.pianificaPartenze(null, adesso, {}), []);
+  assert.deepEqual(push.pianificaPartenze([{ linea: '13' }, null], adesso, {}), []);
+});
+
+test('due corse ravvicinate non diventano due notifiche', () => {
+  const adesso = Date.UTC(2026, 10, 28, 7, 0, 0);
+  const voce = (linea, minuti) => ({ linea: linea, orario: 0, quando: adesso + minuti * 60000 });
+  const scelte = push.pianificaPartenze(
+    [voce('94', 30), voce('101', 31), voce('13', 45), voce('20', 60)],
+    adesso,
+    { sogliaMinuti: 0, quanti: 3, finestraOre: 12, distanzaMinima: 10 }
+  );
+  // La 101 arriva un minuto dopo la 94: si salta e si prende la successiva
+  // almeno dieci minuti più tardi.
+  assert.deepEqual(scelte.map((v) => v.linea), ['94', '13', '20']);
+});

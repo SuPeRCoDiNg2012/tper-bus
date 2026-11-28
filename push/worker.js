@@ -71,7 +71,10 @@ function normalizzaPromemoria(elenco) {
       quando: Number(voce.quando),
       titolo: String(voce.titolo).slice(0, 120),
       corpo: String(voce.corpo || '').slice(0, 220),
-      fermata: String(voce.fermata || '').slice(0, 24)
+      fermata: String(voce.fermata || '').slice(0, 24),
+      // Stesso tag della notifica locale: se arrivano tutte e due, la seconda
+      // sostituisce la prima invece di lasciare due avvisi uguali.
+      tag: String(voce.tag || '').slice(0, 48)
     }))
     .sort((a, b) => a.quando - b.quando);
 }
@@ -128,7 +131,12 @@ async function consegna(env) {
         try {
           const risposta = await inviaPush({
             sottoscrizione: record.sottoscrizione,
-            payload: JSON.stringify({ titolo: voce.titolo, corpo: voce.corpo, fermata: voce.fermata }),
+            payload: JSON.stringify({
+              titolo: voce.titolo,
+              corpo: voce.corpo,
+              fermata: voce.fermata,
+              tag: voce.tag
+            }),
             vapid
           });
           if (risposta.status === 404 || risposta.status === 410) {

@@ -3,8 +3,8 @@
 // Le richieste verso altri domini (mappa, relay degli orari live) non vengono intercettate:
 // gli orari in tempo reale non devono mai arrivare dalla cache.
 
-const CACHE_STATICA = 'muovi-bologna-static-v209';
-const CACHE_DATI = 'muovi-bologna-data-v209';
+const CACHE_STATICA = 'muovi-bologna-static-v211';
+const CACHE_DATI = 'muovi-bologna-data-v211';
 // Mappa: cache non versionata, così la zona salvata sopravvive agli aggiornamenti
 // dell'app. Non entra in pulisciCacheVecchie (che guarda solo i nomi -vN).
 const CACHE_MAPPA = 'muovi-bologna-mappa';
@@ -116,9 +116,9 @@ self.addEventListener('activate', (event) => {
 });
 
 // Notifiche locali: le mostra l'app con registration.showNotification(); il
-// tocco riapre gli orari della fermata che le ha generate. Il gestore `push`
-// non ha ancora un mittente: senza un server non arriva nulla, ma se un giorno
-// si aggiunge un backend l'app è già pronta a riceverlo.
+// tocco riapre gli orari della fermata che le ha generate. Le stesse notifiche
+// arrivano dal Worker (push/worker.js) quando l'app è chiusa, con lo stesso
+// `tag`: se sono tutte e due in viaggio, la seconda sostituisce la prima.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const fermata = (event.notification.data && event.notification.data.fermata) || '';
@@ -145,7 +145,7 @@ self.addEventListener('push', (event) => {
     body: dati.corpo || '',
     icon: './icons/icon-192.png',
     badge: './icons/icon-192.png',
-    tag: 'muovi-bologna-push',
+    tag: dati.tag || 'muovi-bologna-push',
     renotify: true,
     data: { fermata: dati.fermata || '' }
   }));

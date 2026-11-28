@@ -3957,6 +3957,68 @@
   // Con il push attivo il promemoria lo tiene il Worker: così l'ultima corsa
   // arriva anche se l'app è chiusa da ore. Venti minuti prima, una volta al
   // giorno, solo per le fermate con gli avvisi accesi.
+  // Le partenze vere dei preferiti con gli avvisi accesi, lette dall'orario
+  // GTFS e datate sul Worker: «Bus 13 tra 5 min» arriva anche con l'app chiusa,
+  // con la stessa soglia della notifica locale (5 minuti, o il tempo a piedi
+  // quando il preferito è un indirizzo). Oltre dodici ore non si va: tanto
+  // l'app risincronizza la prossima volta che si apre.
+  const PUSH_BUS_QUANTI = 3;
+  const PUSH_BUS_FINESTRA_ORE = 12;
+  const PUSH_BUS_DISTANZA_MIN = 10;
+
+  function promemoriaProssimiBus() {
+    const elenco = [];
+    if (!window.Push || typeof Push.pianificaPartenze !== 'function') return elenco;
+    if (typeof TPERRouting === 'undefined' || !TPERRouting.partenzeFermata) return elenco;
+    preferitiValidi().filter((voce) => avvisoAttivo(voce.slot)).forEach((voce) => {
+      const fermata = fermataPerAvviso(voce.luogo);
+      if (!fermata) return;
+      const esci = minutiPerUscire(voce.luogo, fermata);
+      const soglia = esci || AVVISO_MINUTI;
+      const partenze = [];
+      // Oggi e domani: il servizio comincia alle 04:00, quindi una corsa dopo
+      // mezzanotte appartiene al giorno prima.
+      for (let scarto = 0; scarto <= 1; scarto += 1) {
+        const giorno = new Date();
+        giorno.setHours(12, 0, 0, 0);
+        giorno.setDate(giorno.getDate() + scarto);
+        const iso = isoDi(giorno);
+        const base = dataDaGiornoEOra(iso, '04:00').getTime();
+        let corse = [];
+        try {
+          corse = TPERRouting.partenzeFermata(fermata.id, dataDaGiornoEOra(iso, '04:00')) || [];
+        } catch (errore) {
+          corse = [];
+        }
+        corse.forEach((corsa) => {
+          partenze.push({
+            linea: corsa.linea,
+            orario: corsa.orario,
+            quando: base + (Number(corsa.orario) - 4 * 3600) * 1000
+          });
+        });
+      }
+      Push.pianificaPartenze(partenze, Date.now(), {
+        sogliaMinuti: soglia,
+        quanti: PUSH_BUS_QUANTI,
+        finestraOre: PUSH_BUS_FINESTRA_ORE,
+        distanzaMinima: PUSH_BUS_DISTANZA_MIN
+      }).forEach((corsa) => {
+        elenco.push({
+          id: 'bus-' + voce.slot + '-' + corsa.linea + '-' + Math.round(corsa.quando / 60000),
+          quando: corsa.quando,
+          titolo: esci
+            ? 'Esci ora: bus ' + corsa.linea + ' tra ' + esci + ' min'
+            : 'Bus ' + corsa.linea + ' tra ' + soglia + ' min',
+          corpo: voce.etichetta + ' · ' + nomeBreve(fermata.nome) + ' · bus alle ' + hhmm(corsa.orario),
+          fermata: fermata.id,
+          tag: 'muovi-bologna-avviso'
+        });
+      });
+    });
+    return elenco;
+  }
+
   function promemoriaPush() {
     const elenco = [];
     const inizio = new Date();
@@ -3973,10 +4035,11 @@
         quando: quando,
         titolo: 'Ultima corsa alle ' + hhmm(ultima.secondi),
         corpo: 'Linea ' + ultima.linea + ' da ' + nomeBreve(fermata.nome) + ': dopo non passa più',
-        fermata: fermata.id
+        fermata: fermata.id,
+        tag: 'ultima-' + voce.slot
       });
     });
-    return elenco.concat(promemoriaFeriale());
+    return promemoriaProssimiBus().concat(elenco, promemoriaFeriale());
   }
 
   function sincronizzaPush() {
@@ -4063,7 +4126,8 @@
         quando: quando,
         titolo: 'Prossimo bus da ' + voce.etichetta,
         corpo: testoCorsaBus(bus, fermata, voce),
-        fermata: fermata.id
+        fermata: fermata.id,
+        tag: 'feriale'
       });
     }
     return elenco;

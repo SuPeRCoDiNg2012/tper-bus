@@ -137,6 +137,50 @@
     }
   }
 
+  /**
+   * Dalle partenze di una fermata (orario GTFS già letto dall'app) ai
+   * promemoria da consegnare al Worker. Ogni voce ha `quando` = partenza meno
+   * la soglia per uscire, quindi il Worker non calcola niente: spedisce e
+   * basta. Quella che partirebbe prima che si possa uscire non serve più, e
+   * oltre la finestra non ha senso tenerla perché l'app risincronizza la
+   * prossima volta che si apre.
+   */
+  function pianificaPartenze(partenze, adessoMs, opzioni) {
+    const scelte = opzioni || {};
+    const soglia = Math.max(0, Number(scelte.sogliaMinuti) || 0);
+    const quanti = Math.max(1, Number(scelte.quanti) || 1);
+    const finestra = Math.max(1, Number(scelte.finestraOre) || 12) * 3600 * 1000;
+    // Alla stessa fermata passano più linee quasi insieme: senza una distanza
+    // minima sarebbero tre notifiche in tre minuti.
+    const distanza = Math.max(0, Number(scelte.distanzaMinima) || 0) * 60000;
+    const adesso = Number(adessoMs) || Date.now();
+    const visti = new Set();
+    const ordinate = (Array.isArray(partenze) ? partenze : [])
+      .filter((voce) => voce && Number.isFinite(Number(voce.quando)))
+      .map((voce) => ({
+        linea: String(voce.linea || ''),
+        orario: Number(voce.orario) || 0,
+        quando: Number(voce.quando) - soglia * 60000
+      }))
+      .filter((voce) => voce.quando > adesso && voce.quando - adesso <= finestra)
+      .sort((a, b) => a.quando - b.quando)
+      .filter((voce) => {
+        // La stessa corsa può comparire due volte (servizio di mezzanotte).
+        const chiave = voce.linea + '@' + voce.quando;
+        if (visti.has(chiave)) return false;
+        visti.add(chiave);
+        return true;
+      });
+    const tenute = [];
+    for (const voce of ordinate) { // eslint-disable-line no-restricted-syntax
+      const precedente = tenute[tenute.length - 1];
+      if (precedente && distanza && voce.quando - precedente.quando < distanza) continue;
+      tenute.push(voce);
+      if (tenute.length >= quanti) break;
+    }
+    return tenute;
+  }
+
   async function prova() {
     const sotto = await sottoscrizione();
     if (!sotto) return { esito: 'senza-sottoscrizione' };
@@ -155,6 +199,7 @@
     attiva: attiva,
     spegni: spegni,
     sincronizza: sincronizza,
+    pianificaPartenze: pianificaPartenze,
     prova: prova
   };
 
